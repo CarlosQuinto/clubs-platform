@@ -1,0 +1,171 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function platformConfig() {
+      return get(/databases/$(database)/documents/platform/config);
+    }
+
+    function platformExists() {
+      return exists(/databases/$(database)/documents/platform/config);
+    }
+
+    function isSuperAdmin() {
+      return signedIn()
+        && platformExists()
+        && request.auth.uid in platformConfig().data.superAdmins;
+    }
+
+    function memberPath(clubId) {
+      return /databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid);
+    }
+
+    function isMember(clubId) {
+      return signedIn() && exists(memberPath(clubId));
+    }
+
+    function memberRole(clubId) {
+      return get(memberPath(clubId)).data.role;
+    }
+
+    function hasRole(clubId, roles) {
+      return isSuperAdmin() || (isMember(clubId) && memberRole(clubId) in roles);
+    }
+
+    function isClubAdmin(clubId) {
+      return hasRole(clubId, ['admin']);
+    }
+
+    function emailKeyOf(email) {
+      return email.lower().replace('\\.', ',');
+    }
+
+    // ---------- Plataforma ----------
+    match /platform/config {
+      allow read: if true;
+      // El primer usuario autenticado reclama la plataforma.
+      allow create: if signedIn()
+        && request.resource.data.superAdmins is list
+        && request.resource.data.superAdmins.size() == 1
+        && request.resource.data.superAdmins[0] == request.auth.uid;
+      // Solo los superadmins actuales pueden modificarla; nunca borrar.
+      allow update: if isSuperAdmin()
+        && request.resource.data.superAdmins is list
+        && request.resource.data.superAdmins.size() >= 1;
+      allow delete: if false;
+    }
+
+    match /localities/{localityId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- Clubes ----------
+    match /clubs/{clubId} {
+      allow read: if true;
+      allow create, delete: if isSuperAdmin();
+      // Presidente/Prensa editan portada e identidad; DT guarda alineaciones base.
+      allow update: if isSuperAdmin()
+        || (
+          isClubAdmin(clubId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'logoUrl', 'description', 'location', 'heroImages', 'defaultLineups', 'updatedAt'])
+        )
+        || (
+          hasRole(clubId, ['prensa'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'description', 'location', 'heroImages', 'updatedAt'])
+        )
+        || (
+          hasRole(clubId, ['dt'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['defaultLineups', 'updatedAt'])
+        );
+
+      // Miembros del club (uid -> rol)
+      match /members/{uid} {
+        // Cada miembro ve su propio doc; el presidente ve la lista completa.
+        allow read: if signedIn() && (request.auth.uid == uid || isClubAdmin(clubId));
+        allow create: if isClubAdmin(clubId)
+          || (
+            // Autoreclamo de invitación: el doc se crea con el mismo rol invitado.
+            signedIn()
+            && request.auth.uid == uid
+            && request.auth.token.email != null
+            && exists(/databases/$(database)/documents/clubs/$(clubId)/invites/$(emailKeyOf(request.auth.token.email)))
+            && request.resource.data.role ==
+              get(/databases/$(database)/documents/clubs/$(clubId)/invites/$(emailKeyOf(request.auth.token.email))).data.role
+          );
+        allow update, delete: if isClubAdmin(clubId);
+      }
+
+      // Invitaciones pendientes (clave = correo normalizado)
+      match /invites/{inviteKey} {
+        allow read: if isClubAdmin(clubId)
+          || (
+            signedIn()
+            && request.auth.token.email != null
+            && inviteKey == emailKeyOf(request.auth.token.email)
+          );
+        allow create, update: if isClubAdmin(clubId)
+          && request.resource.data.role in ['admin', 'dt', 'prensa', 'tesorero'];
+        allow delete: if isClubAdmin(clubId)
+          || (
+            signedIn()
+            && request.auth.token.email != null
+            && inviteKey == emailKeyOf(request.auth.token.email)
+          );
+      }
+
+      // Datos deportivos
+      match /players/{id} {
+        allow read: if true;
+        allow create, delete: if hasRole(clubId, ['admin', 'dt']);
+        // Tesorero actualiza lifetime_contributions al registrar aportaciones.
+        allow update: if hasRole(clubId, ['admin', 'dt'])
+          || (
+            hasRole(clubId, ['tesorero'])
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['lifetime_contributions'])
+          );
+      }
+
+      match /events/{id} {
+        allow read: if true;
+        allow write: if hasRole(clubId, ['admin', 'dt']);
+      }
+
+      match /transactions/{id} {
+        allow read: if true;
+        allow write: if hasRole(clubId, ['admin', 'tesorero'])
+          // DT solo registra la recaudación de arbitraje desde la agenda (arb_{eventId}).
+          || (hasRole(clubId, ['dt']) && id.matches('arb_.*'));
+      }
+
+      match /goals/{id} {
+        allow read: if true;
+        allow write: if hasRole(clubId, ['admin', 'tesorero']);
+      }
+
+      match /inventory/{id} {
+        allow read: if true;
+        allow write: if hasRole(clubId, ['admin', 'dt', 'tesorero']);
+      }
+
+      match /gallery/{id} {
+        allow read: if true;
+        allow write: if hasRole(clubId, ['admin', 'prensa']);
+      }
+    }
+  }
+}

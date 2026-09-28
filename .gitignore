@@ -1,0 +1,16 @@
+node_modules
+
+# Compilación de producción
+dist/
+dist-ssr/
+
+# Caché de Firebase
+.firebase/
+
+# Variables de entorno locales (usa .env.example como plantilla)
+.env
+.env.local
+.env.*.local
+
+.agents/
+serviceAccountKey.json

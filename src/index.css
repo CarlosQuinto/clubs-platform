@@ -1,0 +1,138 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+:root {
+  /* Paleta "Carbón" (Reemplaza al Azul Navy, extraído de las letras JB) */
+  --navy-50: #fafafa;
+  --navy-100: #f4f4f5;
+  --navy-200: #e4e4e7;
+  --navy-300: #d4d4d8;
+  --navy-400: #a1a1aa;
+  --navy-500: #71717a;
+  --navy-600: #52525b;
+  --navy-700: #3f3f46;
+  --navy-800: #27272a;
+  --navy-900: #121212; /* Negro Carbón (Letras del logo) */
+  --navy-950: #09090b;
+
+  /* Neutros Cálidos (Hacen mejor contraste con el dorado) */
+  --gray-50: #fcfaf8; /* Blanco con un micro-toque arena */
+  --gray-100: #f5f0e6;
+  --gray-200: #e5dfd3;
+  --gray-300: #d4ccbc;
+  --gray-400: #a39c90;
+  --gray-500: #736d63;
+  --gray-600: #524e46;
+  --gray-700: #3f3b33;
+  --gray-800: #292621;
+  --gray-900: #14120f;
+
+  /* Acentos */
+  --green: #059669;
+  --green-light: #ecfdf5;
+  --green-border: #bbf7d0;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --red-border: #fecaca;
+  --amber: #cd9a40; /* Dorado/Mostaza exacto del fondo del Logo */
+  --amber-light: #fdf8eb;
+  --blue-accent: #cd9a40; /* Lo igualamos al dorado para unificar identidad */
+  --blue-light: #fdf8eb;
+
+  /* Semántica General */
+  --bg: #fcfaf8;
+  --card-bg: #ffffff;
+  --text: #121212;
+  --text-secondary: #524e46;
+  --text-muted: #a39c90;
+  --border: #e5dfd3;
+  --border-light: #f5f0e6;
+  --primary: #121212;
+  --primary-hover: #27272a;
+
+  /* Sombras (sin cambios) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg:
+    0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+.hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── CORREGIDO: Animación con el nuevo Dorado en RGB (205, 154, 64) ── */
+@keyframes pulse-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(205, 154, 64, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(205, 154, 64, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(205, 154, 64, 0);
+  }
+}
+.highlighted-event {
+  animation: pulse-highlight 1.5s infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+/* ── CORREGIDO: Sombra de focus con el nuevo Carbón en RGB (82, 82, 91) ── */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--navy-600) !important;
+  box-shadow: 0 0 0 3px rgba(82, 82, 91, 0.12);
+}
+
+button {
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
