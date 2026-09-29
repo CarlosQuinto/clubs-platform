@@ -1,9 +1,23 @@
 import { Link } from "react-router-dom";
-import { MapPin } from "lucide-react";
+import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
 import { sortByDate } from "../../lib/stats";
-import type { Match } from "../../lib/types";
-import { formatFriendlyTime, formatShortDate, isoDate } from "../../utils/helpers";
-import { C, RADIUS, SHADOWS } from "../ui";
+import type { ClubSummary, Match } from "../../lib/types";
+import { formatFriendlyDate, formatFriendlyTime, isoDate } from "../../utils/helpers";
+
+const MONTHS = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+];
 
 export function upcomingOfficialMatches(
   matches: Match[],
@@ -20,15 +34,11 @@ export function upcomingOfficialMatches(
   );
 }
 
-export function groupMatchesByDay(matches: Match[]) {
-  const groups: { date: string; items: Match[] }[] = [];
-  for (const m of matches) {
-    const date = m.date || "";
-    const last = groups[groups.length - 1];
-    if (last && last.date === date) last.items.push(m);
-    else groups.push({ date, items: [m] });
-  }
-  return groups;
+function dateParts(iso?: string) {
+  if (!iso) return null;
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return { day, month: MONTHS[month - 1] || "", year };
 }
 
 export default function MatchList({
@@ -39,53 +49,32 @@ export default function MatchList({
 }: {
   matches: Match[];
   clubNames: Record<string, string>;
-  clubsById: Record<string, { name?: string }>;
+  clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   subtitleOf: (match: Match) => string;
 }) {
   if (matches.length === 0) return null;
-  const groups = groupMatchesByDay(matches);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-      {groups.map((group) => {
-        const grouped = group.items.length > 1;
-        return (
-          <div
-            key={group.date || group.items[0]?.id}
-            style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}
-          >
-            {grouped && (
-              <div
-                style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  color: C.gray500,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {formatShortDate(group.date)}
-              </div>
-            )}
-            {group.items.map((m) => (
-              <UpcomingMatchCard
-                key={m.id}
-                match={m}
-                homeName={
-                  clubNames[m.homeClubId] || clubsById[m.homeClubId]?.name || "Local"
-                }
-                awayName={
-                  clubNames[m.awayClubId] ||
-                  clubsById[m.awayClubId]?.name ||
-                  "Visitante"
-                }
-                subtitle={subtitleOf(m)}
-                showDate={!grouped}
-              />
-            ))}
-          </div>
-        );
-      })}
+    <div className="match-list">
+      <div className="match-list__grid">
+        {matches.map((m) => (
+          <UpcomingMatchCard
+            key={m.id}
+            match={m}
+            homeName={
+              clubNames[m.homeClubId] || clubsById[m.homeClubId]?.name || "Local"
+            }
+            awayName={
+              clubNames[m.awayClubId] ||
+              clubsById[m.awayClubId]?.name ||
+              "Visitante"
+            }
+            homeLogo={clubsById[m.homeClubId]?.logoUrl}
+            awayLogo={clubsById[m.awayClubId]?.logoUrl}
+            subtitle={subtitleOf(m)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -94,66 +83,57 @@ function UpcomingMatchCard({
   match,
   homeName,
   awayName,
+  homeLogo,
+  awayLogo,
   subtitle,
-  showDate,
 }: {
   match: Match;
   homeName: string;
   awayName: string;
+  homeLogo?: string;
+  awayLogo?: string;
   subtitle: string;
-  showDate: boolean;
 }) {
-  const when = [
-    showDate ? formatShortDate(match.date || "") : "",
-    match.time ? formatFriendlyTime(match.time) : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const date = dateParts(match.date);
+  const when = match.time ? formatFriendlyTime(match.time) : "";
+  const venue = match.venue?.trim() || "";
 
   return (
-    <Link to={`/torneos/${match.tournamentId}`} style={matchCard}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontWeight: 700,
-            fontSize: "0.85rem",
-            lineHeight: 1.25,
-            color: C.gray800,
-          }}
+    <Link to={`/torneos/${match.tournamentId}`} className="match-card">
+      {date && (
+        <time
+          className="match-card__date"
+          dateTime={match.date}
+          aria-label={formatFriendlyDate(match.date || "")}
         >
-          {homeName} vs {awayName}
+          <span className="match-card__day">{date.day}</span>
+          <span className="match-card__month">{date.month}</span>
+          <span className="match-card__year">{date.year}</span>
+        </time>
+      )}
+      <div className="match-card__body">
+        <div className="match-card__side">
+          <Crest src={homeLogo} alt="" />
+          <span className="match-card__club" title={homeName}>
+            {homeName}
+          </span>
         </div>
-        {subtitle && (
-          <div
-            style={{
-              fontSize: "0.7rem",
-              color: C.gray500,
-              fontWeight: 600,
-              marginTop: 3,
-            }}
-          >
-            {subtitle}
-          </div>
-        )}
-        {(when || match.venue) && (
-          <div
-            style={{
-              fontSize: "0.7rem",
-              color: C.gray500,
-              fontWeight: 600,
-              marginTop: 2,
-              display: "flex",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.15rem 0.55rem",
-            }}
-          >
-            {when && <span>{when}</span>}
-            {match.venue && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                <MapPin size={11} /> {match.venue}
+        <div className="match-card__side">
+          <Crest src={awayLogo} alt="" />
+          <span className="match-card__club" title={awayName}>
+            {awayName}
+          </span>
+        </div>
+        {subtitle ? <div className="match-card__comp">{subtitle}</div> : null}
+        {(when || venue) && (
+          <div className="match-card__when">
+            {when ? (
+              <span className="match-card__time">
+                <span className="match-card__dot" aria-hidden />
+                {when}
               </span>
-            )}
+            ) : null}
+            {venue ? <span className="match-card__venue">{venue}</span> : null}
           </div>
         )}
       </div>
@@ -161,15 +141,10 @@ function UpcomingMatchCard({
   );
 }
 
-const matchCard: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  padding: "0.4rem 0.65rem",
-  backgroundColor: C.white,
-  border: `1px solid ${C.gray200}`,
-  borderRadius: RADIUS.md,
-  boxShadow: SHADOWS.sm,
-  textDecoration: "none",
-  color: C.gray800,
-};
+function Crest({ src, alt }: { src?: string; alt: string }) {
+  return (
+    <span className="match-card__crest">
+      <img src={src || DEFAULT_CLUB_LOGO} alt={alt} />
+    </span>
+  );
+}

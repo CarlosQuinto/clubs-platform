@@ -1886,3 +1886,167 @@ button {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.match-list__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.match-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  text-decoration: none;
+  color: var(--gray-800);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.match-card:hover {
+  border-color: var(--gray-300);
+  box-shadow: 0 6px 16px rgba(20, 18, 15, 0.06);
+}
+
+.match-card__date {
+  flex: 0 0 3.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  padding: 0.4rem 0.2rem;
+  border-radius: 10px;
+  background: var(--amber-light);
+  color: var(--navy-900);
+  text-align: center;
+}
+
+.match-card__day {
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-card__month {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+
+.match-card__year {
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gray-500);
+}
+
+.match-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  justify-content: center;
+}
+
+.match-card__side {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.match-card__crest {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.match-card__crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.match-card__club {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--gray-800);
+}
+
+.match-card__comp {
+  margin-top: 0.15rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.match-card__when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.match-card__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--gray-700);
+}
+
+.match-card__dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--green);
+}
+
+.match-card__venue {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--gray-500);
+}
+
+@media (min-width: 800px) {
+  .match-list__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

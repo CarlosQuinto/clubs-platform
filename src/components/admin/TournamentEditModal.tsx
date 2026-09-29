@@ -207,6 +207,7 @@ export default function TournamentEditModal({
         style={{
           width: "100%",
           maxWidth: 760,
+          minWidth: 0,
           maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
@@ -216,6 +217,7 @@ export default function TournamentEditModal({
           boxShadow: SHADOWS.xl,
           position: "relative",
         }}
+        data-tournament-edit=""
       >
         <button
           type="button"
@@ -256,7 +258,16 @@ export default function TournamentEditModal({
         </p>
         </div>
 
-        <div style={{ padding: "0 1.2rem", overflowY: "auto", flex: 1, minHeight: 0 }}>
+        <div
+          data-tournament-edit-scroll=""
+          style={{
+            padding: "0 1.2rem",
+            overflowX: "hidden",
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
 
         <TournamentSync
           tournament={tournament}
@@ -337,6 +348,7 @@ export default function TournamentEditModal({
         </div>
 
         <div
+          data-tournament-edit-footer=""
           style={{
             display: "flex",
             justifyContent: "flex-end",
@@ -424,6 +436,7 @@ function ClubEnrollPicker({
   onRemove: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState({ maxHeight: 200, above: false });
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -435,10 +448,41 @@ function ClubEnrollPicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const fit = () => {
+      const box = boxRef.current;
+      const modal = box?.closest("[data-tournament-edit]") as HTMLElement | null;
+      if (!box || !modal) return;
+      const footer = modal.querySelector("[data-tournament-edit-footer]");
+      const boxRect = box.getBoundingClientRect();
+      const modalRect = modal.getBoundingClientRect();
+      const bottomLimit = footer
+        ? footer.getBoundingClientRect().top - 8
+        : modalRect.bottom - 12;
+      const topLimit = modalRect.top + 12;
+      const below = bottomLimit - boxRect.bottom - 6;
+      const above = boxRect.top - topLimit - 6;
+      const aboveFits = below < 140 && above > below;
+      const room = Math.min(220, Math.max(0, aboveFits ? above : below));
+      setPanel({ maxHeight: room, above: aboveFits });
+    };
+    fit();
+    const scroller = boxRef.current?.closest("[data-tournament-edit-scroll]");
+    window.addEventListener("resize", fit);
+    scroller?.addEventListener("scroll", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      scroller?.removeEventListener("scroll", fit);
+    };
+  }, [open, enrolled.length]);
+
   return (
     <div
       ref={boxRef}
       style={{
+        position: "relative",
+        minWidth: 0,
         display: "flex",
         flexWrap: "wrap",
         gap: "0.4rem",
@@ -475,7 +519,7 @@ function ClubEnrollPicker({
         </button>
         );
       })}
-      <div style={{ position: "relative" }}>
+      <div>
         <button
           type="button"
           aria-label="Añadir equipo"
@@ -500,13 +544,17 @@ function ClubEnrollPicker({
           <div
             style={{
               position: "absolute",
-              zIndex: 30,
-              top: "calc(100% + 6px)",
-              left: 0,
-              width: "min(280px, calc(100vw - 3.5rem))",
-              maxHeight: 280,
+              zIndex: 5,
+              ...(panel.above
+                ? { bottom: "calc(100% + 6px)" }
+                : { top: "calc(100% + 6px)" }),
+              right: 0,
+              width: "min(280px, 100%)",
+              maxHeight: panel.maxHeight,
+              overflowX: "hidden",
               overflowY: "auto",
-              padding: "0.75rem",
+              boxSizing: "border-box",
+              padding: "0.65rem 0.75rem",
               backgroundColor: C.white,
               border: `1px solid ${C.gray200}`,
               borderRadius: RADIUS.lg,
@@ -536,6 +584,7 @@ function ClubEnrollPicker({
                     type="button"
                     onClick={() => onAdd(c.id)}
                     style={{
+                      maxWidth: "100%",
                       border: `1px solid ${C.gray300}`,
                       backgroundColor: C.white,
                       color: C.gray700,
@@ -544,6 +593,7 @@ function ClubEnrollPicker({
                       fontSize: "0.75rem",
                       fontWeight: 700,
                       cursor: "pointer",
+                      overflowWrap: "anywhere",
                     }}
                   >
                     {c.name}
