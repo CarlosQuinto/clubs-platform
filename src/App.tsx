@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { TournamentEditHost } from "./components/admin/TournamentEditModal";
+import DocumentBrand from "./components/platform/DocumentBrand";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Registro from "./pages/Registro";
@@ -18,6 +19,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <DocumentBrand />
         <TournamentEditHost>
           <Routes>
             <Route path="/" element={<Landing />} />
