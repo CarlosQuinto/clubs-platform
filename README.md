@@ -8,19 +8,23 @@ Deriva de la plantilla [Sports-Club-Management-Platform](https://github.com/Carl
 
 | Ruta      | Descripción                                                                                                  |
 | --------- | ------------------------------------------------------------------------------------------------------------ |
-| `/`       | Landing pública: clubes publicados agrupados por localidad, con buscador.                                    |
-| `/login`  | Iniciar sesión, crear cuenta y recuperar contraseña. Acepta `?next=/ruta` para redirigir después de entrar. |
-| `/admin`  | Panel del super administrador: localidades, creación de clubes, publicar/ocultar, miembros de cualquier club. |
-| `/:slug`  | Página pública del club. Los miembros con sesión ven los controles de edición según su rol.                  |
+| `/`                 | Home pública: carrusel, próximos partidos, torneos, temporadas y clubes por categoría. |
+| `/login`            | Iniciar sesión, crear cuenta y recuperar contraseña. Acepta `?next=/ruta`. |
+| `/admin`            | Superadmin: clubes, categorías, temporadas, torneos, partidos y portada. |
+| `/torneos/:id`      | Ficha pública del torneo: tabla, goleadores, calendario y podio. |
+| `/temporadas/:id`   | Torneos de una temporada. |
+| `/:slug`            | Página del club (agenda, jugadores, finanzas…). |
 
 Los slugs se normalizan (`JogaBonitoFC` → `jogabonitofc`), así que la URL no distingue mayúsculas ni acentos.
 
 ## Flujo de uso
 
 1. **Arranque de la plataforma.** La primera persona que crea una cuenta ve en `/` el aviso *"Reclamar administración"*. Al aceptarlo se crea `platform/config` con su `uid` como super administrador. Solo puede hacerse una vez (la regla de Firestore impide crear el documento si ya existe).
-2. **Localidades y clubes.** En `/admin` el super administrador añade localidades y crea clubes: nombre, URL, localidad y, opcionalmente, el correo del presidente del club. Ese correo queda como invitación con rol `admin`.
-3. **Administradores de club.** El presidente entra en `/login`, crea su cuenta con el correo invitado y la invitación se convierte automáticamente en membresía. Desde el botón **Miembros** de su página invita al resto del cuerpo técnico (D. Técnico, Tesorero, Prensa).
-4. **Visitantes.** Cualquiera puede ver la página de un club publicado sin iniciar sesión.
+2. **Categorías, temporadas y clubes.** En `/admin` el superadmin crea categorías (Primera, Segunda…), temporadas, localidades y clubes. Las categorías son de los **torneos**, no de los equipos: un club puede jugar en varias divisiones. Puede activar, desactivar o eliminar clubes.
+3. **Torneos.** Un torneo pertenece a una temporada y se abre en una o varias categorías (una liga por división). El superadmin inscribe cualquier club y programa partidos. Al cerrar el torneo se calcula el podio (1º, 2º, 3º) para la vitrina de cada equipo.
+4. **Administradores de club.** El presidente entra en `/login` con el correo invitado. Desde **Miembros** invita al cuerpo técnico. En la agenda el club solo crea **entrenamientos** y **amistosos**; los partidos oficiales llegan de los torneos.
+5. **Estadísticas.** Goles, asistencias, tarjetas y récord de equipo salen de los partidos de torneo. Se pueden filtrar por temporada, categoría o ver el histórico. Los amistosos cuentan como entrenamiento.
+6. **Visitantes.** Cualquiera ve la home, los torneos y la página de un club activo.
 
 ## Roles y permisos
 
@@ -37,17 +41,22 @@ La matriz vive en `src/lib/roles.ts` (`buildPerms`) y se replica en `firestore.r
 ## Modelo de datos (Cloud Firestore)
 
 ```text
-platform/config                     { superAdmins: [uid] }
+platform/config                     { superAdmins: [uid], heroImages }
 localities/{id}                     { name }
+categories/{id}                     { name, order }
+seasons/{id}                        { name, startDate, endDate, active }
+tournaments/{id}                    { name, seasonId, categoryId, clubIds, status, podium }
+matches/{id}                        { tournamentId, seasonId, categoryId, homeClubId, awayClubId,
+                                      clubIds, date, time, status, homeScore, awayScore, sides }
 users/{uid}                         { email, displayName }
-clubs/{slug}                        { slug, name, localityId, location, description, logoUrl,
-                                      heroImages, defaultLineups, active }
+clubs/{slug}                        { slug, name, localityId, categoryId, location, description,
+                                      logoUrl, heroImages, defaultLineups, active }
 clubs/{slug}/members/{uid}          { role, email, displayName }
-clubs/{slug}/invites/{emailKey}     { email, role }        (emailKey = correo en minúsculas con "." → ",")
+clubs/{slug}/invites/{emailKey}     { email, role }
 clubs/{slug}/players|events|transactions|inventory|gallery|goals
 ```
 
-Las imágenes se guardan en Storage bajo `clubs/{slug}/{logos|portada|gallery|players|events}/`.
+Las imágenes de club van en `clubs/{slug}/{logos|portada|gallery|players|events}/`. El carrusel de portada en `platform/carousel/`.
 
 ## Tecnologías
 

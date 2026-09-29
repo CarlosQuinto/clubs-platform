@@ -19,12 +19,13 @@ export function generatePlayerAchievements(
       let assistsHere = 0;
 
       ev.stats.forEach((s: any) => {
+        if (s.isOwnGoal) return;
         if (
           s.scorer === selectedPlayer.id ||
           s.scorer === selectedPlayer.name
         ) {
           goalsHere++;
-          if (s.isPenalty) penaltyGoals++; // 👈 Contamos los penales anotados
+          if (s.isPenalty) penaltyGoals++;
         }
         if (
           s.assist === selectedPlayer.id ||
@@ -491,105 +492,6 @@ export function generatePlayerAchievements(
         desc: "20 arcos en cero",
         icon: "🏰",
         unlocked: pStats.cleanSheets >= 20,
-      },
-
-      // 👇 NUEVO: LOGROS DE ATAJADAS 👇
-      {
-        id: 70,
-        title: "Reflejos Felinos",
-        desc: "Acumula 5 atajadas",
-        icon: "🐈",
-        unlocked: (pStats.saves || 0) >= 5,
-      },
-      {
-        id: 71,
-        title: "Manos de Acero",
-        desc: "Acumula 15 atajadas",
-        icon: "🦾",
-        unlocked: (pStats.saves || 0) >= 15,
-      },
-      {
-        id: 72,
-        title: "Vuelo de Águila",
-        desc: "Acumula 30 atajadas",
-        icon: "🦅",
-        unlocked: (pStats.saves || 0) >= 30,
-      },
-      {
-        id: 73,
-        title: "Santo Patrono",
-        desc: "Acumula 50 atajadas",
-        icon: "🙏",
-        unlocked: (pStats.saves || 0) >= 50,
-      },
-    );
-  }
-
-  // ─── EXCLUSIVO PARA DT ───
-  if (selectedPlayer.isDT) {
-    achievements.push(
-      {
-        id: 101,
-        title: "El Míster",
-        desc: "Dirige su primer partido",
-        icon: "📋",
-        unlocked: pStats.matchesManaged >= 1,
-      },
-      {
-        id: 102,
-        title: "Pizarra Mágica",
-        desc: "Dirige 5 partidos",
-        icon: "🧠",
-        unlocked: pStats.matchesManaged >= 5,
-      },
-      {
-        id: 103,
-        title: "El Estratega",
-        desc: "Dirige 10 partidos",
-        icon: "🗺️",
-        unlocked: pStats.matchesManaged >= 10,
-      },
-      {
-        id: 104,
-        title: "Maestro del 2-3-1",
-        desc: "Dirige 25 partidos",
-        icon: "🛡️",
-        unlocked: pStats.matchesManaged >= 25,
-      },
-      {
-        id: 105,
-        title: "Revolución 3-2-1",
-        desc: "Dirige 50 partidos",
-        icon: "🔥",
-        unlocked: pStats.matchesManaged >= 50,
-      },
-      {
-        id: 111,
-        title: "El Debut Soñado", // Corregí el pequeño typo de "Sojado" a "Soñado"
-        desc: "Consigue 1 victoria",
-        icon: "🎉",
-        unlocked: pStats.winsManaged >= 1,
-      },
-      {
-        id: 112,
-        title: "Mente Maestra",
-        desc: "Consigue 5 victorias",
-        icon: "🧠",
-        unlocked: pStats.winsManaged >= 5,
-      },
-      {
-        id: 113,
-        title: "ADN Ganador",
-        desc: "Llega a 15 victorias",
-        icon: "🏆",
-        unlocked: pStats.winsManaged >= 15,
-      },
-      {
-        id: 114,
-        title: "Dinastía",
-        desc: "Llega a 30 victorias",
-        icon: "👑",
-        unlocked: pStats.winsManaged >= 30,
       },
     );
   }

@@ -46,6 +46,18 @@ service cloud.firestore {
       return email.lower().replace('\\.', ',');
     }
 
+    function claimingPlatformInvite() {
+      return signedIn()
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/platform/config/invites/$(emailKeyOf(request.auth.token.email)))
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['superAdmins', 'superAdminEmails', 'updatedAt'])
+        && request.auth.uid in request.resource.data.superAdmins
+        && !(request.auth.uid in resource.data.superAdmins)
+        && request.resource.data.superAdmins.size() == resource.data.superAdmins.size() + 1
+        && request.resource.data.superAdmins.hasAll(resource.data.superAdmins);
+    }
+
     // ---------- Plataforma ----------
     match /platform/config {
       allow read: if true;
@@ -55,10 +67,32 @@ service cloud.firestore {
         && request.resource.data.superAdmins.size() == 1
         && request.resource.data.superAdmins[0] == request.auth.uid;
       // Solo los superadmins actuales pueden modificarla; nunca borrar.
-      allow update: if isSuperAdmin()
-        && request.resource.data.superAdmins is list
-        && request.resource.data.superAdmins.size() >= 1;
+      // Un invitado puede agregarse a sí mismo si existe platform/config/invites/{email}.
+      allow update: if (
+          isSuperAdmin()
+          && request.resource.data.superAdmins is list
+          && request.resource.data.superAdmins.size() >= 1
+        )
+        || claimingPlatformInvite();
       allow delete: if false;
+
+      match /invites/{inviteKey} {
+        allow read: if isSuperAdmin()
+          || (
+            signedIn()
+            && request.auth.token.email != null
+            && inviteKey == emailKeyOf(request.auth.token.email)
+          );
+        allow create, update: if isSuperAdmin()
+          && request.resource.data.email is string
+          && inviteKey == emailKeyOf(request.resource.data.email);
+        allow delete: if isSuperAdmin()
+          || (
+            signedIn()
+            && request.auth.token.email != null
+            && inviteKey == emailKeyOf(request.auth.token.email)
+          );
+      }
     }
 
     match /localities/{localityId} {
@@ -66,8 +100,117 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /seasons/{id} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /tournaments/{id} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /matches/{id} {
+      allow read: if true;
+      allow create, delete: if isSuperAdmin();
+      // Superadmin edita todo. El DT/presidente de local o visita
+      // solo registra asistencia y alineación de su lado, no marcador ni stats.
+      allow update: if isSuperAdmin()
+        || (
+          signedIn()
+          && (
+            hasRole(resource.data.homeClubId, ['admin', 'dt'])
+            || hasRole(resource.data.awayClubId, ['admin', 'dt'])
+          )
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['sides', 'updatedAt'])
+          && request.resource.data.get('homeScore', null)
+              == resource.data.get('homeScore', null)
+          && request.resource.data.get('awayScore', null)
+              == resource.data.get('awayScore', null)
+          && request.resource.data.get('penaltiesHome', null)
+              == resource.data.get('penaltiesHome', null)
+          && request.resource.data.get('penaltiesAway', null)
+              == resource.data.get('penaltiesAway', null)
+          && request.resource.data.status == resource.data.status
+        );
+    }
+
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /mail/{id} {
+      allow read, write: if false;
+    }
+
+    // Índice público para /registro: existe si el correo fue invitado.
+    match /signupInvites/{inviteKey} {
+      allow get: if true;
+      allow list: if isSuperAdmin();
+      allow create, update: if request.resource.data.email is string
+        && inviteKey == emailKeyOf(request.resource.data.email)
+        && (
+          isSuperAdmin()
+          || (
+            request.resource.data.clubId is string
+            && isClubAdmin(request.resource.data.clubId)
+            && request.resource.data.get('platform', false) == false
+          )
+        );
+      allow delete: if isSuperAdmin()
+        || (
+          resource.data.clubId is string
+          && isClubAdmin(resource.data.clubId)
+        );
+    }
+
+    match /inquiries/{id} {
+      allow read, update, delete: if isSuperAdmin();
+      allow create: if request.resource.data.keys()
+          .hasOnly(['name', 'email', 'phone', 'message', 'topic', 'status', 'createdAt'])
+        && request.resource.data.status == 'new'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 1
+        && request.resource.data.name.size() < 120
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3
+        && request.resource.data.email.size() < 120
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 6
+        && request.resource.data.phone.size() < 30
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 2
+        && request.resource.data.message.size() < 2000
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 1
+        && request.resource.data.topic.size() < 80
+        && request.resource.data.createdAt == request.time;
+    }
+
+    match /teamApplications/{id} {
+      allow read, update, delete: if isSuperAdmin();
+      allow create: if request.resource.data.keys()
+          .hasOnly(['captainName', 'captainEmail', 'captainPhone', 'teamName', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.captainName is string
+        && request.resource.data.captainName.size() > 1
+        && request.resource.data.captainName.size() < 120
+        && request.resource.data.captainEmail is string
+        && request.resource.data.captainEmail.size() > 3
+        && request.resource.data.captainEmail.size() < 120
+        && request.resource.data.captainPhone is string
+        && request.resource.data.captainPhone.size() > 6
+        && request.resource.data.captainPhone.size() < 30
+        && request.resource.data.teamName is string
+        && request.resource.data.teamName.size() > 1
+        && request.resource.data.teamName.size() < 80
+        && request.resource.data.createdAt == request.time;
     }
 
     // ---------- Clubes ----------
@@ -79,7 +222,7 @@ service cloud.firestore {
         || (
           isClubAdmin(clubId)
           && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['name', 'logoUrl', 'description', 'location', 'heroImages', 'defaultLineups', 'updatedAt'])
+              .hasOnly(['name', 'logoUrl', 'description', 'location', 'presidentPhone', 'heroImages', 'defaultLineups', 'updatedAt'])
         )
         || (
           hasRole(clubId, ['prensa'])
@@ -98,11 +241,13 @@ service cloud.firestore {
         allow read: if signedIn() && (request.auth.uid == uid || isClubAdmin(clubId));
         allow create: if isClubAdmin(clubId)
           || (
-            // Autoreclamo de invitación: el doc se crea con el mismo rol invitado.
+            // Autoreclamo solo si la invitación es de alta (kind != accept).
+            // Quien ya tiene cuenta debe aceptar el rol desde /invitar.
             signedIn()
             && request.auth.uid == uid
             && request.auth.token.email != null
             && exists(/databases/$(database)/documents/clubs/$(clubId)/invites/$(emailKeyOf(request.auth.token.email)))
+            && get(/databases/$(database)/documents/clubs/$(clubId)/invites/$(emailKeyOf(request.auth.token.email))).data.get('kind', 'signup') != 'accept'
             && request.resource.data.role ==
               get(/databases/$(database)/documents/clubs/$(clubId)/invites/$(emailKeyOf(request.auth.token.email))).data.role
           );

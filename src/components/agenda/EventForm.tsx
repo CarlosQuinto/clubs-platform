@@ -1,6 +1,6 @@
 // EventForm.tsx
 import React from "react";
-import { Calendar, Trophy, Target, Medal, Handshake } from "lucide-react";
+import { Calendar, Target, Handshake } from "lucide-react";
 import {
   SectionCard,
   SegmentedControl,
@@ -17,9 +17,6 @@ interface EventFormProps {
   editingEventId: string | null;
   eventType: "Partido" | "Entrenamiento";
   setEventType: (val: "Partido" | "Entrenamiento") => void;
-  // 👇 NUEVO: Estado para el tipo de partido
-  matchType: "Oficial" | "Amistoso";
-  setMatchType: (val: "Oficial" | "Amistoso") => void;
   eventTitle: string;
   setEventTitle: (val: string) => void;
   eventRoutine: any[];
@@ -39,8 +36,6 @@ export default function EventForm({
   editingEventId,
   eventType,
   setEventType,
-  matchType, // 👈 Agregado
-  setMatchType, // 👈 Agregado
   eventTitle,
   setEventTitle,
   eventRoutine,
@@ -58,88 +53,49 @@ export default function EventForm({
 
   return (
     <SectionCard
+      className="compact-form-card"
       title={editingEventId ? "Editar Evento" : "Programar Evento"}
-      icon={<Calendar size={16} />}
+      icon={<Calendar size={14} />}
     >
       <form
         onSubmit={onSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+        className="event-form compact-form"
+        style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}
       >
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}
         >
           <label
-            style={{ fontSize: "0.8rem", fontWeight: "700", color: C.navy900 }}
+            style={{ fontSize: "0.7rem", fontWeight: "700", color: C.navy900 }}
           >
             Tipo de Evento
           </label>
           <SegmentedControl
             options={[
               {
-                label: "Partido",
+                label: "Amistoso",
                 value: "Partido",
-                icon: <Trophy size={14} />,
+                icon: <Handshake size={12} />,
               },
               {
                 label: "Entrenamiento",
                 value: "Entrenamiento",
-                icon: <Target size={14} />,
+                icon: <Target size={12} />,
               },
             ]}
             value={eventType}
             onChange={(v: any) => {
               setEventType(v);
-              if (v === "Partido") {
-                setEventRoutine([]);
-                setMatchType("Oficial"); // Valor por defecto al cambiar a partido
-              }
+              if (v === "Partido") setEventRoutine([]);
             }}
           />
         </div>
 
-        {/* 👇 NUEVO: Selector de Oficial/Amistoso (Solo visible si es Partido) 👇 */}
-        {eventType === "Partido" && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-              animation: "fadeIn 0.2s ease",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: "700",
-                color: C.navy900,
-              }}
-            >
-              Carácter del Partido
-            </label>
-            <SegmentedControl
-              options={[
-                {
-                  label: "Oficial",
-                  value: "Oficial",
-                  icon: <Medal size={14} />,
-                },
-                {
-                  label: "Amistoso",
-                  value: "Amistoso",
-                  icon: <Handshake size={14} />,
-                },
-              ]}
-              value={matchType}
-              onChange={(v: any) => setMatchType(v)}
-            />
-          </div>
-        )}
-
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}
         >
           <label
-            style={{ fontSize: "0.8rem", fontWeight: "700", color: C.navy900 }}
+            style={{ fontSize: "0.7rem", fontWeight: "700", color: C.navy900 }}
           >
             {eventType === "Partido"
               ? "Nombre del Rival"
@@ -151,7 +107,7 @@ export default function EventForm({
             onChange={(e) => setEventTitle(e.target.value)}
             placeholder={
               eventType === "Partido"
-                ? "Ej. Real Madrid FC"
+                ? "Ej. Deportivo Vecinos FC"
                 : "Ej. Activación Física"
             }
           />
@@ -161,18 +117,11 @@ export default function EventForm({
           <RoutineBuilder routine={eventRoutine} onChange={setEventRoutine} />
         )}
 
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
+        <div className="event-when">
+          <div className="event-when__field">
             <label
               style={{
-                fontSize: "0.8rem",
+                fontSize: "0.7rem",
                 fontWeight: "700",
                 color: C.navy900,
               }}
@@ -186,17 +135,10 @@ export default function EventForm({
               onChange={(e) => setEventDate(e.target.value)}
             />
           </div>
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
+          <div className="event-when__field">
             <label
               style={{
-                fontSize: "0.8rem",
+                fontSize: "0.7rem",
                 fontWeight: "700",
                 color: C.navy900,
               }}
@@ -213,10 +155,10 @@ export default function EventForm({
         </div>
 
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}
         >
           <label
-            style={{ fontSize: "0.8rem", fontWeight: "700", color: C.navy900 }}
+            style={{ fontSize: "0.7rem", fontWeight: "700", color: C.navy900 }}
           >
             Lugar o Campo
           </label>
@@ -227,15 +169,15 @@ export default function EventForm({
           />
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-          <PrimaryButton type="submit" style={{ flex: 1, padding: "0.875rem" }}>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <PrimaryButton type="submit" style={{ flex: 1, padding: "0.55rem" }}>
             {editingEventId ? "Guardar Cambios" : "Agendar Evento"}
           </PrimaryButton>
           {editingEventId && (
             <SecondaryButton
               type="button"
               onClick={onCancel}
-              style={{ flex: 1 }}
+              style={{ flex: 1, padding: "0.55rem" }}
             >
               Cancelar
             </SecondaryButton>

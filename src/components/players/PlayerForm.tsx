@@ -15,12 +15,10 @@ import {
 import {
   getStorage,
   ref,
-  uploadBytes,
-  getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import imageCompression from "browser-image-compression";
 import { useClub } from "../../context/ClubContext";
+import { uploadImageFile } from "../../lib/uploadImage";
 
 // ── COMPONENTE SWITCH (SLIDER) PERSONALIZADO ──
 const ToggleSwitch = ({
@@ -74,8 +72,6 @@ interface PlayerFormProps {
   setPlayerBirthDate: (val: string) => void;
   playerImageUrl: string;
   setPlayerImageUrl: (val: string) => void;
-  isDT: boolean;
-  setIsDT: (val: boolean) => void;
   playerActive: boolean;
   setPlayerActive: (val: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -97,8 +93,6 @@ export default function PlayerForm({
   setPlayerBirthDate,
   playerImageUrl,
   setPlayerImageUrl,
-  isDT,
-  setIsDT,
   playerActive,
   setPlayerActive,
   onSubmit,
@@ -132,15 +126,11 @@ export default function PlayerForm({
         initialQuality: 0.8,
       };
 
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("players", `profile_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("players", `profile_${Date.now()}.jpg`),
+        file,
+        options,
       );
-
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
 
       setNewlyUploadedPhotos((prev) => [...prev, url]);
       setPlayerImageUrl(url);
@@ -200,21 +190,21 @@ export default function PlayerForm({
   };
 
   return (
-    <SectionCard title={title} icon={<Users size={16} />}>
+    <SectionCard className="compact-form-card" title={title} icon={<Users size={14} />}>
       <form
         onSubmit={handleSubmitWithCleanup}
-        style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}
+        className="player-form compact-form"
+        style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}
       >
-        {/* FILA 1: NOMBRE Y DORSAL */}
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <FormInput
-            required
-            disabled={isPressOnly}
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            placeholder="Nombre completo"
-            style={{ flex: "1 1 200px" }}
-          />
+        <FormInput
+          required
+          disabled={isPressOnly}
+          value={playerName}
+          onChange={(e) => setPlayerName(e.target.value)}
+          placeholder="Nombre completo"
+        />
+
+        <div className="player-form-grid player-form-grid--meta">
           <FormInput
             type="number"
             required
@@ -222,61 +212,45 @@ export default function PlayerForm({
             value={playerNumber}
             onChange={(e) => setPlayerNumber(e.target.value)}
             placeholder="Dorsal"
-            style={{ width: "90px", flexShrink: 0 }}
           />
-        </div>
-
-        {/* FILA 2: POSICIÓN, VARIANTE Y FECHA */}
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <FormSelect
             disabled={isPressOnly}
             value={playerPosition}
             onChange={(e) => setPlayerPosition(e.target.value)}
-            style={{ flex: "1 1 120px" }}
+            aria-label="Posición"
           >
             <option value="Portero">Portero</option>
             <option value="Defensa">Defensa</option>
             <option value="Medio">Medio</option>
             <option value="Delantero">Delantero</option>
           </FormSelect>
+        </div>
 
+        <div className="player-form-grid player-form-grid--meta">
           <FormInput
             disabled={isPressOnly}
             value={playerVariant}
             onChange={(e) => setPlayerVariant(e.target.value)}
-            placeholder="Variante (Ej. Extremo)"
-            style={{ flex: "1 1 140px" }}
+            placeholder="Variante, ej. Extremo"
           />
-
           <FormInput
             type="date"
             disabled={isPressOnly}
             value={playerBirthDate}
             onChange={(e) => setPlayerBirthDate(e.target.value)}
             placeholder="Nacimiento"
-            style={{ flex: "1 1 140px" }}
+            aria-label="Fecha de nacimiento"
           />
         </div>
 
         {/* ── ZONA DE FOTO ── */}
-        <div
-          style={{
-            display: "flex",
-            gap: "1rem",
-            alignItems: "center",
-            backgroundColor: C.gray50,
-            padding: "1rem",
-            borderRadius: RADIUS.md,
-            border: `1px dashed ${C.gray300}`,
-            marginTop: "0.25rem",
-          }}
-        >
+        <div className="player-photo-row">
           {/* Avatar Circular Grande */}
           <div
             style={{
               position: "relative",
-              width: "60px",
-              height: "60px",
+              width: "48px",
+              height: "48px",
               backgroundColor: C.white,
               borderRadius: "50%",
               color: C.gray300,
@@ -289,7 +263,7 @@ export default function PlayerForm({
               boxShadow: SHADOWS.sm,
             }}
           >
-            <Camera size={24} style={{ position: "absolute", zIndex: 0 }} />
+            <Camera size={18} style={{ position: "absolute", zIndex: 0 }} />
             {playerImageUrl && (
               <img
                 src={playerImageUrl}
@@ -306,34 +280,16 @@ export default function PlayerForm({
             )}
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
+          <div className="player-photo-row__fields">
             <label
+              className="player-photo-row__upload"
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                backgroundColor: C.white,
-                border: `1px solid ${C.gray200}`,
-                padding: "0.4rem 0.75rem",
-                borderRadius: RADIUS.md,
-                color: C.navy900,
-                fontSize: "0.8125rem",
-                fontWeight: "700",
                 cursor: isUploading ? "not-allowed" : "pointer",
-                width: "fit-content",
-                boxShadow: SHADOWS.sm,
-                transition: "all 0.2s",
+                opacity: isUploading ? 0.7 : 1,
               }}
             >
-              <UploadCloud size={16} color={C.amber} />
-              {isUploading ? "Optimizando imagen..." : "Subir desde galería"}
+              <UploadCloud size={14} color={C.amber} />
+              {isUploading ? "Optimizando…" : "Subir desde galería"}
               <input
                 type="file"
                 accept="image/*"
@@ -347,17 +303,16 @@ export default function PlayerForm({
               />
             </label>
 
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-            >
+            <div className="player-photo-row__url">
               <LinkIcon size={12} color={C.gray400} />
               <input
                 type="url"
                 value={playerImageUrl}
                 onChange={(e) => setPlayerImageUrl(e.target.value)}
-                placeholder="O pega un enlace de internet aquí..."
+                placeholder="O pega un enlace…"
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   border: "none",
                   borderBottom: `1px solid ${C.gray300}`,
                   outline: "none",
@@ -380,47 +335,6 @@ export default function PlayerForm({
             marginTop: "0.25rem",
           }}
         >
-          {/* SWITCH CUERPO TÉCNICO */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "0.75rem",
-              backgroundColor: C.gray50,
-              borderRadius: RADIUS.md,
-              border: `1px solid ${C.gray200}`,
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span
-                style={{
-                  fontSize: "0.875rem",
-                  fontWeight: "700",
-                  color: C.navy900,
-                }}
-              >
-                Cuerpo Técnico
-              </span>
-              <span
-                style={{
-                  fontSize: "0.7rem",
-                  color: C.gray500,
-                  lineHeight: 1.3,
-                }}
-              >
-                Este integrante forma parte del staff técnico (DT, Auxiliar).
-              </span>
-            </div>
-            <ToggleSwitch
-              checked={isDT}
-              onChange={setIsDT}
-              disabled={isPressOnly}
-              activeColor={C.navy900}
-            />
-          </div>
-
-          {/* 👇 SWITCH ESTADO ACTIVO (SOLO EN MODO EDICIÓN) 👇 */}
           {editingPlayerId && (
             <div
               style={{
@@ -468,13 +382,13 @@ export default function PlayerForm({
         </div>
 
         {/* BOTONES DE ACCIÓN */}
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
           <PrimaryButton
             type="submit"
             style={{
               flex: 1,
               opacity: isUploading ? 0.7 : 1,
-              padding: "0.875rem",
+              padding: "0.55rem",
             }}
             disabled={isUploading}
           >

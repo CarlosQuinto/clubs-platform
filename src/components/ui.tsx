@@ -34,6 +34,8 @@ export const C = {
   redBorder: "#fecaca",
   amber: "#cd9a40",
   amberLight: "#fdf8eb",
+  blue: "#2563eb",
+  blueSoft: "#eff6ff",
   blueAccent: "#cd9a40",
   blueLight: "#fdf8eb",
 };
@@ -59,12 +61,13 @@ export const SectionCard: React.FC<{
   icon?: React.ReactNode;
   children: React.ReactNode;
   style?: React.CSSProperties;
-}> = ({ title, icon, children, style }) => (
+  className?: string;
+}> = ({ title, icon, children, style, className }) => (
   <div
+    className={["section-card", className].filter(Boolean).join(" ")}
     style={{
       backgroundColor: C.white,
       borderRadius: RADIUS.lg,
-      padding: "1.5rem",
       boxShadow: SHADOWS.md,
       border: `1px solid ${C.gray200}`,
       ...style,
@@ -96,15 +99,7 @@ export const SegmentedControl: React.FC<{
   value: string;
   onChange: (v: string) => void;
 }> = ({ options, value, onChange }) => (
-  <div
-    style={{
-      display: "flex",
-      backgroundColor: C.gray100,
-      borderRadius: RADIUS.md,
-      padding: "3px",
-      gap: "2px",
-    }}
-  >
+  <div className="segmented-control">
     {options.map((opt) => (
       <button
         key={opt.value}
@@ -112,16 +107,17 @@ export const SegmentedControl: React.FC<{
         onClick={() => onChange(opt.value)}
         style={{
           flex: 1,
+          minWidth: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: "0.4rem",
-          padding: "0.5rem 0.75rem",
+          gap: "0.3rem",
+          padding: "0.5rem 0.4rem",
           borderRadius: RADIUS.sm,
           border: "none",
           cursor: "pointer",
           fontWeight: "600",
-          fontSize: "0.8125rem",
+          fontSize: "0.75rem",
           backgroundColor: value === opt.value ? C.white : "transparent",
           color: value === opt.value ? C.navy900 : C.gray500,
           boxShadow: value === opt.value ? SHADOWS.sm : "none",
@@ -144,7 +140,7 @@ export const Badge: React.FC<{
     green: { bg: C.greenLight, text: C.green },
     red: { bg: C.redLight, text: C.red },
     amber: { bg: C.amberLight, text: C.amber },
-    blue: { bg: C.blueLight, text: C.blueAccent },
+    blue: { bg: C.blueSoft, text: C.blue },
     gray: { bg: C.gray100, text: C.gray600 },
   };
   const s = styles[color];

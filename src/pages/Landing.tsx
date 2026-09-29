@@ -1,85 +1,101 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { onSnapshot, query, where } from "firebase/firestore";
-import { MapPin, Search, Shield, ChevronRight, Crown } from "lucide-react";
+import {
+  Calendar,
+  Crown,
+  Pencil,
+  Shield,
+  Trophy,
+} from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
+import HeroCarousel from "../components/platform/HeroCarousel";
+import ClubDirectoryList, {
+  CLUB_PAGE_SIZE,
+} from "../components/platform/ClubDirectoryList";
+import MatchList, {
+  upcomingOfficialMatches,
+} from "../components/platform/MatchList";
 import { useAuth } from "../context/AuthContext";
-import { clubsCol, localitiesCol } from "../lib/paths";
-import { DEFAULT_CLUB_LOGO, PLATFORM_DESCRIPTION } from "../lib/clubDefaults";
-import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../components/ui";
-
-interface ClubSummary {
-  id: string;
-  slug: string;
-  name: string;
-  description?: string;
-  location?: string;
-  localityId?: string;
-  logoUrl?: string;
-}
-
-interface Locality {
-  id: string;
-  name: string;
-}
+import { useAllMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import {
+  DEFAULT_PLATFORM_HERO_IMAGES,
+  PLATFORM_DESCRIPTION,
+  PLATFORM_HEADLINE,
+} from "../lib/clubDefaults";
+import { C, PrimaryButton, RADIUS, SHADOWS } from "../components/ui";
+import {
+  ArchiveSection,
+  TournamentCard,
+  TournamentGrid,
+} from "../components/platform/ArchiveUI";
 
 export default function Landing() {
   const { user, platformConfig, isSuperAdmin, claimPlatformAdmin } = useAuth();
-  const [clubs, setClubs] = useState<ClubSummary[]>([]);
-  const [localities, setLocalities] = useState<Locality[]>([]);
-  const [search, setSearch] = useState("");
+  const {
+    clubs,
+    localities,
+    categories,
+    seasons,
+    tournaments,
+    clubNames,
+    clubsById,
+    categoryName,
+    seasonName,
+    tournamentsById,
+  } = usePlatformCatalog();
+  const { matches } = useAllMatches();
   const [claiming, setClaiming] = useState(false);
 
-  useEffect(() => {
-    const unsubClubs = onSnapshot(
-      query(clubsCol(), where("active", "==", true)),
-      (snap) => {
-        const list = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as ClubSummary,
-        );
-        list.sort((a, b) => a.name.localeCompare(b.name));
-        setClubs(list);
-      },
-      (err) => console.error("Error cargando clubes:", err),
-    );
-    const unsubLoc = onSnapshot(
-      localitiesCol(),
-      (snap) => {
-        const list = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Locality,
-        );
-        list.sort((a, b) => a.name.localeCompare(b.name));
-        setLocalities(list);
-      },
-      (err) => console.error("Error cargando localidades:", err),
-    );
-    return () => {
-      unsubClubs();
-      unsubLoc();
+  const activeClubs = useMemo(() => clubs.filter((c) => c.active), [clubs]);
+  const visibleClubs = useMemo(
+    () => [...activeClubs].sort((a, b) => a.name.localeCompare(b.name)),
+    [activeClubs],
+  );
+  const heroImages =
+    platformConfig?.heroImages && platformConfig.heroImages.length > 0
+      ? platformConfig.heroImages
+      : DEFAULT_PLATFORM_HERO_IMAGES;
+  const headline = platformConfig?.headline?.trim() || PLATFORM_HEADLINE;
+  const tagline = platformConfig?.tagline?.trim() || PLATFORM_DESCRIPTION;
+
+  const liveTournaments = useMemo(
+    () => tournaments.filter((t) => t.status === "active" || t.status === "upcoming"),
+    [tournaments],
+  );
+  const liveTournamentIds = useMemo(
+    () => new Set(liveTournaments.map((t) => t.id)),
+    [liveTournaments],
+  );
+
+  const { activeTournaments, upcomingTournaments } = useMemo(() => {
+    const byName = (a: (typeof liveTournaments)[0], b: (typeof liveTournaments)[0]) =>
+      a.name.localeCompare(b.name);
+    return {
+      activeTournaments: liveTournaments
+        .filter((t) => t.status === "active")
+        .sort(byName),
+      upcomingTournaments: liveTournaments
+        .filter((t) => t.status === "upcoming")
+        .sort(byName),
     };
-  }, []);
+  }, [liveTournaments]);
 
-  const grouped = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const filtered = term
-      ? clubs.filter(
-          (c) =>
-            c.name.toLowerCase().includes(term) ||
-            (c.location || "").toLowerCase().includes(term),
-        )
-      : clubs;
+  const tournamentCard = (t: (typeof liveTournaments)[0]) => (
+    <TournamentCard
+      key={t.id}
+      tournament={t}
+      seasonName={seasonName[t.seasonId]}
+      categoryName={categoryName[t.categoryId]}
+      categoryOrder={categories.find((c) => c.id === t.categoryId)?.order ?? 1}
+      startDate={seasons.find((s) => s.id === t.seasonId)?.startDate}
+    />
+  );
 
-    const byLocality = new Map<string, ClubSummary[]>();
-    for (const club of filtered) {
-      const loc =
-        localities.find((l) => l.id === club.localityId)?.name ||
-        club.location ||
-        "Sin localidad";
-      if (!byLocality.has(loc)) byLocality.set(loc, []);
-      byLocality.get(loc)!.push(club);
-    }
-    return [...byLocality.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [clubs, localities, search]);
+  const upcomingMatches = useMemo(
+    () => upcomingOfficialMatches(matches, liveTournamentIds),
+    [matches, liveTournamentIds],
+  );
+  const visibleMatches = upcomingMatches.slice(0, 10);
 
   const platformUnclaimed = platformConfig === undefined;
 
@@ -102,195 +118,272 @@ export default function Landing() {
   };
 
   return (
-    <PlatformLayout>
-      <section style={{ textAlign: "center", margin: "1rem 0 2rem" }}>
-        <h1
-          style={{
-            fontSize: "2rem",
-            fontWeight: 900,
-            letterSpacing: "-0.03em",
-            color: C.navy900,
-            margin: "0 0 0.5rem",
-          }}
-        >
-          Clubes por localidad
-        </h1>
-        <p style={{ color: C.gray500, margin: "0 auto 1.5rem", maxWidth: "560px" }}>
-          {PLATFORM_DESCRIPTION}
-        </p>
-        <div style={{ position: "relative", maxWidth: "420px", margin: "0 auto" }}>
-          <Search
-            size={16}
-            color={C.gray400}
-            style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)" }}
-          />
-          <FormInput
-            placeholder="Buscar club o localidad..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ paddingLeft: "2.25rem" }}
-          />
-        </div>
-      </section>
-
-      {platformUnclaimed && user && (
-        <div
-          style={{
-            backgroundColor: C.amberLight,
-            border: `1px solid ${C.amber}`,
-            borderRadius: RADIUS.lg,
-            padding: "1rem 1.25rem",
-            marginBottom: "1.5rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <Crown size={20} color={C.amber} />
-          <div style={{ flex: 1, minWidth: "200px", fontSize: "0.85rem", color: C.gray700 }}>
-            La plataforma todavía no tiene administrador. Como primer usuario,
-            puedes reclamar ese rol para crear clubes.
-          </div>
-          <PrimaryButton onClick={handleClaim} disabled={claiming}>
-            {claiming ? "Reclamando..." : "Reclamar administración"}
-          </PrimaryButton>
-        </div>
-      )}
-
-      {platformUnclaimed && !user && (
-        <div
-          style={{
-            backgroundColor: C.white,
-            border: `1px solid ${C.gray200}`,
-            borderRadius: RADIUS.lg,
-            padding: "1rem 1.25rem",
-            marginBottom: "1.5rem",
-            fontSize: "0.85rem",
-            color: C.gray600,
-          }}
-        >
-          Plataforma nueva sin configurar.{" "}
-          <Link to="/login" style={{ color: C.navy900, fontWeight: 700 }}>
-            Crea la primera cuenta
-          </Link>{" "}
-          para convertirte en administrador.
-        </div>
-      )}
-
-      {clubs.length === 0 && !!platformConfig && (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "3rem 1rem",
-            color: C.gray400,
-            backgroundColor: C.white,
-            borderRadius: RADIUS.lg,
-            border: `1px dashed ${C.gray300}`,
-          }}
-        >
-          <Shield size={40} color={C.gray300} />
-          <p style={{ margin: "0.75rem 0 0", fontWeight: 600 }}>
-            Todavía no hay clubes publicados.
-          </p>
-          {isSuperAdmin && (
-            <Link to="/admin" style={{ color: C.navy900, fontWeight: 700, fontSize: "0.85rem" }}>
-              Crear el primer club →
-            </Link>
-          )}
-        </div>
-      )}
-
-      {grouped.map(([localityName, list]) => (
-        <section key={localityName} style={{ marginBottom: "2rem" }}>
-          <h2
+    <PlatformLayout landing>
+      <div className="landing-hero">
+        {isSuperAdmin && (
+          <Link
+            to="/admin?tab=cover"
+            className="landing-hero__edit"
             style={{
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              gap: "0.4rem",
-              fontSize: "0.8rem",
+              gap: "0.35rem",
+              padding: "0.4rem 0.75rem",
+              borderRadius: RADIUS.full,
+              backgroundColor: "rgba(255,255,255,0.92)",
+              border: `1px solid ${C.gray200}`,
+              color: C.navy900,
+              fontSize: "0.75rem",
               fontWeight: 800,
-              color: C.gray500,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              margin: "0 0 0.75rem",
+              textDecoration: "none",
+              boxShadow: SHADOWS.sm,
             }}
           >
-            <MapPin size={14} color={C.amber} /> {localityName}
-            <span style={{ color: C.gray400, fontWeight: 600 }}>({list.length})</span>
-          </h2>
+            <Pencil size={12} /> Editar portada
+          </Link>
+        )}
+        <HeroCarousel images={heroImages} variant="full" arrows={false}>
+          <div className="landing-hero__copy">
+            <h1>{headline}</h1>
+            <p>{tagline}</p>
+            <div className="landing-hero__actions">
+              <Link to="/contacto#formulario" className="landing-hero__btn">
+                Apúntate a una liga
+              </Link>
+              <Link to="/registrar-equipo#formulario" className="landing-hero__btn">
+                Registrar equipo
+              </Link>
+            </div>
+          </div>
+        </HeroCarousel>
+      </div>
+
+      <div className="landing-body">
+      <Section
+        title="Próximos partidos"
+        icon={<Calendar size={15} color={C.amber} />}
+        id="encuentros"
+        tone="plain"
+      >
+        {platformUnclaimed && user && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-              gap: "0.75rem",
+              backgroundColor: C.amberLight,
+              border: `1px solid ${C.amber}`,
+              borderRadius: RADIUS.lg,
+              padding: "1rem 1.25rem",
+              marginBottom: "1.25rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap",
             }}
           >
-            {list.map((club) => (
+            <Crown size={20} color={C.amber} />
+            <div
+              style={{
+                flex: 1,
+                minWidth: 200,
+                fontSize: "0.85rem",
+                color: C.gray700,
+              }}
+            >
+              La plataforma todavía no tiene administrador. Como primer usuario,
+              puedes reclamar ese rol para crear categorías, temporadas y clubes.
+            </div>
+            <PrimaryButton onClick={handleClaim} disabled={claiming}>
+              {claiming ? "Reclamando..." : "Reclamar administración"}
+            </PrimaryButton>
+          </div>
+        )}
+
+        {platformUnclaimed && !user && (
+          <div
+            style={{
+              backgroundColor: C.white,
+              border: `1px solid ${C.gray200}`,
+              borderRadius: RADIUS.lg,
+              padding: "1rem 1.25rem",
+              marginBottom: "1.25rem",
+              fontSize: "0.85rem",
+              color: C.gray600,
+            }}
+          >
+            Plataforma nueva sin configurar.{" "}
+            <Link to="/registro" style={{ color: C.navy900, fontWeight: 700 }}>
+              Crea la primera cuenta
+            </Link>{" "}
+            para convertirte en administrador.
+          </div>
+        )}
+
+        {visibleMatches.length === 0 ? (
+          <Empty>No hay partidos próximos en torneos vigentes.</Empty>
+        ) : (
+          <>
+          <MatchList
+            matches={visibleMatches}
+            clubNames={clubNames}
+            clubsById={clubsById}
+            subtitleOf={(m) => {
+              const tournament = tournamentsById[m.tournamentId];
+              const category =
+                categoryName[tournament?.categoryId || m.categoryId] || "";
+              return [category, tournament?.name].filter(Boolean).join(" · ");
+            }}
+          />
+          {upcomingMatches.length > 10 && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "0.85rem" }}>
               <Link
-                key={club.id}
-                to={`/${club.slug || club.id}`}
+                to="/partidos"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.85rem",
-                  padding: "0.9rem 1rem",
-                  backgroundColor: C.white,
-                  border: `1px solid ${C.gray200}`,
-                  borderRadius: RADIUS.lg,
-                  boxShadow: SHADOWS.sm,
+                  padding: "0.4rem 0.9rem",
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  border: `1px solid ${C.gray300}`,
+                  borderRadius: RADIUS.md,
+                  color: C.navy900,
                   textDecoration: "none",
-                  color: C.gray800,
-                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = SHADOWS.md;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = SHADOWS.sm;
+                  background: C.white,
                 }}
               >
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    backgroundColor: C.navy900,
-                    border: `1.5px solid ${C.amber}`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <img
-                    src={club.logoUrl || DEFAULT_CLUB_LOGO}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 800,
-                      fontSize: "0.95rem",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {club.name}
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: C.gray500 }}>
-                    /{club.slug || club.id}
-                  </div>
-                </div>
-                <ChevronRight size={16} color={C.gray400} />
+                Ver más
               </Link>
-            ))}
-          </div>
-        </section>
-      ))}
+            </div>
+          )}
+          </>
+        )}
+      </Section>
+
+      <Section
+        title="Torneos"
+        icon={<Trophy size={15} color={C.amber} />}
+        id="torneos"
+        tone="alt"
+      >
+        {liveTournaments.length === 0 ? (
+          <Empty>
+            No hay torneos publicados.
+            {isSuperAdmin && (
+              <>
+                {" "}
+                <Link to="/admin" style={{ color: C.navy900, fontWeight: 700 }}>
+                  Crear uno
+                </Link>
+              </>
+            )}
+          </Empty>
+        ) : (
+          <>
+            {activeTournaments.length > 0 && (
+              <ArchiveSection title="En curso" count={activeTournaments.length}>
+                <TournamentGrid>{activeTournaments.map(tournamentCard)}</TournamentGrid>
+              </ArchiveSection>
+            )}
+            {upcomingTournaments.length > 0 && (
+              <ArchiveSection title="Próximos" count={upcomingTournaments.length}>
+                <TournamentGrid>{upcomingTournaments.map(tournamentCard)}</TournamentGrid>
+              </ArchiveSection>
+            )}
+          </>
+        )}
+      </Section>
+
+      <Section
+        title="Equipos"
+        icon={<Shield size={15} color={C.amber} />}
+        id="clubes"
+        tone="plain"
+        action={
+          <Link
+            to="/equipos"
+            style={{
+              marginLeft: "auto",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              color: C.navy900,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Ver todos →
+          </Link>
+        }
+      >
+        {visibleClubs.length === 0 ? (
+          <Empty>
+            <Shield size={32} color={C.gray300} />
+            <div>Todavía no hay clubes publicados.</div>
+          </Empty>
+        ) : (
+          <ClubDirectoryList
+            clubs={visibleClubs.slice(0, CLUB_PAGE_SIZE)}
+            localityName={(club) =>
+              localities.find((l) => l.id === club.localityId)?.name ||
+              club.location ||
+              `/${club.slug}`
+            }
+          />
+        )}
+      </Section>
+      </div>
     </PlatformLayout>
   );
 }
+
+function Section({
+  title,
+  icon,
+  id,
+  action,
+  children,
+  tone = "plain",
+}: {
+  title: string;
+  icon: ReactNode;
+  id?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  tone?: "plain" | "alt";
+}) {
+  return (
+    <section id={id} className={`landing-band landing-band--${tone}`}>
+      <div className="landing-band__inner">
+        <h2
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.45rem",
+            fontSize: "1.05rem",
+            fontWeight: 900,
+            color: C.navy900,
+            margin: "0 0 0.85rem",
+            width: "100%",
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+            {icon} {title}
+          </span>
+          {action}
+        </h2>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+const Empty = ({ children }: { children: React.ReactNode }) => (
+  <div
+    style={{
+      padding: "1.5rem",
+      textAlign: "center",
+      color: C.gray400,
+      backgroundColor: C.white,
+      border: `1px dashed ${C.gray300}`,
+      borderRadius: RADIUS.lg,
+      fontSize: "0.85rem",
+    }}
+  >
+    {children}
+  </div>
+);

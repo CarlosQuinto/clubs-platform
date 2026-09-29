@@ -13,17 +13,9 @@ import {
   Star,
 } from "lucide-react";
 import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
-// 👇 IMPORTACIONES DE STORAGE Y COMPRESIÓN 👇
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
-import imageCompression from "browser-image-compression";
-
+import { getStorage, ref, deleteObject } from "firebase/storage";
 import { useClub } from "../../context/ClubContext";
+import { uploadImageFile } from "../../lib/uploadImage";
 import {
   C,
   RADIUS,
@@ -34,6 +26,7 @@ import {
   SecondaryButton,
 } from "../ui";
 import { formatFriendlyDate } from "../../utils/helpers";
+import { useModalLock } from "../../hooks/useModalLock";
 
 interface GallerySectionProps {
   gallery: any[];
@@ -115,15 +108,11 @@ export default function GallerySection({
         initialQuality: 0.8,
       };
 
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("gallery", `photo_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("gallery", `photo_${Date.now()}.jpg`),
+        file,
+        options,
       );
-
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
 
       // Lo agregamos automáticamente al área de "staging"
       setStagingPhotos((prev) => [
@@ -211,6 +200,8 @@ export default function GallerySection({
     setModalPhotosList([{ url: "", caption: "" }]);
   };
 
+  useModalLock(modalAlbumName ? () => { void handleCloseModal(); } : null);
+
   const updateModalPhoto = (
     idx: number,
     field: "url" | "caption",
@@ -245,15 +236,11 @@ export default function GallerySection({
         useWebWorker: true,
         initialQuality: 0.8,
       };
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("gallery", `photo_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("gallery", `photo_${Date.now()}.jpg`),
+        file,
+        options,
       );
-
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
 
       updateModalPhoto(index, "url", url);
       setNewlyUploadedModal((prev) => [...prev, url]); // La rastreamos como basura potencial
@@ -768,17 +755,19 @@ export default function GallerySection({
       {/* ADMIN GALERÍA (Creación de Nuevos Álbumes) */}
       {perms.canEditPortada && (
         <SectionCard
+          className="compact-form-card"
           title="Crear Nuevo Álbum"
-          icon={<Camera size={16} color={C.navy600} />}
+          icon={<Camera size={14} color={C.navy600} />}
           style={{
             border: `2px dashed ${C.navy200}`,
             backgroundColor: C.navy50,
-            marginBottom: "2rem",
+            marginBottom: "1.25rem",
           }}
         >
           <form
             onSubmit={handleAddStaging}
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            className="compact-form"
+            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
           >
             <datalist id="album-names">
               {existingAlbumNames.map((name, idx) => (
@@ -791,118 +780,104 @@ export default function GallerySection({
               list="album-names"
               value={albumName}
               onChange={(e) => setAlbumName(e.target.value)}
-              placeholder="1. Nombre del Álbum (Ej. Convivio 2026)"
+              placeholder="Nombre del álbum (Ej. Convivio 2026)"
             />
 
             <div
               style={{
                 backgroundColor: C.white,
-                padding: "1rem",
+                padding: "0.6rem",
                 borderRadius: RADIUS.md,
                 border: `1px solid ${C.gray200}`,
               }}
             >
               <p
                 style={{
-                  margin: "0 0 0.5rem 0",
-                  fontSize: "0.8125rem",
+                  margin: "0 0 0.35rem 0",
+                  fontSize: "0.7rem",
                   fontWeight: "700",
                   color: C.navy900,
                 }}
               >
-                2. Añadir foto a la colección:
+                Añadir foto
               </p>
 
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.5rem",
+                  gap: "0.4rem",
                 }}
               >
-                {/* 👇 MODIFICADO: Input URL + Botón Subir 👇 */}
-                <div
+                <FormInput
+                  type="text"
+                  placeholder="Pega un link de imagen"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                />
+                <label
                   style={{
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "0.2rem",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    color: C.amber,
+                    fontSize: "0.68rem",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    width: "fit-content",
                   }}
                 >
-                  <FormInput
-                    type="text"
-                    placeholder="Pega un link de imagen"
-                    value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
-                  />
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.3rem",
-                      color: C.amber,
-                      fontSize: "0.75rem",
-                      fontWeight: "700",
-                      cursor: "pointer",
-                      width: "fit-content",
-                      marginTop: "0.2rem",
+                  <UploadCloud size={13} />
+                  {isUploadingMain
+                    ? "Comprimiendo y subiendo foto..."
+                    : "O súbela desde tu dispositivo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingMain}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleMainFileUpload(e.target.files[0]);
+                      }
                     }}
-                  >
-                    <UploadCloud size={14} />
-                    {isUploadingMain
-                      ? "Comprimiendo y subiendo foto..."
-                      : "O súbela desde tu dispositivo"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={isUploadingMain}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleMainFileUpload(e.target.files[0]);
-                        }
-                      }}
-                      style={{ display: "none" }}
-                    />
-                  </label>
-                </div>
+                    style={{ display: "none" }}
+                  />
+                </label>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    marginTop: "0.4rem",
-                  }}
-                >
+                <div className="album-add-row">
                   <FormInput
                     type="text"
-                    placeholder="Descripción (Opcional)"
+                    placeholder="Descripción (opcional)"
                     value={newCaption}
                     onChange={(e) => setNewCaption(e.target.value)}
-                    style={{ flex: 1 }}
                   />
                   <SecondaryButton
                     type="submit"
                     disabled={!newUrl.trim() || isUploadingMain}
-                    style={{ whiteSpace: "nowrap", padding: "0.5rem 1rem" }}
+                    style={{
+                      whiteSpace: "nowrap",
+                      padding: "0.38rem 0.55rem",
+                      fontSize: "0.7rem",
+                    }}
                   >
-                    <Plus size={16} /> Añadir a lista
+                    <Plus size={13} /> Añadir
                   </SecondaryButton>
                 </div>
               </div>
             </div>
           </form>
 
-          {/* Área de Preparación de Nuevos Álbumes */}
           <div
             style={{
-              marginTop: "1.25rem",
-              padding: "1rem",
+              marginTop: "0.55rem",
+              padding: stagingPhotos.length > 0 ? "0.55rem" : "0.4rem 0.55rem",
               backgroundColor:
                 stagingPhotos.length > 0 ? C.white : "transparent",
               border:
                 stagingPhotos.length > 0
                   ? `2px solid ${C.amber}`
                   : `1px dashed ${C.gray300}`,
-              borderRadius: RADIUS.lg,
+              borderRadius: RADIUS.md,
               transition: "all 0.3s ease",
             }}
           >
@@ -911,19 +886,19 @@ export default function GallerySection({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1rem",
+                marginBottom: stagingPhotos.length > 0 ? "0.45rem" : 0,
               }}
             >
               <h4
                 style={{
                   margin: 0,
-                  fontSize: "0.875rem",
+                  fontSize: "0.72rem",
                   fontWeight: "800",
                   color: stagingPhotos.length > 0 ? C.navy900 : C.gray400,
                 }}
               >
                 {stagingPhotos.length > 0
-                  ? `Fotos listas para subir (${stagingPhotos.length})`
+                  ? `Fotos listas (${stagingPhotos.length})`
                   : "Vista previa"}
               </h4>
             </div>
@@ -934,9 +909,9 @@ export default function GallerySection({
                   className="hide-scroll"
                   style={{
                     display: "flex",
-                    gap: "0.75rem",
+                    gap: "0.45rem",
                     overflowX: "auto",
-                    paddingBottom: "1rem",
+                    paddingBottom: "0.4rem",
                   }}
                 >
                   {stagingPhotos.map((p, idx) => (
@@ -945,8 +920,8 @@ export default function GallerySection({
                       style={{
                         position: "relative",
                         flexShrink: 0,
-                        width: "80px",
-                        height: "80px",
+                        width: "64px",
+                        height: "64px",
                         borderRadius: RADIUS.md,
                         overflow: "hidden",
                         boxShadow: SHADOWS.sm,
@@ -1027,13 +1002,14 @@ export default function GallerySection({
                     width: "100%",
                     display: "flex",
                     justifyContent: "center",
-                    gap: "0.4rem",
+                    gap: "0.3rem",
                     alignItems: "center",
-                    marginTop: "0.5rem",
+                    marginTop: "0.35rem",
+                    padding: "0.5rem",
+                    fontSize: "0.75rem",
                   }}
                 >
-                  <UploadCloud size={18} /> Guardar Álbum Nuevo (
-                  {stagingPhotos.length} fotos)
+                  <UploadCloud size={14} /> Guardar Álbum ({stagingPhotos.length})
                 </PrimaryButton>
               </>
             )}

@@ -3,6 +3,12 @@ node_modules
 # Compilación de producción
 dist/
 dist-ssr/
+functions/lib/
+functions/node_modules/
+
+# Compilación de producción
+dist/
+dist-ssr/
 
 # Caché de Firebase
 .firebase/
@@ -11,6 +17,9 @@ dist-ssr/
 .env
 .env.local
 .env.*.local
+functions/.env
 
 .agents/
 serviceAccountKey.json
+firestore.rules.prod.bak
+firestore.rules.seed

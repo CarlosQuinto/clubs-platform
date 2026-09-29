@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -6,7 +6,6 @@ import {
   Trophy,
   Target,
   Search,
-  Hand,
   Shield,
   Goal,
   X,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { useClub } from "../context/ClubContext";
+import { useModalLock } from "../hooks/useModalLock";
 import { C, RADIUS, SHADOWS, SectionCard, FormInput } from "../components/ui";
 import { CompareModal } from "../components/AppComponents";
 
@@ -27,22 +27,7 @@ import { usePlayerStats } from "../hooks/usePlayerStats";
 const PlayersCarouselModal = ({ position, playersStats, onClose }: any) => {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-
-  // Bloquear el scroll y escuchar la tecla ESC
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  useModalLock(onClose);
 
   // Filtramos solo a los jugadores activos de la posición seleccionada
   const carouselPlayers = playersStats.filter(
@@ -261,12 +246,6 @@ const PlayersCarouselModal = ({ position, playersStats, onClose }: any) => {
                   {isGoalkeeper ? (
                     <>
                       <MiniStat
-                        icon={<Hand size={16} color="#3b82f6" />}
-                        label="Atajadas"
-                        value={p.saves || 0}
-                        color="#3b82f6"
-                      />
-                      <MiniStat
                         icon={<Shield size={16} />}
                         label="Arcos Cero"
                         value={p.cleanSheets || 0}
@@ -436,7 +415,6 @@ export default function Players({ players, events, perms, goals }: any) {
   const [playerVariant, setPlayerVariant] = useState("");
   const [playerBirthDate, setPlayerBirthDate] = useState("");
   const [playerImageUrl, setPlayerImageUrl] = useState("");
-  const [isDT, setIsDT] = useState(false);
   const [playerActive, setPlayerActive] = useState(true);
 
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
@@ -462,7 +440,6 @@ export default function Players({ players, events, perms, goals }: any) {
       variant: playerVariant.trim(),
       birthDate: playerBirthDate || "",
       imageUrl: playerImageUrl.trim(),
-      isDT: isDT,
       active: playerActive,
     };
 
@@ -487,7 +464,6 @@ export default function Players({ players, events, perms, goals }: any) {
     setPlayerVariant("");
     setPlayerBirthDate("");
     setPlayerImageUrl("");
-    setIsDT(false);
     setPlayerActive(true);
   };
 
@@ -499,7 +475,6 @@ export default function Players({ players, events, perms, goals }: any) {
     setPlayerVariant(p.variant || "");
     setPlayerBirthDate(p.birthDate || "");
     setPlayerImageUrl(p.imageUrl || "");
-    setIsDT(p.isDT || false);
     setPlayerActive(p.active !== false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -849,8 +824,6 @@ export default function Players({ players, events, perms, goals }: any) {
           setPlayerBirthDate={setPlayerBirthDate}
           playerImageUrl={playerImageUrl}
           setPlayerImageUrl={setPlayerImageUrl}
-          isDT={isDT}
-          setIsDT={setIsDT}
           playerActive={playerActive}
           setPlayerActive={setPlayerActive}
           onSubmit={handleSavePlayer}

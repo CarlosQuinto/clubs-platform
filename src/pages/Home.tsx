@@ -6,14 +6,26 @@ import BirthdayBanner from "../components/home/BirthdayBanner";
 import HeroSection from "../components/home/HeroSection";
 import HallOfFame from "../components/home/HallOfFame";
 import GallerySection from "../components/home/GallerySection";
+import TeamRecordCard from "../components/home/TeamRecordCard";
+import ClubTrophyCase from "../components/home/ClubTrophyCase";
+import StatsScopeBar from "../components/club/StatsScopeBar";
 
 export default function Home({
   clubInfo,
   players,
   events,
+  clubEvents,
   gallery,
   perms,
-  setActiveTab,
+  teamRecord,
+  scopeLabel,
+  trophies,
+  seasonName,
+  categoryName,
+  scope,
+  onScopeChange,
+  seasons,
+  categories,
 }: any) {
   // ── Estado global para el visor de fotos (Lightbox) ──
   const [lightboxData, setLightboxData] = useState<{
@@ -51,12 +63,14 @@ export default function Home({
           }
 
           if (ev.eventType === "Partido") {
-            // 👇 Las presencias SÍ cuentan para amistosos y oficiales 👇
-            if (attended) matchesAttended++;
+            if (attended) {
+              if (ev.matchType === "Amistoso") trainingsAttended++;
+              else matchesAttended++;
+            }
 
-            // 👇 REGLA DE ORO: Goles, Asistencias y MVPs SOLO en OFICIALES 👇
             if (ev.matchType !== "Amistoso") {
               ev.stats?.forEach((s: any) => {
+                if (s.isOwnGoal) return;
                 if (s.scorer === p.id || s.scorer === p.name) goals++;
                 if (s.assist === p.id || s.assist === p.name) assists++;
               });
@@ -131,6 +145,30 @@ export default function Home({
         setLightboxData={setLightboxData}
       />
 
+      <div
+        className="home-record-block"
+        style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+      >
+        <StatsScopeBar
+          scope={scope}
+          onChange={onScopeChange}
+          seasons={seasons || []}
+          categories={categories || []}
+        />
+        {teamRecord && (
+          <TeamRecordCard
+            record={teamRecord}
+            scopeLabel={scopeLabel || "Histórico"}
+          />
+        )}
+      </div>
+
+      <ClubTrophyCase
+        trophies={trophies || []}
+        seasonName={seasonName || {}}
+        categoryName={categoryName || {}}
+      />
+
       {/* MURO DE LA FAMA (Ya viene purificado de amistosos) */}
       <HallOfFame
         topScorers={topScorers}
@@ -141,7 +179,7 @@ export default function Home({
 
       <GallerySection
         gallery={gallery}
-        events={events}
+        events={clubEvents || events}
         perms={perms}
         setLightboxData={setLightboxData}
       />

@@ -35,7 +35,34 @@ export const clubItemRef = (clubId: string, name: ClubCollection, id: string) =>
 
 export const localitiesCol = () => collection(db, "localities");
 export const platformConfigRef = () => doc(db, "platform", "config");
+export const platformInvitesCol = () =>
+  collection(db, "platform", "config", "invites");
+export const platformInviteRef = (inviteKey: string) =>
+  doc(db, "platform", "config", "invites", inviteKey);
 export const userDocRef = (uid: string) => doc(db, "users", uid);
+
+// ── Competición (gestionada por el super administrador) ──
+//   categories/{id}   → divisiones (Primera, Segunda, ...)
+//   seasons/{id}      → temporadas
+//   tournaments/{id}  → torneos (seasonId + categoryId + clubIds; la categoría es del torneo)
+//   matches/{id}      → partidos oficiales (tournamentId, home/away, sides por club)
+export const categoriesCol = () => collection(db, "categories");
+export const categoryRef = (id: string) => doc(db, "categories", id);
+export const seasonsCol = () => collection(db, "seasons");
+export const seasonRef = (id: string) => doc(db, "seasons", id);
+export const tournamentsCol = () => collection(db, "tournaments");
+export const tournamentRef = (id: string) => doc(db, "tournaments", id);
+export const matchesCol = () => collection(db, "matches");
+export const matchRef = (id: string) => doc(db, "matches", id);
+export const inquiriesCol = () => collection(db, "inquiries");
+export const inquiryRef = (id: string) => doc(db, "inquiries", id);
+export const teamApplicationsCol = () => collection(db, "teamApplications");
+export const teamApplicationRef = (id: string) =>
+  doc(db, "teamApplications", id);
+
+/** Ruta de Storage para recursos de la plataforma (carrusel de la landing). */
+export const platformStoragePath = (folder: string, filename: string) =>
+  `platform/${folder}/${filename}`;
 
 /** Ruta de Storage aislada por club: clubs/{clubId}/{folder}/{filename} */
 export const clubStoragePath = (
@@ -58,4 +85,18 @@ export const normalizeSlug = (input: string) =>
 export const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");
 
-export const RESERVED_SLUGS = ["admin", "login", "registro", "clubes", "api"];
+export const RESERVED_SLUGS = [
+  "admin",
+  "login",
+  "registro",
+  "invitar",
+  "registrar-equipo",
+  "contacto",
+  "solicitudes",
+  "clubes",
+  "equipos",
+  "torneos",
+  "temporadas",
+  "categorias",
+  "api",
+];

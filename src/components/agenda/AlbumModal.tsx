@@ -10,18 +10,17 @@ import {
   UploadCloud,
   Link as LinkIcon,
 } from "lucide-react";
+import { useClub } from "../../context/ClubContext";
+import { useModalLock } from "../../hooks/useModalLock";
 import { C, RADIUS, SHADOWS, PrimaryButton } from "../../components/ui";
 
 // 👇 IMPORTACIONES DE STORAGE Y COMPRESIÓN 👇
 import {
   getStorage,
   ref,
-  uploadBytes,
-  getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import imageCompression from "browser-image-compression";
-import { useClub } from "../../context/ClubContext";
+import { uploadImageFile } from "../../lib/uploadImage";
 
 interface AlbumModalProps {
   ev: any;
@@ -36,6 +35,7 @@ export default function AlbumModal({ ev, onClose, onSave }: AlbumModalProps) {
   // 👇 ESTADOS PARA SUBIDA Y BASURA 👇
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [newlyUploadedPhotos, setNewlyUploadedPhotos] = useState<string[]>([]);
+  useModalLock(onClose);
 
   // Inicializar estado cuando se abre el modal
   useEffect(() => {
@@ -73,15 +73,11 @@ export default function AlbumModal({ ev, onClose, onSave }: AlbumModalProps) {
         initialQuality: 0.8,
       };
 
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("events", `album_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("events", `album_${Date.now()}.jpg`),
+        file,
+        options,
       );
-
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
 
       setNewlyUploadedPhotos((prev) => [...prev, url]);
 

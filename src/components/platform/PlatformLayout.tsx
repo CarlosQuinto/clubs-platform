@@ -1,144 +1,291 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Crown, LogIn, LogOut, Shield } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Crown,
+  Image as ImageIcon,
+  Inbox,
+  LogIn,
+  LogOut,
+  Mail,
+  Menu,
+  Calendar,
+  Shield,
+  Trophy,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { C, RADIUS } from "../ui";
+import { useModalLock } from "../../hooks/useModalLock";
+import { C } from "../ui";
 import { PLATFORM_NAME } from "../../lib/clubDefaults";
+import { hasAnySocial } from "../../lib/social";
+import SocialLinks from "./SocialLinks";
+
+type AdminTab = "clubs" | "competition" | "cover" | "inbox" | "admins";
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
   children,
-  maxWidth = "960px",
+  maxWidth,
+  landing,
+  flush,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   maxWidth?: string;
+  landing?: boolean;
+  flush?: boolean;
 }) {
-  const { user, isSuperAdmin, logout } = useAuth();
+  const { user, isSuperAdmin, logout, platformConfig } = useAuth();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const brandName = platformConfig?.name?.trim() || PLATFORM_NAME;
+  const logoUrl = platformConfig?.logoUrl?.trim();
+  const adminTab = ((): AdminTab => {
+    const tab = new URLSearchParams(search).get("tab");
+    return tab === "competition" || tab === "cover" || tab === "inbox" || tab === "admins"
+      ? tab
+      : "clubs";
+  })();
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: C.gray50,
-        color: C.gray800,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <header
-        style={{
-          background: `linear-gradient(135deg, ${C.navy900} 0%, #0a1120 100%)`,
-          color: C.white,
-          padding: "1rem 1.5rem",
-          boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname, search]);
+
+  useModalLock(menuOpen ? () => setMenuOpen(false) : null);
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const renderAuthButton = () =>
+    user ? (
+      <button
+        type="button"
+        className="platform-auth-btn is-out"
+        title={user.email || ""}
+        onClick={() => {
+          closeMenu();
+          void logout();
         }}
       >
-        <div
-          style={{
-            maxWidth,
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-          }}
-        >
-          <Link
-            to="/"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.6rem",
-              color: C.white,
-              textDecoration: "none",
-              fontWeight: 900,
-              letterSpacing: "-0.02em",
-              fontSize: "1.1rem",
-            }}
-          >
-            <Shield size={22} color={C.amber} />
-            {PLATFORM_NAME}
-          </Link>
+        <LogOut size={14} /> Salir
+      </button>
+    ) : (
+      <button
+        type="button"
+        className="platform-auth-btn is-in"
+        onClick={() => {
+          closeMenu();
+          navigate("/login");
+        }}
+      >
+        <LogIn size={14} /> Entrar
+      </button>
+    );
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {isSuperAdmin && (
-              <Link
-                to="/admin"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  padding: "0.35rem 0.6rem",
-                  borderRadius: RADIUS.md,
-                  backgroundColor: "rgba(245, 158, 11, 0.15)",
-                  color: C.amber,
-                  fontSize: "0.7rem",
-                  fontWeight: 800,
-                  textDecoration: "none",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                <Crown size={12} /> Admin
-              </Link>
+  const navLink = (
+    to: string,
+    label: string,
+    icon: ReactNode,
+    active: boolean,
+  ) => (
+    <Link
+      to={to}
+      onClick={closeMenu}
+      className={active ? "platform-nav__link is-on" : "platform-nav__link"}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+
+  const sidebar = (
+    <aside className={menuOpen ? "platform-sidebar is-open" : "platform-sidebar"}>
+      <div className="platform-sidebar__head">
+        <Link to="/" className="platform-sidebar__brand" onClick={closeMenu}>
+          {logoUrl ? (
+            <img src={logoUrl} alt="" />
+          ) : (
+            <Shield size={20} color={C.amber} />
+          )}
+          <span>{brandName}</span>
+        </Link>
+        <button
+          type="button"
+          className="platform-sidebar__close"
+          aria-label="Cerrar menú"
+          onClick={closeMenu}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <nav className="platform-sidebar__nav">
+        <div className="platform-sidebar__label platform-sidebar__label--sections">
+          Secciones
+        </div>
+        {navLink(
+          "/torneos",
+          "Torneos",
+          <Trophy size={16} />,
+          pathname === "/torneos" || pathname.startsWith("/torneos/"),
+        )}
+        {navLink(
+          "/partidos",
+          "Partidos",
+          <Calendar size={16} />,
+          pathname === "/partidos",
+        )}
+        {navLink(
+          "/equipos",
+          "Equipos",
+          <Shield size={16} />,
+          pathname === "/equipos",
+        )}
+        {navLink(
+          "/contacto",
+          "Contacto",
+          <Mail size={16} />,
+          pathname === "/contacto",
+        )}
+        {navLink(
+          "/registrar-equipo",
+          "Registrar equipo",
+          <UserPlus size={16} />,
+          pathname === "/registrar-equipo",
+        )}
+
+        {isSuperAdmin && (
+          <div className="platform-sidebar__group">
+            <div className="platform-sidebar__label">Administración</div>
+            {navLink(
+              "/admin",
+              "Clubes",
+              <Shield size={16} />,
+              pathname === "/admin" && adminTab === "clubs",
             )}
-            {user ? (
-              <button
-                onClick={() => logout()}
-                title={user.email || ""}
-                style={{
-                  background: "rgba(239, 68, 68, 0.1)",
-                  border: `1px solid rgba(239, 68, 68, 0.3)`,
-                  borderRadius: RADIUS.md,
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  padding: "0.35rem 0.6rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                }}
-              >
-                <LogOut size={12} /> Salir
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/login")}
-                style={{
-                  background: C.white,
-                  border: "none",
-                  borderRadius: RADIUS.md,
-                  color: C.navy900,
-                  cursor: "pointer",
-                  padding: "0.35rem 0.6rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  fontSize: "0.7rem",
-                  fontWeight: 800,
-                }}
-              >
-                <LogIn size={12} /> Iniciar sesión
-              </button>
+            {navLink(
+              "/admin?tab=competition",
+              "Competición",
+              <Trophy size={16} />,
+              pathname === "/admin" && adminTab === "competition",
+            )}
+            {navLink(
+              "/admin?tab=cover",
+              "Portada",
+              <ImageIcon size={16} />,
+              pathname === "/admin" && adminTab === "cover",
+            )}
+            {navLink(
+              "/admin?tab=inbox",
+              "Solicitudes",
+              <Inbox size={16} />,
+              pathname === "/admin" && adminTab === "inbox",
+            )}
+            {navLink(
+              "/admin?tab=admins",
+              "Administradores",
+              <Crown size={16} />,
+              pathname === "/admin" && adminTab === "admins",
             )}
           </div>
-        </div>
-      </header>
+        )}
+      </nav>
 
-      <main
-        style={{
-          maxWidth,
-          width: "100%",
-          margin: "0 auto",
-          padding: "1.5rem",
-          flex: 1,
-          boxSizing: "border-box",
-          animation: "fadeIn 0.3s ease",
-        }}
-      >
-        {children}
-      </main>
+      <div className="platform-sidebar__foot">
+        {renderAuthButton()}
+      </div>
+    </aside>
+  );
+
+  return (
+    <div className="platform-shell">
+      {menuOpen && (
+        <button
+          type="button"
+          className="platform-scrim"
+          aria-label="Cerrar menú"
+          onClick={closeMenu}
+        />
+      )}
+      {sidebar}
+      <div className="platform-body">
+        <header className="platform-topbar">
+          <button
+            type="button"
+            className="platform-topbar__menu"
+            aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          <Link to="/" className="platform-topbar__brand" onClick={closeMenu}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="" />
+            ) : (
+              <Shield className="platform-topbar__mark" color={C.amber} />
+            )}
+            <span>{brandName}</span>
+          </Link>
+          <div className="platform-topbar__auth">{renderAuthButton()}</div>
+        </header>
+        <main
+          className={[
+            "platform-main",
+            maxWidth ? "platform-main--narrow" : "",
+            landing || flush ? "platform-main--flush" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={maxWidth ? { maxWidth } : undefined}
+        >
+          {children}
+        </main>
+        <footer className="platform-footer">
+          <div className="platform-footer__inner">
+            <div className="platform-footer__brand">
+              <Link to="/" className="platform-footer__logo" onClick={closeMenu}>
+                {logoUrl ? (
+                  <img src={logoUrl} alt="" />
+                ) : (
+                  <Shield size={22} color={C.amber} />
+                )}
+                <span>{brandName}</span>
+              </Link>
+            </div>
+            <nav className="platform-footer__nav" aria-label="Enlaces del pie">
+              <Link to="/" onClick={closeMenu}>
+                Inicio
+              </Link>
+              <Link to="/equipos" onClick={closeMenu}>
+                Equipos
+              </Link>
+              <Link to="/torneos" onClick={closeMenu}>
+                Torneos
+              </Link>
+              <Link to="/partidos" onClick={closeMenu}>
+                Partidos
+              </Link>
+              <Link to="/contacto#formulario" onClick={closeMenu}>
+                Contacto
+              </Link>
+              <Link to="/registrar-equipo#formulario" onClick={closeMenu}>
+                Registrar equipo
+              </Link>
+            </nav>
+            {hasAnySocial(platformConfig?.social) && (
+              <div className="platform-footer__social">
+                <span>Síguenos</span>
+                <SocialLinks social={platformConfig?.social} tone="dark" compact />
+              </div>
+            )}
+          </div>
+          <div className="platform-footer__bar">
+            <span>
+              © {new Date().getFullYear()} {brandName}
+            </span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,6 @@ import {
   Plus,
   LayoutTemplate,
   ArrowRightLeft,
-  Trophy,
   Target,
   Edit,
   Trash2,
@@ -21,7 +20,7 @@ import {
   ChevronRight,
   UserCheck,
   UserX,
-  Wallet,
+  ClipboardList,
   ChevronUp,
   ChevronDown,
   UserPlus,
@@ -45,6 +44,7 @@ import {
   formatFriendlyDate,
   formatFriendlyTime,
 } from "../utils/helpers";
+import { useModalLock } from "../hooks/useModalLock";
 import RoutineDisplay from "./agenda/RoutineDisplay";
 
 export const AttendanceModal = ({
@@ -70,6 +70,7 @@ export const AttendanceModal = ({
   const [adminAttendees, setAdminAttendees] =
     useState<string[]>(initialAttendees);
   const [newGuest, setNewGuest] = useState("");
+  useModalLock(onClose);
 
   const isAttending = adminAttendees.includes(selectedPlayerId);
 
@@ -770,13 +771,7 @@ export const LineupModal = ({
   // Ahora selectedPlayer puede ser alguien de la banca O de la cancha
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, []);
+  useModalLock(onClose);
 
   // ── 1. MANTENER JUGADORES AL CAMBIAR FORMACIÓN ──
   const reassignPlayersToNewFormation = (newMode: string, newForm: string) => {
@@ -1514,6 +1509,8 @@ export const CompareModal = ({
   const pA = activePlayersStats.find((p) => p.id === playerAId);
   const pB = activePlayersStats.find((p) => p.id === playerBId);
 
+  useModalLock(onClose);
+
   // 👇 NUEVO RENDER DE FILAS CON ÍCONOS Y PÍLDORAS 👇
   const renderRow = (
     label: string,
@@ -1914,6 +1911,7 @@ export const LightboxModal = ({
 }: any) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
+  useModalLock(onClose);
 
   useEffect(() => {
     if (thumbnailsRef.current && urls.length > 1) {
@@ -2151,7 +2149,6 @@ export const EventCard = ({
   isHighlighted,
   onImageClick,
   onEditPhoto,
-  onOpenArbitration,
 }: any) => {
   const isMatch = ev.eventType === "Partido";
   const attendeesCount = (ev.attendees || []).length;
@@ -2216,37 +2213,8 @@ export const EventCard = ({
               }}
             >
               <Badge color={isMatch ? "green" : "blue"}>
-                {isMatch ? <Trophy size={11} /> : <Target size={11} />}
-                {isMatch ? "Partido" : "Entrenamiento"}
+                {isMatch ? "Amistoso" : "Entrenamiento"}
               </Badge>
-
-              {/* 👇 NUEVO: INDICADOR OFICIAL / AMISTOSO 👇 */}
-              {isMatch && (
-                <span
-                  style={{
-                    backgroundColor:
-                      ev.matchType === "Amistoso"
-                        ? "rgba(59, 130, 246, 0.1)" // Azul tenue para Amistoso
-                        : "rgba(245, 158, 11, 0.1)", // Dorado tenue para Oficial
-                    color: ev.matchType === "Amistoso" ? "#3b82f6" : C.amber,
-                    border: `1px solid ${
-                      ev.matchType === "Amistoso"
-                        ? "rgba(59, 130, 246, 0.3)"
-                        : "rgba(245, 158, 11, 0.3)"
-                    }`,
-                    padding: "2px 8px",
-                    borderRadius: RADIUS.full,
-                    fontSize: "0.6rem",
-                    fontWeight: "800",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    display: "inline-flex",
-                    alignItems: "center",
-                  }}
-                >
-                  {ev.matchType === "Amistoso" ? "Amistoso" : "Oficial"}
-                </span>
-              )}
             </div>
 
             <h3
@@ -2377,42 +2345,26 @@ export const EventCard = ({
                   onClick={onOpenLineup}
                   style={{
                     fontSize: "0.75rem",
-                    padding: "0.5rem 0.8rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.3rem",
-                    borderColor: C.amber,
-                    color: C.amber,
-                    backgroundColor: C.amberLight,
-                  }}
-                >
-                  <LayoutTemplate size={14} />{" "}
-                  {perms.canEditAgenda
-                    ? hasLineup
-                      ? "Editar Alineación"
-                      : "Armar Alineación"
-                    : "Ver Alineación"}
-                </SecondaryButton>
-              )}
-              {isMatch && perms.canEditAgenda && (
-                <SecondaryButton
-                  onClick={onOpenArbitration}
-                  style={{
-                    fontSize: "0.75rem",
-                    padding: "0.5rem 0.8rem",
+                    padding: "0.4rem 0.7rem",
                     display: "flex",
                     alignItems: "center",
                     gap: "0.3rem",
                   }}
                 >
-                  <Wallet size={14} /> Pagos Arbitraje
+                  <ClipboardList size={13} /> Alineación
                 </SecondaryButton>
               )}
               <SecondaryButton
                 onClick={onOpenAttendance}
-                style={{ fontSize: "0.75rem", padding: "0.5rem 1rem" }}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.4rem 0.7rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                }}
               >
-                Confirmar / Cambiar
+                <Users size={13} /> Asistencia ({attendeesCount})
               </SecondaryButton>
             </div>
           </div>

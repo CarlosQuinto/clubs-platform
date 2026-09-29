@@ -9,18 +9,29 @@ import {
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
   User,
 } from "firebase/auth";
-import { onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth } from "../lib/firebase";
-import { platformConfigRef, userDocRef } from "../lib/paths";
+import { onSnapshot, serverTimestamp, setDoc, getDoc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import { auth, functions } from "../lib/firebase";
+import { emailKey, platformConfigRef, platformInviteRef, userDocRef } from "../lib/paths";
+import type { PlatformSocial } from "../lib/types";
 
-interface PlatformConfig {
+export type { PlatformSocial };
+
+export interface PlatformConfig {
   superAdmins: string[];
+  /** uid → correo, para mostrar la lista de superadmins. */
+  superAdminEmails?: Record<string, string>;
+  heroImages?: string[];
+  name?: string;
+  logoUrl?: string;
+  headline?: string;
+  tagline?: string;
+  social?: PlatformSocial;
 }
 
 interface AuthContextValue {
@@ -97,12 +108,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const claimPlatformInvite = useCallback(async (u: User) => {
+    if (!u.email) return;
+    const invRef = platformInviteRef(emailKey(u.email));
+    const invite = await getDoc(invRef);
+    if (!invite.exists()) return;
+    await updateDoc(platformConfigRef(), {
+      superAdmins: arrayUnion(u.uid),
+      [`superAdminEmails.${u.uid}`]: u.email.toLowerCase(),
+      updatedAt: serverTimestamp(),
+    });
+    await deleteDoc(invRef).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!user || isSuperAdmin) return;
+    void claimPlatformInvite(user).catch((err) => {
+      console.error("No se pudo reclamar la invitación de superadmin:", err);
+    });
+  }, [user, isSuperAdmin, claimPlatformInvite]);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       await ensureUserDoc(cred.user).catch(() => {});
+      await claimPlatformInvite(cred.user).catch((err) => {
+        console.error("No se pudo reclamar la invitación de superadmin:", err);
+      });
     },
-    [ensureUserDoc],
+    [ensureUserDoc, claimPlatformInvite],
   );
 
   const register = useCallback(
@@ -112,8 +146,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await updateProfile(cred.user, { displayName: displayName.trim() });
       }
       await ensureUserDoc(cred.user).catch(() => {});
+      await claimPlatformInvite(cred.user).catch((err) => {
+        console.error("No se pudo reclamar la invitación de superadmin:", err);
+      });
     },
-    [ensureUserDoc],
+    [ensureUserDoc, claimPlatformInvite],
   );
 
   const logout = useCallback(async () => {
@@ -121,13 +158,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    const fn = httpsCallable<{ email: string }, { ok: boolean }>(
+      functions,
+      "requestPasswordReset",
+    );
+    await fn({ email: email.trim().toLowerCase() });
   }, []);
 
   const claimPlatformAdmin = useCallback(async () => {
     if (!user) throw new Error("Debes iniciar sesión.");
     await setDoc(platformConfigRef(), {
       superAdmins: [user.uid],
+      superAdminEmails: user.email
+        ? { [user.uid]: user.email.toLowerCase() }
+        : {},
       createdAt: serverTimestamp(),
     });
   }, [user]);

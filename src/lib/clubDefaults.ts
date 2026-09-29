@@ -1,8 +1,16 @@
 /** Nombre de la plataforma (landing, panel de administración, manifiesto PWA). */
 export const PLATFORM_NAME = "Clubs Platform";
 export const PLATFORM_SHORT_NAME = "Clubs";
+export const PLATFORM_HEADLINE = "Clubes, temporadas y torneos";
 export const PLATFORM_DESCRIPTION =
-  "Plataforma para la gestión de clubes deportivos por localidad: agenda, jugadores, finanzas, inventario y galería.";
+  "Clubes, temporadas y torneos por localidad. Estadísticas oficiales, categorías y la vitrina de cada equipo.";
+
+/** Imágenes del carrusel de portada mientras el superadmin no sube las suyas. */
+export const DEFAULT_PLATFORM_HERO_IMAGES = [
+  "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1600&q=80",
+  "https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=1600&q=80",
+  "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&w=1600&q=80",
+];
 
 /**
  * Valores por defecto de un club.

@@ -11,15 +11,9 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import { setDoc } from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
-import imageCompression from "browser-image-compression";
+import { getStorage, ref, deleteObject } from "firebase/storage";
 import { useClub } from "../../context/ClubContext";
+import { uploadImageFile } from "../../lib/uploadImage";
 import {
   DEFAULT_CLUB_NAME,
   DEFAULT_CLUB_LOCATION,
@@ -149,15 +143,11 @@ export default function HeroSection({
         initialQuality: 0.8, // Calidad un poco mejor para la portada
       };
 
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("portada", `hero_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("portada", `hero_${Date.now()}.jpg`),
+        file,
+        options,
       );
-
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
 
       setNewlyUploadedImages((prev) => [...prev, url]);
 
@@ -289,31 +279,31 @@ export default function HeroSection({
 
       {/* ── PANEL DE EDICIÓN PREMIUM ── */}
       {isEditingClubInfo ? (
-        <div style={{ backgroundColor: C.gray50 }}>
-          {/* Cabecera del Editor */}
+        <div className="cover-editor compact-form-card" style={{ backgroundColor: C.gray50 }}>
           <div
+            className="cover-editor__head"
             style={{
-              padding: "1.25rem 1.5rem",
+              padding: "0.65rem 0.85rem",
               backgroundColor: C.white,
               borderBottom: `1px solid ${C.gray200}`,
               display: "flex",
               alignItems: "center",
-              gap: "0.5rem",
+              gap: "0.4rem",
             }}
           >
             <div
               style={{
                 backgroundColor: "rgba(245, 158, 11, 0.15)",
-                padding: "6px",
+                padding: "5px",
                 borderRadius: "50%",
                 display: "flex",
               }}
             >
-              <LayoutTemplate size={18} color={C.amber} />
+              <LayoutTemplate size={14} color={C.amber} />
             </div>
             <h3
               style={{
-                fontSize: "1.1rem",
+                fontSize: "0.78rem",
                 fontWeight: "800",
                 color: C.navy900,
                 margin: 0,
@@ -325,27 +315,25 @@ export default function HeroSection({
 
           <form
             onSubmit={handleSaveClubInfo}
+            className="compact-form cover-editor__form"
             style={{
-              padding: "1.5rem",
+              padding: "0.75rem 0.85rem 0.85rem",
               display: "flex",
               flexDirection: "column",
-              gap: "1.5rem",
+              gap: "0.7rem",
             }}
           >
-            {/* Bloque de Textos */}
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
+            <div className="cover-editor-meta">
               <div>
                 <label
                   style={{
                     display: "block",
-                    fontSize: "0.75rem",
+                    fontSize: "0.62rem",
                     fontWeight: "700",
                     color: C.gray500,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    marginBottom: "0.4rem",
+                    marginBottom: "0.22rem",
                   }}
                 >
                   Nombre del Club
@@ -364,36 +352,37 @@ export default function HeroSection({
                 <label
                   style={{
                     display: "block",
-                    fontSize: "0.75rem",
+                    fontSize: "0.62rem",
                     fontWeight: "700",
                     color: C.gray500,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    marginBottom: "0.4rem",
+                    marginBottom: "0.22rem",
                   }}
                 >
-                  Sede o Ciudad
+                  Barrio / Escuela
                 </label>
                 <FormInput
                   type="text"
                   required
                   value={editLocation}
                   onChange={(e) => setEditLocation(e.target.value)}
-                  placeholder={`Ej. ${DEFAULT_CLUB_LOCATION}`}
+                  placeholder="Ej. Col. Centro, CETIS 4"
                   style={{ width: "100%" }}
                 />
               </div>
+            </div>
 
               <div>
                 <label
                   style={{
                     display: "block",
-                    fontSize: "0.75rem",
+                    fontSize: "0.62rem",
                     fontWeight: "700",
                     color: C.gray500,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    marginBottom: "0.4rem",
+                    marginBottom: "0.22rem",
                   }}
                 >
                   Lema o Historia Breve
@@ -407,7 +396,6 @@ export default function HeroSection({
                   style={{ width: "100%" }}
                 />
               </div>
-            </div>
 
             <hr
               style={{
@@ -422,28 +410,27 @@ export default function HeroSection({
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.75rem",
+                gap: "0.45rem",
               }}
             >
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.2rem",
+                  gap: "0.1rem",
                 }}
               >
                 <label
                   style={{
-                    fontSize: "0.85rem",
+                    fontSize: "0.72rem",
                     fontWeight: "700",
                     color: C.navy900,
                   }}
                 >
                   Imágenes del Carrusel
                 </label>
-                <span style={{ fontSize: "0.75rem", color: C.gray500 }}>
-                  Sube o pega links para las imágenes de fondo. La primera será
-                  la principal.
+                <span style={{ fontSize: "0.65rem", color: C.gray500 }}>
+                  La primera imagen es la principal.
                 </span>
               </div>
 
@@ -452,16 +439,17 @@ export default function HeroSection({
                 return (
                   <div
                     key={index}
+                    className="cover-slide"
                     style={{
                       display: "flex",
-                      gap: "1rem",
-                      alignItems: "flex-start",
-                      padding: "1rem",
+                      gap: "0.55rem",
+                      alignItems: "center",
+                      padding: "0.5rem 0.55rem",
                       backgroundColor: C.white,
-                      borderRadius: RADIUS.lg,
+                      borderRadius: RADIUS.md,
                       border: `1px solid ${isCover ? C.amber : C.gray200}`,
                       boxShadow: isCover
-                        ? "0 4px 12px rgba(245, 158, 11, 0.1)"
+                        ? "0 2px 8px rgba(245, 158, 11, 0.1)"
                         : SHADOWS.sm,
                       position: "relative",
                       transition: "all 0.2s ease",
@@ -471,15 +459,15 @@ export default function HeroSection({
                       <div
                         style={{
                           position: "absolute",
-                          top: "-10px",
-                          left: "1rem",
+                          top: "-8px",
+                          left: "0.65rem",
                           backgroundColor: C.amber,
                           color: C.navy900,
-                          fontSize: "0.6rem",
+                          fontSize: "0.55rem",
                           fontWeight: "800",
                           textTransform: "uppercase",
                           letterSpacing: "0.05em",
-                          padding: "2px 8px",
+                          padding: "1px 6px",
                           borderRadius: RADIUS.full,
                           boxShadow: SHADOWS.sm,
                           border: `1px solid ${C.white}`,
@@ -489,12 +477,11 @@ export default function HeroSection({
                       </div>
                     )}
 
-                    {/* Miniatura */}
                     <div
                       style={{
-                        width: "64px",
-                        height: "64px",
-                        borderRadius: RADIUS.md,
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: RADIUS.sm,
                         backgroundColor: C.gray50,
                         border: `1px solid ${C.gray200}`,
                         overflow: "hidden",
@@ -502,7 +489,6 @@ export default function HeroSection({
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
-                        marginTop: isCover ? "0.2rem" : "0",
                       }}
                     >
                       {url.trim() ? (
@@ -522,51 +508,50 @@ export default function HeroSection({
                           }
                         />
                       ) : (
-                        <Camera size={20} color={C.gray300} />
+                        <Camera size={16} color={C.gray300} />
                       )}
                     </div>
 
-                    {/* Controles */}
                     <div
                       style={{
                         flex: 1,
+                        minWidth: 0,
                         display: "flex",
                         flexDirection: "column",
-                        gap: "0.6rem",
-                        marginTop: isCover ? "0.2rem" : "0",
+                        gap: "0.3rem",
                       }}
                     >
                       <div
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: "flex-start",
+                          alignItems: "center",
+                          gap: "0.35rem",
                         }}
                       >
                         <label
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "0.4rem",
+                            gap: "0.25rem",
                             backgroundColor: C.gray50,
                             border: `1px solid ${C.gray200}`,
                             color: C.navy900,
-                            padding: "0.4rem 0.875rem",
+                            padding: "0.22rem 0.55rem",
                             borderRadius: RADIUS.full,
-                            fontSize: "0.75rem",
+                            fontSize: "0.65rem",
                             fontWeight: "700",
                             cursor:
                               uploadingIndex !== null
                                 ? "not-allowed"
                                 : "pointer",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
                             opacity: uploadingIndex === index ? 0.6 : 1,
                           }}
                         >
-                          <UploadCloud size={14} color={C.amber} />
+                          <UploadCloud size={12} color={C.amber} />
                           {uploadingIndex === index
                             ? "Subiendo..."
-                            : "Cargar Foto"}
+                            : "Cargar"}
                           <input
                             type="file"
                             accept="image/*"
@@ -580,7 +565,6 @@ export default function HeroSection({
                           />
                         </label>
 
-                        {/* Botón Borrar */}
                         {editHeroImages.length > 1 && (
                           <button
                             type="button"
@@ -591,40 +575,40 @@ export default function HeroSection({
                               border: `1px solid rgba(239, 68, 68, 0.2)`,
                               borderRadius: RADIUS.sm,
                               cursor: "pointer",
-                              padding: "4px",
+                              padding: "3px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
+                              flexShrink: 0,
                             }}
                             title="Eliminar foto"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={12} />
                           </button>
                         )}
                       </div>
 
-                      {/* Input URL */}
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "0.4rem",
-                          borderTop: `1px dashed ${C.gray200}`,
-                          paddingTop: "0.5rem",
+                          gap: "0.3rem",
+                          minWidth: 0,
                         }}
                       >
-                        <LinkIcon size={12} color={C.gray400} />
+                        <LinkIcon size={11} color={C.gray400} />
                         <input
                           type="url"
                           value={url}
                           onChange={(e) =>
                             handleUpdateImage(index, e.target.value)
                           }
-                          placeholder="O pega una URL externa..."
+                          placeholder="Pega URL..."
                           required={index === 0 && !url}
                           style={{
                             flex: 1,
-                            fontSize: "0.75rem",
+                            minWidth: 0,
+                            fontSize: "0.7rem",
                             border: "none",
                             background: "transparent",
                             color: C.gray600,
@@ -643,18 +627,17 @@ export default function HeroSection({
                 onClick={handleAddImageField}
                 style={{
                   width: "100%",
-                  padding: "0.875rem",
-                  marginTop: "0.25rem",
-                  border: `2px dashed ${C.gray300}`,
-                  borderRadius: RADIUS.lg,
+                  padding: "0.45rem",
+                  border: `1px dashed ${C.gray300}`,
+                  borderRadius: RADIUS.md,
                   backgroundColor: C.white,
                   color: C.navy900,
-                  fontSize: "0.8rem",
+                  fontSize: "0.7rem",
                   fontWeight: "700",
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
-                  gap: "0.5rem",
+                  gap: "0.35rem",
                   cursor: "pointer",
                   transition: "all 0.2s ease",
                 }}
@@ -667,31 +650,27 @@ export default function HeroSection({
                   e.currentTarget.style.borderColor = C.gray300;
                 }}
               >
-                <div
-                  style={{
-                    backgroundColor: C.gray100,
-                    padding: "4px",
-                    borderRadius: "50%",
-                  }}
-                >
-                  <Plus size={14} color={C.amber} />
-                </div>
-                Añadir otra imagen al carrusel
+                <Plus size={13} color={C.amber} />
+                Añadir imagen
               </button>
             </div>
 
-            {/* Botones de Guardar/Cancelar */}
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
               <SecondaryButton
                 type="button"
                 onClick={handleCancelEdit}
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: "0.5rem", fontSize: "0.75rem" }}
               >
                 Cancelar
               </SecondaryButton>
               <PrimaryButton
                 type="submit"
-                style={{ flex: 1, opacity: uploadingIndex !== null ? 0.7 : 1 }}
+                style={{
+                  flex: 1,
+                  padding: "0.5rem",
+                  fontSize: "0.75rem",
+                  opacity: uploadingIndex !== null ? 0.7 : 1,
+                }}
                 disabled={uploadingIndex !== null}
               >
                 {uploadingIndex !== null ? "Procesando..." : "Guardar Cambios"}

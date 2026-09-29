@@ -7,11 +7,11 @@ import {
   Goal,
   Shield,
   TrendingUp,
-  Hand,
   Target,
 } from "lucide-react";
 import { C, RADIUS, SHADOWS } from "../../components/ui";
 import { calculateAge } from "../../utils/helpers";
+import { useModalLock } from "../../hooks/useModalLock";
 import TrophyCase, { Achievement } from "./TrophyCase";
 
 interface PlayerModalProps {
@@ -28,27 +28,14 @@ export default function PlayerModal({
   onClose,
 }: PlayerModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useModalLock(onClose);
 
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
     closeButtonRef.current?.focus({ preventScroll: true });
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  }, []);
 
   if (!player || !pStats) return null;
 
-  const isDT = Boolean(player.isDT);
   const isGoalkeeper = player.position?.trim().toLowerCase() === "portero";
   const isActive = player.active !== false;
 
@@ -59,12 +46,9 @@ export default function PlayerModal({
     trainingsAttended = 0,
     cleanSheets = 0,
     goalsConceded = 0,
-    saves = 0,
     mvps = 0,
     yellowCards = 0,
     redCards = 0,
-    matchesManaged = 0,
-    winsManaged = 0,
   } = pStats || {};
 
   const positionColor =
@@ -222,7 +206,7 @@ export default function PlayerModal({
                 filter: isActive ? "none" : "grayscale(100%)",
               }}
             />
-            {isActive && !isDT && (
+            {isActive && (
               <div
                 style={{
                   position: "absolute",
@@ -232,28 +216,6 @@ export default function PlayerModal({
                   zIndex: -1,
                 }}
               />
-            )}
-            {isDT && (
-              <span
-                title="Director Técnico"
-                style={{
-                  position: "absolute",
-                  bottom: "5px",
-                  right: "0px",
-                  width: "28px",
-                  height: "28px",
-                  backgroundColor: C.amber,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.9rem",
-                  border: "2px solid white",
-                  boxShadow: SHADOWS.sm,
-                }}
-              >
-                📋
-              </span>
             )}
           </div>
 
@@ -296,30 +258,27 @@ export default function PlayerModal({
               </span>
             )}
 
-            {!isDT && (
-              <span
-                style={{
-                  fontSize: "0.85rem",
-                  fontWeight: "900",
-                  color: C.navy900,
-                }}
-              >
-                #{player.number}
-              </span>
-            )}
-            {!isDT && <span style={{ color: C.gray300 }}>•</span>}
+            <span
+              style={{
+                fontSize: "0.85rem",
+                fontWeight: "900",
+                color: C.navy900,
+              }}
+            >
+              #{player.number}
+            </span>
+            <span style={{ color: C.gray300 }}>•</span>
 
             <span
               style={{
                 fontSize: "0.75rem",
                 fontWeight: "700",
-                color: isDT ? C.amber : positionColor,
+                color: positionColor,
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
               }}
             >
-              {isDT ? "Cuerpo Técnico" : player.position}{" "}
-              {player.variant && `- ${player.variant}`}
+              {player.position} {player.variant && `- ${player.variant}`}
             </span>
 
             {player.birthDate && (
@@ -355,41 +314,18 @@ export default function PlayerModal({
             Rendimiento Histórico
           </p>
 
-          {isDT ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "0.75rem",
-              }}
-            >
-              <PremiumStatBox
-                icon={<span style={{ fontSize: "18px" }}>📋</span>}
-                label="Partidos Dirigidos"
-                value={matchesManaged}
-              />
-              <PremiumStatBox
-                icon={<span style={{ fontSize: "18px" }}>🏆</span>}
-                label="Victorias"
-                value={winsManaged}
-                valueColor={C.amber}
-              />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-              }}
-            >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+            }}
+          >
               <div
                 style={{
                   display: "grid",
                   // 👇 4 columnas para porteros, 3 para jugadores de campo 👇
-                  gridTemplateColumns: isGoalkeeper
-                    ? "repeat(4, 1fr)"
-                    : "repeat(3, 1fr)",
+                  gridTemplateColumns: "repeat(3, 1fr)",
                   gap: "0.75rem",
                 }}
               >
@@ -404,13 +340,6 @@ export default function PlayerModal({
                       icon={<Goal size={18} />}
                       label="Goles Recib."
                       value={goalsConceded}
-                    />
-                    {/* 👇 NUEVA CAJA DE ATAJADAS 👇 */}
-                    <PremiumStatBox
-                      icon={<Hand size={18} color="#3b82f6" />}
-                      label="Atajadas"
-                      value={saves}
-                      valueColor="#3b82f6" // Azul brillante para destacar
                     />
                     <PremiumStatBox
                       icon={<Shield size={18} />}
@@ -464,16 +393,13 @@ export default function PlayerModal({
                   valueColor={C.red}
                 />
               </div>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* ── VITRINA DE TROFEOS ── */}
-        {!isDT && (
-          <div style={{ padding: "0 1.5rem 1.5rem 1.5rem" }}>
-            <TrophyCase achievements={achievements} />
-          </div>
-        )}
+        <div style={{ padding: "0 1.5rem 1.5rem 1.5rem" }}>
+          <TrophyCase achievements={achievements} />
+        </div>
       </div>
     </div>
   );

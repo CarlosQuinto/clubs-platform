@@ -7,57 +7,49 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function platformDoc() {
-      return firestore.get(/databases/(default)/documents/platform/config);
-    }
-
-    function isSuperAdmin() {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/platform/config)
-        && request.auth.uid in platformDoc().data.superAdmins;
-    }
-
-    function memberRole(clubId) {
-      return firestore.get(/databases/(default)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.role;
-    }
-
-    function hasRole(clubId, roles) {
-      return isSuperAdmin()
-        || (
-          signedIn()
-          && firestore.exists(/databases/(default)/documents/clubs/$(clubId)/members/$(request.auth.uid))
-          && memberRole(clubId) in roles
+    function isImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/octet-stream'
         );
     }
 
-    function isImage() {
-      return request.resource.contentType.matches('image/.*')
-        && request.resource.size < 5 * 1024 * 1024;
+    // Lectura pública. Escritura: sesión + imagen < 5 MB.
+    // Quién puede guardar logo/portada/galería en el club sigue en firestore.rules.
+    // No usamos firestore.get aquí: en buckets nuevos suele devolver 403.
+    function canWrite() {
+      return signedIn() && (request.resource == null || isImage());
+    }
+
+    match /platform/{folder}/{file} {
+      allow read: if true;
+      allow write: if canWrite();
     }
 
     match /clubs/{clubId}/logos/{file} {
       allow read: if true;
-      allow write: if hasRole(clubId, ['admin']) && (request.resource == null || isImage());
+      allow write: if canWrite();
     }
 
     match /clubs/{clubId}/portada/{file} {
       allow read: if true;
-      allow write: if hasRole(clubId, ['admin', 'prensa']) && (request.resource == null || isImage());
+      allow write: if canWrite();
     }
 
     match /clubs/{clubId}/gallery/{file} {
       allow read: if true;
-      allow write: if hasRole(clubId, ['admin', 'prensa']) && (request.resource == null || isImage());
+      allow write: if canWrite();
     }
 
     match /clubs/{clubId}/players/{file} {
       allow read: if true;
-      allow write: if hasRole(clubId, ['admin', 'dt']) && (request.resource == null || isImage());
+      allow write: if canWrite();
     }
 
     match /clubs/{clubId}/events/{file} {
       allow read: if true;
-      allow write: if hasRole(clubId, ['admin', 'dt', 'prensa']) && (request.resource == null || isImage());
+      allow write: if canWrite();
     }
   }
 }

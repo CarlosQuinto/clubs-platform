@@ -19,7 +19,19 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useClubData } from "../hooks/useClubData";
+import { useModalLock } from "../hooks/useModalLock";
 import { useMembership } from "../hooks/useMembership";
+import { useClubMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import StatsScopeBar from "../components/club/StatsScopeBar";
+import {
+  applyScope,
+  calendarStatus,
+  clubTrophies,
+  computeTeamRecord,
+  isPlayed,
+  matchToClubEvent,
+} from "../lib/stats";
+import type { StatsScope } from "../lib/types";
 import { useAuth } from "../context/AuthContext";
 import { ClubProvider, useClub } from "../context/ClubContext";
 import { buildPerms, ROLE_LABELS } from "../lib/roles";
@@ -41,14 +53,8 @@ import Finances from "./Finances";
 import Inventory from "./Inventory";
 import MembersModal from "../components/club/MembersModal";
 import { updateDoc } from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
-import imageCompression from "browser-image-compression";
+import { getStorage, ref, deleteObject } from "firebase/storage";
+import { uploadImageFile } from "../lib/uploadImage";
 
 // ── CUSTOM HOOK PARA RESIZE Y RESPONSIVIDAD ──
 // Soluciona el problema de window.innerWidth no reactivo al rotar la pantalla
@@ -145,6 +151,60 @@ function ClubShell() {
     loading,
   } = useClubData(clubId);
   const [showMembers, setShowMembers] = useState(false);
+
+  // ── Competición: partidos oficiales del club y catálogo de la plataforma ──
+  const { matches } = useClubMatches(clubId);
+  const { seasons, categories, tournaments, clubNames, tournamentsById, seasonName, categoryName } =
+    usePlatformCatalog();
+  const [scope, setScope] = useState<StatsScope>({});
+
+  /** Todos los partidos oficiales (programados y jugados) en forma de evento, para la agenda. */
+  const officialEvents = useMemo(
+    () =>
+      matches
+        .filter((m) => calendarStatus(m) !== "unscheduled")
+        .map((m) =>
+          matchToClubEvent(m, clubId, clubNames, tournamentsById[m.tournamentId]?.name),
+        ),
+    [matches, clubId, clubNames, tournamentsById],
+  );
+  /** Partidos jugados dentro del filtro, para estadísticas de jugadores y del equipo. */
+  const scopedPlayedMatches = useMemo(
+    () => applyScope(matches.filter(isPlayed), scope),
+    [matches, scope],
+  );
+  const statsEvents = useMemo(
+    () => [
+      ...events,
+      ...scopedPlayedMatches.map((m) =>
+        matchToClubEvent(m, clubId, clubNames, tournamentsById[m.tournamentId]?.name),
+      ),
+    ],
+    [events, scopedPlayedMatches, clubId, clubNames, tournamentsById],
+  );
+  const teamRecord = useMemo(
+    () => computeTeamRecord(scopedPlayedMatches, clubId),
+    [scopedPlayedMatches, clubId],
+  );
+  const trophies = useMemo(
+    () =>
+      clubTrophies(
+        tournaments.filter(
+          (t) =>
+            (!scope.seasonId || t.seasonId === scope.seasonId) &&
+            (!scope.categoryId || t.categoryId === scope.categoryId),
+        ),
+        clubId,
+      ),
+    [tournaments, clubId, scope],
+  );
+  const scopeLabel = useMemo(() => {
+    const parts = [
+      scope.seasonId ? seasonName[scope.seasonId] : "Histórico",
+      scope.categoryId ? categoryName[scope.categoryId] : null,
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }, [scope, seasonName, categoryName]);
   const [activeTab, setActiveTab] = useState<
     "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario"
   >("inicio");
@@ -165,12 +225,14 @@ function ClubShell() {
   const [showEditClub, setShowEditClub] = useState(false);
   const [editClubName, setEditClubName] = useState("");
   const [editClubLogo, setEditClubLogo] = useState("");
+  const [editClubPhone, setEditClubPhone] = useState("");
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [newlyUploadedLogos, setNewlyUploadedLogos] = useState<string[]>([]);
 
   const handleOpenEditClub = () => {
     setEditClubName(clubInfo?.name || DEFAULT_CLUB_NAME);
     setEditClubLogo(clubInfo?.logoUrl || DEFAULT_CLUB_LOGO);
+    setEditClubPhone(clubInfo?.presidentPhone || "");
     setNewlyUploadedLogos([]);
     setShowEditClub(true);
   };
@@ -185,14 +247,11 @@ function ClubShell() {
         useWebWorker: true,
         initialQuality: 0.8,
       };
-      const compressedFile = await imageCompression(file, options);
-      const storage = getStorage();
-      const fileRef = ref(
-        storage,
-        storagePath("logos", `logo_${Date.now()}_${compressedFile.name}`),
+      const url = await uploadImageFile(
+        storagePath("logos", `logo_${Date.now()}.jpg`),
+        file,
+        options,
       );
-      await uploadBytes(fileRef, compressedFile);
-      const url = await getDownloadURL(fileRef);
       setNewlyUploadedLogos((prev) => [...prev, url]);
       setEditClubLogo(url);
     } catch (error) {
@@ -219,6 +278,8 @@ function ClubShell() {
     setNewlyUploadedLogos([]);
     setShowEditClub(false);
   };
+
+  useModalLock(showEditClub ? () => { void handleCancelEditClub(); } : null);
 
   const handleSaveClub = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +308,7 @@ function ClubShell() {
       await updateDoc(clubRef, {
         name: editClubName,
         logoUrl: editClubLogo,
+        presidentPhone: editClubPhone.trim(),
       });
       setNewlyUploadedLogos([]);
       setShowEditClub(false);
@@ -662,7 +724,7 @@ function ClubShell() {
               {perms.canManageMembers && (
                 <button
                   onClick={() => setShowMembers(true)}
-                  title="Gestionar miembros del club"
+                  title="Gestionar administradores del club"
                   style={{
                     background: "rgba(255,255,255,0.1)",
                     border: `1px solid rgba(255,255,255,0.15)`,
@@ -679,7 +741,7 @@ function ClubShell() {
                 >
                   <UserCog size={12} />
                   <span style={{ display: isMobile ? "none" : "inline" }}>
-                    Miembros
+                    Administradores
                   </span>
                 </button>
               )}
@@ -964,6 +1026,35 @@ function ClubShell() {
                   value={editClubName}
                   onChange={(e) => setEditClubName(e.target.value)}
                   placeholder={`Ej. ${DEFAULT_CLUB_NAME}`}
+                  style={{
+                    width: "100%",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    padding: "0.75rem",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    color: C.gray500,
+                    marginBottom: "0.4rem",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  Teléfono del presidente
+                </label>
+                <FormInput
+                  type="tel"
+                  value={editClubPhone}
+                  onChange={(e) => setEditClubPhone(e.target.value)}
+                  placeholder="Ej. 622 123 4567"
+                  maxLength={29}
                   style={{
                     width: "100%",
                     fontSize: "1rem",
@@ -1266,6 +1357,7 @@ function ClubShell() {
               return (
                 <div
                   key={item.key}
+                  className={isActive ? "club-tab-pane" : undefined}
                   style={{
                     width: "100%",
                     flexShrink: 0,
@@ -1275,23 +1367,40 @@ function ClubShell() {
                     visibility: isActive ? "visible" : "hidden",
                     pointerEvents: isActive ? "auto" : "none",
                     height: isActive ? "auto" : "0px",
-                    padding: isActive ? "1.5rem" : "0",
                     overflow: "hidden",
                   }}
                 >
+                  {item.key === "jugadores" && (
+                    <StatsScopeBar
+                      scope={scope}
+                      onChange={setScope}
+                      seasons={seasons}
+                      categories={categories}
+                    />
+                  )}
                   {item.key === "inicio" && (
                     <Home
                       clubInfo={clubInfo}
                       players={players}
-                      events={events}
+                      events={statsEvents}
+                      clubEvents={events}
                       gallery={gallery}
                       perms={perms}
-                      setActiveTab={handleTabChange}
+                      teamRecord={teamRecord}
+                      scopeLabel={scopeLabel}
+                      trophies={trophies}
+                      seasonName={seasonName}
+                      categoryName={categoryName}
+                      scope={scope}
+                      onScopeChange={setScope}
+                      seasons={seasons}
+                      categories={categories}
                     />
                   )}
                   {item.key === "agenda" && (
                     <Agenda
                       events={events}
+                      officialEvents={officialEvents}
                       players={players}
                       clubInfo={clubInfo}
                       perms={perms}
@@ -1301,7 +1410,7 @@ function ClubShell() {
                   {item.key === "jugadores" && (
                     <Players
                       players={players}
-                      events={events}
+                      events={statsEvents}
                       perms={perms}
                       goals={goals}
                     />

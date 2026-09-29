@@ -1,10 +1,5 @@
 import React, { useState } from "react";
-import {
-  PlusCircle,
-  TrendingUp,
-  TrendingDown,
-  CalendarDays,
-} from "lucide-react";
+import { PlusCircle, TrendingUp, TrendingDown } from "lucide-react";
 import {
   C,
   SectionCard,
@@ -57,25 +52,26 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
 
   return (
     <SectionCard
+      className="compact-form-card"
       title="Nuevo Movimiento"
-      icon={<PlusCircle size={16} color={C.navy900} />}
+      icon={<PlusCircle size={14} color={C.navy900} />}
     >
       <form
         onSubmit={handleSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+        className="compact-form"
+        style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}
       >
-        {/* 1. SELECTOR TIPO DE MOVIMIENTO */}
         <SegmentedControl
           options={[
             {
               label: "Ingreso",
               value: "ingreso",
-              icon: <TrendingUp size={14} />,
+              icon: <TrendingUp size={12} />,
             },
             {
               label: "Gasto",
               value: "gasto",
-              icon: <TrendingDown size={14} />,
+              icon: <TrendingDown size={12} />,
             },
           ]}
           value={type}
@@ -85,13 +81,13 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
           }}
         />
 
-        {/* 2. ZONA HEROICA DEL MONTO (Diseño tipo CashApp/Venmo) */}
         <div
+          className="finance-amount"
           style={{
             backgroundColor: themeBg,
             border: `1px solid ${themeColor}40`,
-            borderRadius: RADIUS.lg,
-            padding: "1.5rem",
+            borderRadius: RADIUS.md,
+            padding: "0.55rem 0.65rem",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -100,12 +96,12 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
         >
           <span
             style={{
-              fontSize: "0.75rem",
+              fontSize: "0.62rem",
               fontWeight: "700",
               color: themeColor,
               textTransform: "uppercase",
               letterSpacing: "0.05em",
-              marginBottom: "0.5rem",
+              marginBottom: "0.15rem",
             }}
           >
             {type === "ingreso" ? "Monto a ingresar" : "Monto a gastar"}
@@ -119,10 +115,10 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
           >
             <span
               style={{
-                fontSize: "2rem",
+                fontSize: "1.15rem",
                 fontWeight: "800",
                 color: themeColor,
-                marginRight: "0.2rem",
+                marginRight: "0.15rem",
               }}
             >
               $
@@ -136,14 +132,14 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               style={{
-                fontSize: "3rem",
+                fontSize: "1.45rem",
                 fontWeight: "900",
                 color: C.navy900,
                 background: "transparent",
                 border: "none",
                 outline: "none",
                 width: "100%",
-                maxWidth: "200px",
+                maxWidth: "140px",
                 textAlign: "center",
                 padding: 0,
                 letterSpacing: "-0.03em",
@@ -152,88 +148,55 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
           </div>
         </div>
 
-        {/* 3. DETALLES (Categoría y Descripción) */}
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-        >
-          <div style={{ position: "relative" }}>
-            <FormSelect
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              style={{
-                width: "100%",
-                fontWeight: "600",
-                color: C.navy900,
-                backgroundColor: C.gray50,
-              }}
-            >
-              {(type === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO).map(
-                (cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ),
-              )}
-            </FormSelect>
-          </div>
-
-          <FormInput
-            type="text"
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="¿De qué fue este movimiento? Ej. Arbitraje..."
-            style={{ width: "100%", backgroundColor: C.gray50 }}
-          />
-        </div>
-
-        {/* 4. FECHA Y BOTÓN DE CONFIRMACIÓN */}
-        <div
+        <FormSelect
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
           style={{
-            display: "flex",
-            gap: "0.5rem",
-            marginTop: "0.25rem",
-            flexWrap: "wrap",
+            width: "100%",
+            fontWeight: "600",
+            color: C.navy900,
+            backgroundColor: C.gray50,
           }}
         >
-          <div style={{ position: "relative", flex: "1 1 130px" }}>
-            <CalendarDays
-              size={16}
-              color={C.gray400}
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                pointerEvents: "none",
-              }}
-            />
-            <FormInput
-              type="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={{
-                width: "100%",
-                paddingLeft: "2.25rem",
-                color: C.gray600,
-                fontWeight: "600",
-              }}
-            />
-          </div>
+          {(type === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO).map(
+            (cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ),
+          )}
+        </FormSelect>
 
-          <PrimaryButton
-            type="submit"
-            variant={type === "ingreso" ? "green" : "red"}
-            style={{
-              flex: "2 1 200px",
-              padding: "0.875rem",
-              fontSize: "0.95rem",
-            }}
-          >
-            {type === "ingreso" ? "Ingresar Dinero" : "Registrar Gasto"}
-          </PrimaryButton>
-        </div>
+        <FormInput
+          type="date"
+          required
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          aria-label="Fecha"
+          style={{
+            width: "100%",
+            color: C.gray600,
+            fontWeight: "600",
+            backgroundColor: C.gray50,
+          }}
+        />
+
+        <FormInput
+          type="text"
+          required
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="¿De qué fue este movimiento?"
+          style={{ width: "100%", backgroundColor: C.gray50 }}
+        />
+
+        <PrimaryButton
+          type="submit"
+          variant={type === "ingreso" ? "green" : "red"}
+          style={{ padding: "0.55rem", fontSize: "0.75rem" }}
+        >
+          {type === "ingreso" ? "Ingresar Dinero" : "Registrar Gasto"}
+        </PrimaryButton>
       </form>
     </SectionCard>
   );

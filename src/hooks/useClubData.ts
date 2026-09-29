@@ -16,6 +16,7 @@ export interface ClubInfo {
   heroImages: string[];
   defaultLineups: Record<string, any>;
   logoUrl?: string;
+  presidentPhone?: string;
   active?: boolean;
   createdAt?: any;
 }
@@ -74,6 +75,7 @@ export function useClubData(clubId: string) {
           heroImages: images,
           defaultLineups: data.defaultLineups || {},
           logoUrl: data.logoUrl,
+          presidentPhone: data.presidentPhone || "",
           active: data.active !== false,
           createdAt: data.createdAt,
         });

@@ -11,6 +11,7 @@ import {
   SecondaryButton,
 } from "../../components/ui";
 import { getPlayerName } from "../../utils/helpers";
+import { useModalLock } from "../../hooks/useModalLock";
 
 interface StatsModalProps {
   ev: any;
@@ -25,12 +26,10 @@ export default function StatsModal({
   onClose,
   onSave,
 }: StatsModalProps) {
-  // 👇 1. Añadimos 'saves' al estado de porteros 👇
   const [statsFormGoalkeepers, setStatsFormGoalkeepers] = useState<
-    { id: string; conceded: number; saves: number }[]
+    { id: string; conceded: number }[]
   >([]);
   const [statsFormMVP, setStatsFormMVP] = useState("");
-  const [statsFormManager, setStatsFormManager] = useState("");
   const [statsFormYellowCards, setStatsFormYellowCards] = useState<string[]>(
     [],
   );
@@ -46,10 +45,12 @@ export default function StatsModal({
     );
   }, [players, ev]);
 
+  useModalLock(onClose);
+
   useEffect(() => {
     if (!ev) return;
 
-    let initialGks: { id: string; conceded: number; saves: number }[] = [];
+    let initialGks: { id: string; conceded: number }[] = [];
     if (
       ev.goalkeepers &&
       Array.isArray(ev.goalkeepers) &&
@@ -60,7 +61,6 @@ export default function StatsModal({
           players.find((p: any) => p.name === gk.id || p.id === gk.id)?.id ||
           (gk.id.startsWith("guest-") ? gk.id : `guest-${gk.id}`),
         conceded: gk.conceded || 0,
-        saves: gk.saves || 0, // 👈 Cargamos las atajadas
       }));
     } else if (ev.goalkeeper) {
       const id =
@@ -70,7 +70,7 @@ export default function StatsModal({
         (ev.goalkeeper.startsWith("guest-")
           ? ev.goalkeeper
           : `guest-${ev.goalkeeper}`);
-      initialGks = [{ id, conceded: 0, saves: 0 }];
+      initialGks = [{ id, conceded: 0 }];
     }
     setStatsFormGoalkeepers(initialGks);
 
@@ -80,16 +80,6 @@ export default function StatsModal({
           ? ev.mvp.startsWith("guest-")
             ? ev.mvp
             : `guest-${ev.mvp}`
-          : ""),
-    );
-
-    setStatsFormManager(
-      players.find((p: any) => p.name === ev.manager || p.id === ev.manager)
-        ?.id ||
-        (ev.manager
-          ? ev.manager.startsWith("guest-")
-            ? ev.manager
-            : `guest-${ev.manager}`
           : ""),
     );
 
@@ -143,20 +133,20 @@ export default function StatsModal({
   const addGoalkeeper = () =>
     setStatsFormGoalkeepers([
       ...statsFormGoalkeepers,
-      { id: "", conceded: 0, saves: 0 },
-    ]); // 👈 Agregamos saves
+      { id: "", conceded: 0 },
+    ]);
 
   const removeGoalkeeper = (index: number) =>
     setStatsFormGoalkeepers(statsFormGoalkeepers.filter((_, i) => i !== index));
 
   const updateGoalkeeper = (
     index: number,
-    field: "id" | "conceded" | "saves",
+    field: "id" | "conceded",
     value: string | number,
   ) => {
     const newGks = [...statsFormGoalkeepers];
     if (field === "id") newGks[index].id = value as string;
-    else newGks[index][field] = Number(value) || 0; // 👈 Maneja conceded y saves
+    else newGks[index][field] = Number(value) || 0;
     setStatsFormGoalkeepers(newGks);
   };
 
@@ -180,7 +170,6 @@ export default function StatsModal({
       goalkeeper: null, // Mantenemos compatibilidad con DB
       stats: statsFormScorers,
       mvp: statsFormMVP,
-      manager: statsFormManager,
       yellowCards: statsFormYellowCards.filter((id) => id.trim() !== ""),
       redCards: statsFormRedCards.filter((id) => id.trim() !== ""),
     });
@@ -370,48 +359,6 @@ export default function StatsModal({
               border: `1px solid ${C.gray200}`,
             }}
           >
-            <label
-              style={{
-                fontSize: "0.8125rem",
-                fontWeight: "700",
-                color: C.navy900,
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <span style={{ fontSize: "16px" }}>👔</span> Director Técnico (DT)
-            </label>
-            <FormSelect
-              value={statsFormManager}
-              onChange={(e) => setStatsFormManager(e.target.value)}
-              style={{ marginTop: "0.5rem" }}
-            >
-              <option value="">¿Quién dirigió el equipo?</option>
-              {attendingPlayers.map((p: any) => (
-                <option key={`dt-${p.id}`} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-              {(ev.attendees || [])
-                .filter((id: string) => id.startsWith("guest-"))
-                .map((guestId: string) => (
-                  <option key={`dt-${guestId}`} value={guestId}>
-                    {getPlayerName(guestId, players)} (Invitado)
-                  </option>
-                ))}
-            </FormSelect>
-          </div>
-
-          {/* 👇 SECCIÓN DE PORTEROS CON ATAJADAS 👇 */}
-          <div
-            style={{
-              backgroundColor: C.gray50,
-              padding: "1rem",
-              borderRadius: RADIUS.lg,
-              border: `1px solid ${C.gray200}`,
-            }}
-          >
             <div
               style={{
                 display: "flex",
@@ -430,7 +377,7 @@ export default function StatsModal({
                   gap: "0.5rem",
                 }}
               >
-                <Hand size={16} /> Porteros (Goles / Atajadas)
+                <Hand size={16} /> Porteros (goles recibidos)
               </label>
               <button
                 type="button"
@@ -508,24 +455,6 @@ export default function StatsModal({
                   style={{
                     width: "55px",
                     flex: "0 0 auto", // 👈 Evita que el input crezca y aplaste al nombre
-                    padding: "0.4rem",
-                    textAlign: "center", // 👈 Números centrados
-                  }}
-                />
-
-                {/* Input Atajadas */}
-                <FormInput
-                  type="number"
-                  min="0"
-                  value={gk.saves}
-                  onChange={(e) =>
-                    updateGoalkeeper(index, "saves", e.target.value)
-                  }
-                  placeholder="Atj"
-                  title="Atajadas (Saves)"
-                  style={{
-                    width: "55px",
-                    flex: "0 0 auto", // 👈 Evita que crezca
                     padding: "0.4rem",
                     textAlign: "center", // 👈 Números centrados
                   }}

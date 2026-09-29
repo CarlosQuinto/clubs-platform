@@ -81,10 +81,10 @@ export default function RoutineBuilder({
         backgroundColor: C.gray50,
         border: `1px solid ${C.gray200}`,
         borderRadius: RADIUS.md,
-        padding: "1rem",
+        padding: "0.65rem",
         display: "flex",
         flexDirection: "column",
-        gap: "1rem",
+        gap: "0.55rem",
       }}
     >
       <p
@@ -95,10 +95,10 @@ export default function RoutineBuilder({
           display: "flex",
           alignItems: "center",
           gap: "0.4rem",
-          fontSize: "0.875rem",
+          fontSize: "0.75rem",
         }}
       >
-        <ListChecks size={16} color={C.amber} /> Estructura del Entrenamiento
+        <ListChecks size={14} color={C.amber} /> Estructura del Entrenamiento
       </p>
 
       {!routine || routine.length === 0 ? (
@@ -106,16 +106,16 @@ export default function RoutineBuilder({
           style={{
             textAlign: "center",
             color: C.gray400,
-            fontSize: "0.8125rem",
+            fontSize: "0.72rem",
             fontStyle: "italic",
-            margin: "1rem 0",
+            margin: "0.35rem 0 0.15rem",
           }}
         >
           Agrega fases o pausas para estructurar tu sesión.
         </p>
       ) : (
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+          style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}
         >
           {routine.map((block) => (
             <div
@@ -142,8 +142,8 @@ export default function RoutineBuilder({
                   <Droplet size={16} color="#0284c7" />
                   <span
                     style={{
-                      fontSize: "0.8125rem",
-                      color: "#0284c7",
+                    fontSize: "0.75rem",
+                    color: "#0284c7",
                       fontWeight: "600",
                     }}
                   >
@@ -166,10 +166,10 @@ export default function RoutineBuilder({
                     backgroundColor: C.white,
                     border: `1px solid ${C.gray200}`,
                     borderRadius: RADIUS.md,
-                    padding: "0.75rem",
+                    padding: "0.5rem",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "0.5rem",
+                    gap: "0.4rem",
                   }}
                 >
                   <FormInput
@@ -265,9 +265,9 @@ export default function RoutineBuilder({
                       background: "none",
                       border: `1px dashed ${C.gray300}`,
                       color: C.navy600,
-                      padding: "0.4rem",
+                      padding: "0.3rem",
                       borderRadius: RADIUS.sm,
-                      fontSize: "0.75rem",
+                      fontSize: "0.7rem",
                       fontWeight: "600",
                       cursor: "pointer",
                       display: "flex",
@@ -288,10 +288,10 @@ export default function RoutineBuilder({
                   border: "none",
                   color: C.gray400,
                   cursor: "pointer",
-                  padding: "0.5rem 0.2rem",
+                  padding: "0.25rem 0.1rem",
                 }}
               >
-                <Trash2 size={18} />
+                <Trash2 size={14} />
               </button>
             </div>
           ))}
@@ -304,34 +304,36 @@ export default function RoutineBuilder({
           type="button"
           onClick={addPhase}
           style={{
-            flex: "1 1 130px", // 👈 Clave para que se apilen en celulares muy pequeños
+            flex: "1 1 110px",
             display: "flex",
-            gap: "0.4rem",
+            gap: "0.3rem",
             justifyContent: "center",
-            alignItems: "center", // 👈 Alinea el ícono y el texto perfectamente
-            padding: "0.75rem",
+            alignItems: "center",
+            padding: "0.45rem",
+            fontSize: "0.72rem",
             whiteSpace: "nowrap",
           }}
         >
-          <ListChecks size={16} /> + Fase
+          <ListChecks size={13} /> + Fase
         </SecondaryButton>
         <SecondaryButton
           type="button"
           onClick={addHydration}
           style={{
-            flex: "1 1 130px", // 👈 Clave para el Responsive
+            flex: "1 1 110px",
             display: "flex",
-            gap: "0.4rem",
+            gap: "0.3rem",
             justifyContent: "center",
             alignItems: "center",
-            padding: "0.75rem",
+            padding: "0.45rem",
+            fontSize: "0.72rem",
             color: "#0284c7",
-            backgroundColor: "#f0f9ff", // 👈 Fondo azulito muy suave para que destaque
+            backgroundColor: "#f0f9ff",
             borderColor: "#bae6fd",
             whiteSpace: "nowrap",
           }}
         >
-          <Droplet size={16} /> + Hidratación
+          <Droplet size={13} /> + Hidratación
         </SecondaryButton>
       </div>
     </div>

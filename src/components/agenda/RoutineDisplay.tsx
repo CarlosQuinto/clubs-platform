@@ -9,7 +9,13 @@ import {
 } from "lucide-react";
 import { C, RADIUS, SHADOWS } from "../../components/ui";
 
-export default function RoutineDisplay({ routine }: { routine: any }) {
+export default function RoutineDisplay({
+  routine,
+  compact = false,
+}: {
+  routine: any;
+  compact?: boolean;
+}) {
   const [isMainExpanded, setIsMainExpanded] = useState(false);
   const [collapsedPhases, setCollapsedPhases] = useState<
     Record<string, boolean>
@@ -33,7 +39,7 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
           backgroundColor: C.white,
           borderRadius: RADIUS.md,
           border: `1px solid ${C.gray200}`,
-          marginTop: "1rem",
+          marginTop: compact ? 0 : "1rem",
           overflow: "hidden",
         }}
       >
@@ -41,7 +47,7 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
           onClick={() => setIsMainExpanded(!isMainExpanded)}
           style={{
             width: "100%",
-            padding: "0.75rem 1rem",
+            padding: compact ? "0.35rem 0.65rem" : "0.75rem 1rem",
             backgroundColor: C.navy50,
             border: "none",
             borderBottom: isMainExpanded ? `1px solid ${C.gray200}` : "none",
@@ -51,13 +57,18 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
             cursor: "pointer",
             fontWeight: "700",
             color: C.navy900,
-            fontSize: "0.8125rem",
+            fontSize: compact ? "0.7rem" : "0.8125rem",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <ListChecks size={16} color={C.amber} /> Plan de Entrenamiento
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <ListChecks size={compact ? 12 : 16} color={C.amber} />
+            {compact ? "Plan" : "Plan de Entrenamiento"}
           </div>
-          {isMainExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {isMainExpanded ? (
+            <ChevronUp size={compact ? 14 : 16} />
+          ) : (
+            <ChevronDown size={compact ? 14 : 16} />
+          )}
         </button>
 
         {isMainExpanded && (
@@ -86,7 +97,7 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
         backgroundColor: C.white,
         borderRadius: RADIUS.md,
         border: `1px solid ${C.gray200}`,
-        marginTop: "1rem",
+        marginTop: compact ? 0 : "1rem",
         overflow: "hidden",
       }}
     >
@@ -94,7 +105,7 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
         onClick={() => setIsMainExpanded(!isMainExpanded)}
         style={{
           width: "100%",
-          padding: "0.75rem 1rem",
+          padding: compact ? "0.35rem 0.65rem" : "0.75rem 1rem",
           backgroundColor: C.navy50,
           border: "none",
           borderBottom: isMainExpanded ? `1px solid ${C.gray200}` : "none",
@@ -104,18 +115,18 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
           cursor: "pointer",
           fontWeight: "700",
           color: C.navy900,
-          fontSize: "0.8125rem",
+          fontSize: compact ? "0.7rem" : "0.8125rem",
           transition: "background-color 0.2s",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <ListChecks size={16} color={C.amber} />
-          Ver Plan de Entrenamiento
+        <div style={{ display: "flex", alignItems: "center", gap: compact ? "0.3rem" : "0.5rem" }}>
+          <ListChecks size={compact ? 12 : 16} color={C.amber} />
+          {compact ? "Plan" : "Ver Plan de Entrenamiento"}
         </div>
         {isMainExpanded ? (
-          <ChevronUp size={16} color={C.navy600} />
+          <ChevronUp size={compact ? 14 : 16} color={C.navy600} />
         ) : (
-          <ChevronDown size={16} color={C.navy600} />
+          <ChevronDown size={compact ? 14 : 16} color={C.navy600} />
         )}
       </button>
 
@@ -124,8 +135,8 @@ export default function RoutineDisplay({ routine }: { routine: any }) {
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "0.75rem",
-            padding: "1rem",
+            gap: compact ? "0.45rem" : "0.75rem",
+            padding: compact ? "0.5rem 0.65rem" : "1rem",
             backgroundColor: C.gray50,
             animation: "fadeIn 0.2s ease",
           }}

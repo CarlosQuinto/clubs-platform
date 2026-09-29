@@ -1,29 +1,32 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Lock, Mail, UserPlus } from "lucide-react";
+import { Lock, Mail } from "lucide-react";
 import { authErrorMessage, useAuth } from "../context/AuthContext";
+import { usePostLoginRedirect } from "../hooks/usePostLoginRedirect";
 import PlatformLayout from "../components/platform/PlatformLayout";
+import DestinationPicker from "../components/platform/DestinationPicker";
 import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../components/ui";
 
-type Mode = "login" | "register" | "reset";
+type Mode = "login" | "reset";
 
 export default function Login() {
-  const { user, loading, login, register, resetPassword } = useAuth();
+  const { user, loading, login, resetPassword, platformConfig } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = params.get("next") || "/";
+  const platformUnclaimed = platformConfig === undefined;
 
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!loading && user) navigate(next, { replace: true });
-  }, [user, loading, next, navigate]);
+  const { choices, resolving, go } = usePostLoginRedirect({
+    enabled: !!user && !loading && mode === "login",
+    fallback: next,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,11 +36,23 @@ export default function Login() {
     try {
       if (mode === "login") {
         await login(email.trim(), password);
-      } else if (mode === "register") {
-        await register(email.trim(), password, name);
       } else {
-        await resetPassword(email.trim());
-        setInfo("Te enviamos un correo para restablecer la contraseña.");
+        try {
+          await resetPassword(email.trim());
+        } catch (err) {
+          const code = (err as { code?: string }).code || "";
+          if (code.includes("invalid-argument")) {
+            setError("El correo no es válido.");
+            return;
+          }
+          if (code.includes("unavailable") || code.includes("internal")) {
+            setError("No se pudo completar. Inténtalo de nuevo.");
+            return;
+          }
+        }
+        setInfo(
+          "Si hay una cuenta con ese correo, te enviaremos el enlace para restablecer la contraseña.",
+        );
       }
     } catch (err) {
       setError(authErrorMessage(err));
@@ -45,13 +60,6 @@ export default function Login() {
       setBusy(false);
     }
   };
-
-  const title =
-    mode === "login"
-      ? "Iniciar sesión"
-      : mode === "register"
-        ? "Crear cuenta"
-        : "Recuperar contraseña";
 
   return (
     <PlatformLayout maxWidth="480px">
@@ -79,9 +87,7 @@ export default function Login() {
             marginBottom: "1rem",
           }}
         >
-          {mode === "register" ? (
-            <UserPlus size={26} color={C.amber} />
-          ) : mode === "reset" ? (
+          {mode === "reset" ? (
             <Mail size={26} color={C.amber} />
           ) : (
             <Lock size={26} color={C.amber} />
@@ -96,7 +102,7 @@ export default function Login() {
             margin: "0 0 0.25rem",
           }}
         >
-          {title}
+          {mode === "reset" ? "Recuperar contraseña" : "Iniciar sesión"}
         </h1>
         <p
           style={{
@@ -107,26 +113,17 @@ export default function Login() {
             lineHeight: 1.4,
           }}
         >
-          {mode === "register"
-            ? "Crea tu cuenta con el correo al que te invitaron. Tus permisos se activan automáticamente."
-            : mode === "reset"
-              ? "Escribe tu correo y te enviaremos un enlace."
-              : "Accede con el correo con el que fuiste invitado a tu club."}
+          {mode === "reset"
+            ? "Escribe tu correo y te enviaremos un enlace."
+            : platformUnclaimed
+              ? "Crea la primera cuenta para tomar la plataforma, o entra si ya la tienes."
+              : "Accede con el correo con el que fuiste invitado."}
         </p>
 
         <form
           onSubmit={handleSubmit}
           style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "100%" }}
         >
-          {mode === "register" && (
-            <FormInput
-              type="text"
-              placeholder="Tu nombre"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
-          )}
           <FormInput
             type="email"
             placeholder="correo@ejemplo.com"
@@ -144,7 +141,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete="current-password"
             />
           )}
 
@@ -157,15 +154,15 @@ export default function Login() {
 
           <PrimaryButton
             type="submit"
-            disabled={busy}
+            disabled={busy || resolving}
             style={{ width: "100%", padding: "0.85rem", marginTop: "0.25rem" }}
           >
             {busy
               ? "Un momento..."
-              : mode === "login"
-                ? "Entrar"
-                : mode === "register"
-                  ? "Crear cuenta"
+              : resolving
+                ? "Revisando tus accesos..."
+                : mode === "login"
+                  ? "Entrar"
                   : "Enviar enlace"}
           </PrimaryButton>
         </form>
@@ -184,14 +181,21 @@ export default function Login() {
           {mode !== "login" && (
             <LinkButton onClick={() => setMode("login")}>Ya tengo cuenta</LinkButton>
           )}
-          {mode !== "register" && (
-            <LinkButton onClick={() => setMode("register")}>Crear cuenta</LinkButton>
+          {mode === "login" && platformUnclaimed && (
+            <LinkButton onClick={() => navigate("/registro")}>Crear cuenta</LinkButton>
           )}
           {mode !== "reset" && (
             <LinkButton onClick={() => setMode("reset")}>Olvidé mi contraseña</LinkButton>
           )}
         </div>
       </div>
+      {choices && choices.length > 1 && (
+        <DestinationPicker
+          destinations={choices}
+          onPick={go}
+          onHome={() => go("/")}
+        />
+      )}
     </PlatformLayout>
   );
 }

@@ -14,16 +14,13 @@ export function usePlayerStats(
       let goals = 0,
         assists = 0,
         cleanSheets = 0,
-        goalsConceded = 0,
-        saves = 0;
+        goalsConceded = 0;
 
       let matchesAttended = 0,
         trainingsAttended = 0,
         mvps = 0;
       let yellowCards = 0,
         redCards = 0;
-      let matchesManaged = 0,
-        winsManaged = 0;
 
       safeEvents
         .filter(
@@ -48,21 +45,8 @@ export function usePlayerStats(
 
             // 👇 El resto de estadísticas SOLO si NO ES Amistoso 👇
             if (ev.matchType !== "Amistoso") {
-              if (ev.manager === p.id || ev.manager === p.name) {
-                matchesManaged++;
-                const golesAFavor =
-                  ev.scoreOurs !== undefined
-                    ? ev.scoreOurs
-                    : ev.stats
-                      ? ev.stats.filter((s: any) => s.scorer).length
-                      : 0;
-                const golesEnContra = ev.scoreTheirs || 0;
-                if (golesAFavor > golesEnContra) {
-                  winsManaged++;
-                }
-              }
-
               ev.stats?.forEach((s: any) => {
+                if (s.isOwnGoal) return;
                 if (s.scorer === p.id || s.scorer === p.name) goals++;
                 if (s.assist === p.id || s.assist === p.name) assists++;
               });
@@ -77,7 +61,6 @@ export function usePlayerStats(
                 );
                 if (gkEntry) {
                   goalsConceded += gkEntry.conceded || 0;
-                  saves += gkEntry.saves || 0;
                   if ((gkEntry.conceded || 0) === 0) cleanSheets++;
                 }
               } else if (ev.goalkeeper) {
@@ -106,14 +89,11 @@ export function usePlayerStats(
         assists,
         cleanSheets,
         goalsConceded,
-        saves,
         matchesAttended,
         trainingsAttended,
         mvps,
         yellowCards,
         redCards,
-        matchesManaged,
-        winsManaged,
         totalAttendance: matchesAttended + trainingsAttended,
       };
     });

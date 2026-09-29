@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Package,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { useClub } from "../context/ClubContext";
+import { useModalLock } from "../hooks/useModalLock";
 import {
   C,
   RADIUS,
@@ -153,21 +154,7 @@ const conditionRank: Record<string, number> = {
 
 // 👇 NUEVO: COMPONENTE DE RESUMEN EN LISTA 👇
 const InventorySummaryModal = ({ category, inventory, onClose }: any) => {
-  // Bloquear el scroll y escuchar ESC
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  useModalLock(onClose);
 
   // Filtrar el inventario según la tarjeta seleccionada
   let summaryItems: any[] = [];
@@ -421,6 +408,7 @@ export default function Inventory({ inventory, perms }: any) {
   const [condItem, setCondItem] = useState<any | null>(null);
   const [condQty, setCondQty] = useState<number>(1);
   const [condNew, setCondNew] = useState<string>("Malo");
+  useModalLock(condItem ? () => setCondItem(null) : null);
 
   // 👇 NUEVO: ESTADO PARA LA LISTA DE RESUMEN 👇
   const [summaryCategory, setSummaryCategory] = useState<string | null>(null);
@@ -811,8 +799,9 @@ export default function Inventory({ inventory, perms }: any) {
       {/* ── INGRESAR NUEVO MATERIAL ── */}
       {perms.canEditInventory && (
         <SectionCard
+          className="compact-form-card"
           title="Ingresar Nuevo Material"
-          icon={<PlusCircle size={16} color={C.navy600} />}
+          icon={<PlusCircle size={14} color={C.navy600} />}
           style={{
             backgroundColor: C.white,
             border: `1px solid ${C.gray200}`,
@@ -821,44 +810,35 @@ export default function Inventory({ inventory, perms }: any) {
         >
           <form
             onSubmit={handleAddInventory}
+            className="compact-form inventory-form"
             style={{
               display: "flex",
-              gap: "0.5rem",
-              flexWrap: "wrap",
-              alignItems: "flex-start",
+              flexDirection: "column",
+              gap: "0.45rem",
             }}
           >
-            <div
-              style={{
-                flex: "1 1 200px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.25rem",
-              }}
-            >
-              <FormInput
-                required
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                placeholder="Nombre del artículo (Ej. Balones)"
-                style={{ width: "100%" }}
-              />
-            </div>
+            <FormInput
+              required
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder="Nombre del artículo (Ej. Balones)"
+              style={{ width: "100%" }}
+            />
 
-            <div style={{ display: "flex", gap: "0.5rem", flex: "1 1 200px" }}>
+            <div className="inventory-qty-row">
               <FormInput
                 type="number"
                 required
                 min="1"
                 value={itemQty}
                 onChange={(e) => setItemQty(parseInt(e.target.value) || 0)}
-                style={{ flex: 1, minWidth: "60px" }}
                 placeholder="Cant."
+                aria-label="Cantidad"
               />
               <FormSelect
                 value={itemCondition}
                 onChange={(e) => setItemCondition(e.target.value)}
-                style={{ flex: 2, minWidth: "90px" }}
+                aria-label="Condición"
               >
                 <option value="Bueno">🟢 Bueno</option>
                 <option value="Regular">🟡 Regular</option>
@@ -871,14 +851,13 @@ export default function Inventory({ inventory, perms }: any) {
               type="submit"
               style={{
                 width: "100%",
-                padding: "0.6rem 1rem",
+                padding: "0.5rem 0.75rem",
                 display: "flex",
                 justifyContent: "center",
-                gap: "0.4rem",
-                marginTop: "0.25rem",
+                gap: "0.3rem",
               }}
             >
-              <Plus size={16} /> Añadir al Inventario
+              <Plus size={14} /> Añadir al Inventario
             </PrimaryButton>
           </form>
         </SectionCard>

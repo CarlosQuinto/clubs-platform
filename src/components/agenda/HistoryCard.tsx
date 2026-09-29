@@ -3,17 +3,17 @@ import {
   ChevronUp,
   MapPin,
   Clock,
+  Calendar,
   Users,
   Edit,
   Camera,
   Images,
   Award,
   Goal,
-  Wallet,
   LayoutTemplate,
   Trash2,
 } from "lucide-react";
-import { C, RADIUS, SHADOWS } from "../../components/ui";
+import { Badge, C, RADIUS, SHADOWS } from "../../components/ui";
 import {
   formatFriendlyDate,
   formatFriendlyTime,
@@ -31,7 +31,6 @@ interface HistoryCardProps {
   onDelete: () => void;
   onUpdateScore: (id: string) => void;
   onOpenStats: (ev: any) => void;
-  onOpenArbitration: (ev: any) => void;
   onOpenLineup: (ev: any) => void;
   onOpenAlbum: (eventId: string) => void;
   onImageClick: (data: any) => void;
@@ -48,7 +47,6 @@ export default function HistoryCard({
   onDelete,
   onUpdateScore,
   onOpenStats,
-  onOpenArbitration,
   onOpenLineup,
   onOpenAlbum,
   onImageClick,
@@ -56,14 +54,6 @@ export default function HistoryCard({
 }: HistoryCardProps) {
   const hasLineup =
     ev.lineup && Object.keys(ev.lineup.positions || {}).length > 0;
-  const hasPayments =
-    ev.arbitrationPayments && ev.arbitrationPayments.length > 0;
-  const totalPaid = hasPayments
-    ? ev.arbitrationPayments.reduce(
-        (sum: number, p: any) => sum + (Number(p.amount) || 0),
-        0,
-      )
-    : 0;
 
   const photos =
     ev.photoUrls && ev.photoUrls.length > 0
@@ -73,158 +63,183 @@ export default function HistoryCard({
         : [];
   const hasPhotos = photos.length > 0;
 
+  const attendeesCount = ev.attendees?.length || 0;
+  const played = ev.scoreOurs !== undefined && ev.scoreTheirs !== undefined;
+  const opponent = String(ev.title || "").replace(/^vs\s+/i, "");
+  const metaIcon = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+  } as const;
+
   return (
     <div
       id={`history-card-${ev.id}`}
       style={{
         border: `1px solid ${C.gray200}`,
-        borderRadius: RADIUS.md,
+        borderRadius: RADIUS.lg,
         backgroundColor: C.white,
         overflow: "hidden",
         boxShadow: SHADOWS.sm,
       }}
     >
-      {/* ── ENCABEZADO EXPANDIBLE ── */}
       <div
         onClick={onToggle}
         style={{
-          padding: "0.875rem 1rem",
+          padding: "1rem",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          flexDirection: "column",
+          gap: "0.4rem",
           cursor: "pointer",
           backgroundColor: isExpanded ? C.gray50 : C.white,
           transition: "background-color 0.2s ease",
         }}
       >
         <div
-          style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "0.5rem",
+          }}
         >
+          <Badge color="green">Amistoso</Badge>
           <div
-            style={{
-              marginTop: ev.eventType === "Partido" ? "0.8rem" : "0.1rem",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}
           >
+            {perms.canEditAgenda && (
+              <div
+                style={{ display: "flex", gap: "0.15rem" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={onEdit}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: C.navy600,
+                    cursor: "pointer",
+                    padding: "4px",
+                    opacity: 0.6,
+                  }}
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  onClick={onDelete}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: C.red,
+                    cursor: "pointer",
+                    padding: "4px",
+                    opacity: 0.6,
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            )}
             {isExpanded ? (
               <ChevronUp size={18} color={C.gray400} />
             ) : (
               <ChevronDown size={18} color={C.gray400} />
             )}
           </div>
-
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}
-          >
-            {ev.eventType === "Partido" && (
-              <div style={{ display: "flex" }}>
-                <span
-                  style={{
-                    backgroundColor:
-                      ev.matchType === "Amistoso"
-                        ? "rgba(59, 130, 246, 0.1)"
-                        : "rgba(245, 158, 11, 0.1)",
-                    color: ev.matchType === "Amistoso" ? "#3b82f6" : C.amber,
-                    border: `1px solid ${
-                      ev.matchType === "Amistoso"
-                        ? "rgba(59, 130, 246, 0.3)"
-                        : "rgba(245, 158, 11, 0.3)"
-                    }`,
-                    padding: "2px 8px",
-                    borderRadius: RADIUS.full,
-                    fontSize: "0.6rem",
-                    fontWeight: "800",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  {ev.matchType === "Amistoso" ? "Amistoso" : "Oficial"}
-                </span>
-              </div>
-            )}
-
-            {/* 👇 AQUÍ ESTÁ LA MAGIA: TÍTULO Y FECHA SEPARADOS 👇 */}
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span
-                style={{
-                  fontWeight: "800",
-                  color: C.navy900,
-                  fontSize: "0.95rem",
-                  lineHeight: 1.2,
-                }}
-              >
-                {ev.title}
-              </span>
-              <span
-                style={{
-                  fontWeight: "600",
-                  color: C.gray400,
-                  fontSize: "0.7rem",
-                  marginTop: "0.15rem",
-                }}
-              >
-                {formatFriendlyDate(ev.eventDate)}
-              </span>
-            </div>
-            {/* 👆 ========================================== 👆 */}
-          </div>
         </div>
 
-        {/* SECCIÓN DERECHA CON ASISTENCIAS Y BOTONES DE EDICIÓN */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "0.5rem",
-            marginTop: ev.eventType === "Partido" ? "0.8rem" : "0.1rem",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "1rem",
           }}
         >
-          <span
-            style={{
-              color: C.green,
-              fontWeight: "700",
-              fontSize: "0.75rem",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
-              padding: "2px 8px",
-              borderRadius: RADIUS.full,
-            }}
-          >
-            {ev.attendees?.length || 0} asis.
-          </span>
-
-          {perms.canEditAgenda && (
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div
-              style={{ display: "flex", gap: "0.25rem" }}
-              onClick={(e) => e.stopPropagation()}
+              style={{
+                fontSize: "1rem",
+                fontWeight: 800,
+                color: C.navy900,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+              }}
             >
-              <button
-                onClick={onEdit}
+              vs {opponent}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.85rem",
+                fontSize: "0.75rem",
+                color: C.gray500,
+                flexWrap: "wrap",
+                marginTop: "0.35rem",
+              }}
+            >
+              <span style={metaIcon}>
+                <Calendar size={12} /> {formatFriendlyDate(ev.eventDate)}
+              </span>
+              <span style={metaIcon}>
+                <Clock size={12} /> {formatFriendlyTime(ev.eventTime)}
+              </span>
+            </div>
+            {ev.location && (
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: C.navy600,
-                  cursor: "pointer",
-                  padding: "4px",
-                  opacity: 0.6,
+                  ...metaIcon,
+                  fontSize: "0.75rem",
+                  color: C.gray500,
+                  marginTop: "0.3rem",
                 }}
               >
-                <Edit size={14} />
-              </button>
-              <button
-                onClick={onDelete}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: C.red,
-                  cursor: "pointer",
-                  padding: "4px",
-                  opacity: 0.6,
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
+                <MapPin size={12} /> {ev.location}
+              </div>
+            )}
+          </div>
+          {played && (
+            <div
+              style={{
+                fontSize: "1.5rem",
+                fontWeight: 900,
+                color:
+                  ev.scoreOurs > ev.scoreTheirs
+                    ? C.green
+                    : ev.scoreOurs < ev.scoreTheirs
+                      ? C.red
+                      : C.gray600,
+                letterSpacing: "-0.02em",
+                flexShrink: 0,
+              }}
+            >
+              {ev.scoreOurs} - {ev.scoreTheirs}
             </div>
           )}
+        </div>
+
+        <div
+          onClick={(e) => {
+            if (!perms.canEditAgenda) return;
+            e.stopPropagation();
+            onOpenAttendance(ev);
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            fontSize: "0.75rem",
+            fontWeight: 600,
+            color: attendeesCount > 0 ? C.green : C.gray400,
+            alignSelf: "flex-start",
+            cursor: perms.canEditAgenda ? "pointer" : "default",
+          }}
+        >
+          <Users size={13} /> {attendeesCount}{" "}
+          {attendeesCount === 1 ? "asistente" : "asistentes"}
+          {perms.canEditAgenda && <Edit size={11} color={C.navy600} />}
         </div>
       </div>
 
@@ -619,28 +634,6 @@ export default function HistoryCard({
                     Editar Estadísticas
                   </button>
                 )}
-              <button
-                onClick={() => onOpenArbitration(ev)}
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${C.amber}`,
-                  borderRadius: RADIUS.md,
-                  color: C.amber,
-                  cursor: "pointer",
-                  padding: "0.6rem 0.5rem",
-                  fontSize: "0.75rem",
-                  fontWeight: "600",
-                  boxShadow: SHADOWS.sm,
-                  flex: "1 1 140px",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  textAlign: "center",
-                }}
-              >
-                <Wallet size={14} /> Pagos Arbitraje
-              </button>
               {(perms.canEditAgenda || hasLineup) && (
                 <button
                   onClick={() => onOpenLineup(ev)}
@@ -662,64 +655,9 @@ export default function HistoryCard({
                     textAlign: "center",
                   }}
                 >
-                  <LayoutTemplate size={14} />{" "}
-                  {perms.canEditAgenda
-                    ? hasLineup
-                      ? "Editar Alineación"
-                      : "Armar Alineación"
-                    : "Ver Alineación"}
+                  <LayoutTemplate size={14} /> Alineación
                 </button>
               )}
-            </div>
-          )}
-
-          {/* RESUMEN DE PAGOS DE ARBITRAJE */}
-          {hasPayments && (
-            <div
-              style={{
-                marginBottom: "1.25rem",
-                backgroundColor: "rgba(245, 158, 11, 0.1)",
-                border: `1px solid ${C.amber}`,
-                borderRadius: RADIUS.md,
-                padding: "0.75rem 1rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                boxShadow: SHADOWS.sm,
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
-              >
-                <div
-                  style={{
-                    backgroundColor: C.amber,
-                    borderRadius: RADIUS.sm,
-                    padding: "0.3rem",
-                    display: "flex",
-                  }}
-                >
-                  <Wallet size={16} color={C.white} />
-                </div>
-                <span
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: C.navy900,
-                    fontWeight: "700",
-                  }}
-                >
-                  Recaudación Arbitraje
-                </span>
-              </div>
-              <span
-                style={{
-                  color: C.amber,
-                  fontWeight: "900",
-                  fontSize: "1.1rem",
-                }}
-              >
-                ${totalPaid}
-              </span>
             </div>
           )}
 
@@ -802,7 +740,7 @@ export default function HistoryCard({
                     marginTop: "0.2rem",
                   }}
                 >
-                  <Edit size={12} /> Editar Asistencia
+                  <Edit size={12} /> Asistencia
                 </button>
               )}
             </div>

@@ -1,4 +1,4 @@
-import { Edit, Trash2, LayoutTemplate } from "lucide-react";
+import { Edit, Trash2 } from "lucide-react";
 import { C, RADIUS, Badge } from "../../components/ui";
 import { isBirthdayToday } from "../../utils/helpers";
 
@@ -76,23 +76,6 @@ export default function PlayerRow({
               )}&background=102a43&color=fff`;
             }}
           />
-
-          {player.isDT && (
-            <div
-              title="Cuerpo Técnico"
-              style={{
-                position: "absolute",
-                top: "-2px",
-                right: "-4px",
-                backgroundColor: C.navy900,
-                borderRadius: "50%",
-                padding: "2px",
-                border: `2px solid ${C.white}`,
-              }}
-            >
-              <LayoutTemplate size={10} color={C.amber} />
-            </div>
-          )}
         </div>
 
         {/* ── INFO CLARA Y ORDENADA ── */}
@@ -131,42 +114,33 @@ export default function PlayerRow({
               </Badge>
             )}
 
-            {player.isDT ? (
-              <span style={{ color: C.navy600, fontWeight: "600" }}>
-                Cuerpo Técnico
-              </span>
-            ) : (
+            <span style={{ fontWeight: "700", color: C.navy700 }}>
+              #{player.number !== "S/N" ? player.number : "-"}
+            </span>
+            <span>•</span>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <div
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  backgroundColor: positionColor,
+                }}
+              />
+              <span>{player.position}</span>
+            </div>
+
+            {player.variant && (
               <>
-                <span style={{ fontWeight: "700", color: C.navy700 }}>
-                  #{player.number !== "S/N" ? player.number : "-"}
-                </span>
                 <span>•</span>
-
-                {/* Indicador de posición limpio (Puntito + Texto) */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.25rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "50%",
-                      backgroundColor: positionColor,
-                    }}
-                  />
-                  <span>{player.position}</span>
-                </div>
-
-                {player.variant && (
-                  <>
-                    <span>•</span>
-                    <span>{player.variant}</span>
-                  </>
-                )}
+                <span>{player.variant}</span>
               </>
             )}
           </div>

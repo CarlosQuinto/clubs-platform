@@ -52,7 +52,7 @@ export function useMembership(clubId: string | null) {
               emailKey(user.email),
             );
             const invite = await getDoc(inviteRef);
-            if (invite.exists()) {
+            if (invite.exists() && invite.data().kind !== "accept") {
               await setDoc(memberRef, {
                 role: invite.data().role,
                 email: user.email.toLowerCase(),

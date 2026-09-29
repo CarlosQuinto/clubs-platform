@@ -1,22 +1,23 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Trophy,
   Target,
-  TrendingUp,
-  TrendingDown,
+  Handshake,
   CalendarDays,
   History,
   CalendarX,
   Archive,
+  Layers,
 } from "lucide-react";
 import { addDoc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { useClub } from "../context/ClubContext";
-import { C, StatBox, SectionCard, RADIUS } from "../components/ui";
+import { matchRef } from "../lib/paths";
+import OfficialMatchCard from "../components/agenda/OfficialMatchCard";
+import { C, StatBox, SectionCard } from "../components/ui";
 import { useAgendaData } from "../hooks/useAgendaData";
 
 // ── COMPONENTES GENERALES ──
 import {
-  EventCard,
   AttendanceModal,
   LineupModal,
   LightboxModal,
@@ -26,23 +27,21 @@ import {
 import EventForm from "../components/agenda/EventForm";
 import HistoryCard from "../components/agenda/HistoryCard";
 import AlbumModal from "../components/agenda/AlbumModal";
-import ArbitrationModal from "../components/agenda/ArbitrationModal";
 import StatsModal from "../components/agenda/StatsModal";
 
 export default function Agenda({
   events,
+  officialEvents = [],
   players,
   clubInfo,
   perms,
   highlightedEventId = null,
 }: any) {
-  const { col, item, clubRef } = useClub();
+  const { clubId, col, item, clubRef } = useClub();
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventType, setEventType] = useState<"Partido" | "Entrenamiento">(
     "Partido",
   );
-  // 👇 NUEVO ESTADO: Controla si es Oficial o Amistoso 👇
-  const [matchType, setMatchType] = useState<"Oficial" | "Amistoso">("Oficial");
   const [eventTitle, setEventTitle] = useState("");
   const [eventRoutine, setEventRoutine] = useState<any[]>([]);
   const [eventDate, setEventDate] = useState(
@@ -61,24 +60,34 @@ export default function Agenda({
   const [lineupModalEvent, setLineupModalEvent] = useState<any | null>(null);
   const [statsModalEvent, setStatsModalEvent] = useState<any | null>(null);
   const [albumModalEvent, setAlbumModalEvent] = useState<any | null>(null);
-  const [arbitrationModalEvent, setArbitrationModalEvent] = useState<
-    any | null
-  >(null);
   const [lightboxData, setLightboxData] = useState<{
     urls: string[];
     initialIndex: number;
     caption?: string;
   } | null>(null);
 
-  const canEditArbitration = perms?.canEditAgenda || perms?.canEditFinanzas;
-  const { statsClub, nextEvents, pastEvents } = useAgendaData(events);
+  // Los partidos oficiales (torneos) se mezclan con los eventos propios del club.
+  const agendaEvents = useMemo(
+    () => [...events, ...officialEvents],
+    [events, officialEvents],
+  );
+  const { statsClub, nextEvents, pastEvents } = useAgendaData(agendaEvents);
+
+  /** Guarda datos del lado del club en un partido oficial (matches/{id}.sides.{clubId}). */
+  const saveOfficialSide = async (ev: any, patch: Record<string, any>) => {
+    const updates: Record<string, any> = {};
+    Object.entries(patch).forEach(([k, v]) => {
+      updates[`sides.${clubId}.${k}`] = v;
+    });
+    await updateDoc(matchRef(ev.matchId), updates);
+  };
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     const data = {
       eventType,
-      // 👇 Lo guardamos en Firestore (Solo si es Partido) 👇
-      matchType: eventType === "Partido" ? matchType : null,
+      // Los clubes solo organizan entrenamientos y amistosos; lo oficial viene de torneos.
+      matchType: eventType === "Partido" ? "Amistoso" : null,
       title: eventTitle,
       routine: eventType === "Entrenamiento" ? eventRoutine : [],
       eventDate,
@@ -98,7 +107,28 @@ export default function Agenda({
     setEventTitle("");
     setEventLocation("");
     setEventRoutine([]);
-    setMatchType("Oficial"); // Reiniciamos el estado por defecto
+  };
+
+  const handleStartEdit = (ev: any) => {
+    setEditingEventId(ev.id);
+    setEventTitle(ev.title);
+    setEventType(ev.eventType);
+    setEventDate(ev.eventDate);
+    setEventTime(ev.eventTime);
+    setEventLocation(ev.location);
+    if (typeof ev.routine === "string" && ev.routine) {
+      setEventRoutine([
+        {
+          type: "phase",
+          id: Date.now().toString(),
+          title: "Rutina Guardada",
+          exercises: [{ id: "1", name: ev.routine, duration: "", link: "" }],
+        },
+      ]);
+    } else {
+      setEventRoutine(ev.routine || []);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (id: string) => {
@@ -161,67 +191,37 @@ export default function Agenda({
       }}
     >
       {/* ── 1. BALANCE DE TEMPORADA ── */}
-      <SectionCard title="Récord Oficial del Club" icon={<Trophy size={16} />}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* Cuadrícula de Estadísticas */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-              gap: "0.75rem",
-            }}
-          >
-            <StatBox
-              icon={<Trophy size={18} color={C.navy600} />}
-              label="Jugados"
-              value={statsClub.jugados}
-            />
-            <StatBox
-              icon={<TrendingUp size={18} color={C.green} />}
-              label="Ganados"
-              value={statsClub.ganados}
-              valueColor={C.green}
-            />
-            <StatBox
-              icon={<TrendingDown size={18} color={C.red} />}
-              label="Perdidos"
-              value={statsClub.perdidos}
-              valueColor={C.red}
-            />
-            <StatBox
-              icon={<Target size={18} color={C.navy600} />}
-              label="Entrenamientos"
-              value={statsClub.entrenamientos}
-            />
-          </div>
-
-          {/* 👇 NOTA ACLARATORIA DE AMISTOSOS (ELEGANTE Y SUTIL) 👇 */}
-          <div
-            style={{
-              backgroundColor: C.gray50,
-              border: `1px dashed ${C.gray300}`,
-              borderRadius: RADIUS.md,
-              padding: "0.6rem 0.8rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-            }}
-          >
-            <span style={{ fontSize: "14px" }}>🤝</span>
-            <span
-              style={{
-                fontSize: "0.7rem",
-                color: C.gray500,
-                fontWeight: "600",
-                letterSpacing: "0.02em",
-                textAlign: "center",
-              }}
-            >
-              El historial oficial <strong>contabiliza</strong> los partidos de
-              carácter amistoso como entrenamientos.
-            </span>
-          </div>
+      <SectionCard title="Historial de Eventos" icon={<History size={16} />}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: "0.55rem",
+          }}
+        >
+          <StatBox
+            icon={<Target size={16} color={C.blue} />}
+            label="Entrenamientos"
+            value={statsClub.entrenamientos}
+            valueColor={C.blue}
+          />
+          <StatBox
+            icon={<Handshake size={16} color={C.green} />}
+            label="Amistosos"
+            value={statsClub.amistosos}
+            valueColor={C.green}
+          />
+          <StatBox
+            icon={<Trophy size={16} color={C.amber} />}
+            label="Oficiales"
+            value={statsClub.oficiales}
+            valueColor={C.amber}
+          />
+          <StatBox
+            icon={<Layers size={16} color={C.navy600} />}
+            label="Total de eventos"
+            value={statsClub.total}
+          />
         </div>
       </SectionCard>
 
@@ -231,8 +231,6 @@ export default function Agenda({
         editingEventId={editingEventId}
         eventType={eventType}
         setEventType={setEventType}
-        matchType={matchType} // 👈 Pasamos el estado
-        setMatchType={setMatchType} // 👈 Pasamos el setter
         eventTitle={eventTitle}
         setEventTitle={setEventTitle}
         eventRoutine={eventRoutine}
@@ -249,7 +247,6 @@ export default function Agenda({
           setEventTitle("");
           setEventLocation("");
           setEventRoutine([]);
-          setMatchType("Oficial"); // Reiniciar al cancelar
         }}
       />
 
@@ -287,45 +284,20 @@ export default function Agenda({
             </div>
           ) : (
             nextEvents.map((ev: any) => (
-              <EventCard
+              <OfficialMatchCard
                 key={ev.id}
                 ev={ev}
                 players={players}
                 perms={perms}
                 isHighlighted={highlightedEventId === ev.id}
-                onDelete={() => handleDelete(ev.id)}
-                onEdit={() => {
-                  setEditingEventId(ev.id);
-                  setEventTitle(ev.title);
-                  setEventType(ev.eventType);
-                  // 👇 Recuperamos si era Oficial o Amistoso (Por defecto Oficial para eventos viejos) 👇
-                  setMatchType(ev.matchType || "Oficial");
-                  setEventDate(ev.eventDate);
-                  setEventTime(ev.eventTime);
-                  setEventLocation(ev.location);
-                  if (typeof ev.routine === "string" && ev.routine) {
-                    setEventRoutine([
-                      {
-                        type: "phase",
-                        id: Date.now().toString(),
-                        title: "Rutina Guardada",
-                        exercises: [
-                          { id: "1", name: ev.routine, duration: "", link: "" },
-                        ],
-                      },
-                    ]);
-                  } else {
-                    setEventRoutine(ev.routine || []);
-                  }
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
                 onOpenAttendance={() => setAttendanceModalEvent(ev)}
                 onOpenLineup={() => setLineupModalEvent(ev)}
+                onEdit={() => handleStartEdit(ev)}
+                onDelete={() => handleDelete(ev.id)}
                 onImageClick={(data: any) => setLightboxData(data)}
                 onEditPhoto={(id: string) =>
                   setAlbumModalEvent(events.find((e: any) => e.id === id))
                 }
-                onOpenArbitration={() => setArbitrationModalEvent(ev)}
               />
             ))
           )}
@@ -370,7 +342,27 @@ export default function Agenda({
                   new Date(b.eventDate + "T" + b.eventTime).getTime() -
                   new Date(a.eventDate + "T" + a.eventTime).getTime(),
               )
-              .map((ev: any) => (
+              .map((ev: any) =>
+                ev.isOfficial || ev.eventType === "Entrenamiento" ? (
+                  <OfficialMatchCard
+                    key={ev.id}
+                    ev={ev}
+                    players={players}
+                    perms={perms}
+                    isPast
+                    onOpenAttendance={() => {
+                      if (!perms?.canEditAgenda) return;
+                      setAttendanceModalEvent(ev);
+                    }}
+                    onOpenLineup={() => setLineupModalEvent(ev)}
+                    onEdit={() => handleStartEdit(ev)}
+                    onDelete={() => handleDelete(ev.id)}
+                    onImageClick={(data: any) => setLightboxData(data)}
+                    onEditPhoto={(id: string) =>
+                      setAlbumModalEvent(events.find((e: any) => e.id === id))
+                    }
+                  />
+                ) : (
                 <HistoryCard
                   key={ev.id}
                   ev={ev}
@@ -392,46 +384,21 @@ export default function Agenda({
                     }
                   }}
                   onDelete={() => handleDelete(ev.id)}
-                  onEdit={() => {
-                    setEditingEventId(ev.id);
-                    setEventTitle(ev.title);
-                    setEventType(ev.eventType);
-                    setMatchType(ev.matchType || "Oficial");
-                    setEventDate(ev.eventDate);
-                    setEventTime(ev.eventTime);
-                    setEventLocation(ev.location);
-                    if (typeof ev.routine === "string" && ev.routine) {
-                      setEventRoutine([
-                        {
-                          type: "phase",
-                          id: Date.now().toString(),
-                          title: "Rutina Guardada",
-                          exercises: [
-                            {
-                              id: "1",
-                              name: ev.routine,
-                              duration: "",
-                              link: "",
-                            },
-                          ],
-                        },
-                      ]);
-                    } else {
-                      setEventRoutine(ev.routine || []);
-                    }
-                    window.scrollTo({ top: 0, behavior: "smooth" }); // 👈 Sube al formulario
-                  }}
+                  onEdit={() => handleStartEdit(ev)}
                   onUpdateScore={handleUpdateScore}
                   onOpenStats={(ev: any) => setStatsModalEvent(ev)}
-                  onOpenArbitration={(ev: any) => setArbitrationModalEvent(ev)}
                   onOpenLineup={(ev: any) => setLineupModalEvent(ev)}
                   onOpenAlbum={(id: string) =>
                     setAlbumModalEvent(events.find((e: any) => e.id === id))
                   }
                   onImageClick={(data: any) => setLightboxData(data)}
-                  onOpenAttendance={(ev: any) => setAttendanceModalEvent(ev)}
+                  onOpenAttendance={(ev: any) => {
+                    if (!perms?.canEditAgenda) return;
+                    setAttendanceModalEvent(ev);
+                  }}
                 />
-              ))
+                ),
+              )
           )}
         </div>
       </SectionCard>
@@ -444,7 +411,11 @@ export default function Agenda({
           perms={perms}
           onClose={() => setAttendanceModalEvent(null)}
           onSave={async (id: string, att: string[]) => {
-            await updateDoc(item("events", id), { attendees: att });
+            if (attendanceModalEvent.isOfficial) {
+              await saveOfficialSide(attendanceModalEvent, { attendees: att });
+            } else {
+              await updateDoc(item("events", id), { attendees: att });
+            }
             setAttendanceModalEvent(null);
           }}
         />
@@ -458,7 +429,11 @@ export default function Agenda({
           perms={perms}
           onClose={() => setLineupModalEvent(null)}
           onSave={async (id: string, lineup: any) => {
-            await updateDoc(item("events", id), { lineup });
+            if (lineupModalEvent.isOfficial) {
+              await saveOfficialSide(lineupModalEvent, { lineup });
+            } else {
+              await updateDoc(item("events", id), { lineup });
+            }
             setLineupModalEvent(null);
           }}
           onSaveBase={async (mode: string, lineup: any) => {
@@ -488,53 +463,16 @@ export default function Agenda({
         />
       )}
 
-      {arbitrationModalEvent && (
-        <ArbitrationModal
-          ev={arbitrationModalEvent}
-          players={players}
-          canEditArbitration={canEditArbitration}
-          onClose={() => setArbitrationModalEvent(null)}
-          onSave={async (cleanPayments: any[]) => {
-            await updateDoc(item("events", arbitrationModalEvent.id), {
-              arbitrationPayments: cleanPayments,
-            });
-
-            const totalArbitraje = cleanPayments.reduce(
-              (sum, p) => sum + (Number(p.amount || p.monto || p.pagado) || 0),
-              0,
-            );
-
-            const transRef = item(
-              "transactions",
-              `arb_${arbitrationModalEvent.id}`,
-            );
-            if (totalArbitraje > 0) {
-              await setDoc(
-                transRef,
-                {
-                  type: "ingreso",
-                  category: "Cuotas",
-                  description: `Recaudación Arbitraje: ${arbitrationModalEvent.title}`,
-                  amount: totalArbitraje,
-                  date: arbitrationModalEvent.eventDate,
-                  timestamp: new Date().toISOString(),
-                },
-                { merge: true },
-              );
-            } else {
-              await deleteDoc(transRef).catch(() => {});
-            }
-            setArbitrationModalEvent(null);
-          }}
-        />
-      )}
-
       {statsModalEvent && (
         <StatsModal
           ev={statsModalEvent}
           players={players}
           onClose={() => setStatsModalEvent(null)}
           onSave={async (statsData: any) => {
+            if (statsModalEvent.isOfficial) {
+              setStatsModalEvent(null);
+              return;
+            }
             await updateDoc(item("events", statsModalEvent.id), statsData);
             setStatsModalEvent(null);
           }}

@@ -3,15 +3,22 @@ import { createPortal } from "react-dom";
 import {
   deleteDoc,
   onSnapshot,
-  serverTimestamp,
-  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { X, UserPlus, Mail, Trash2, UserCog } from "lucide-react";
 import { useClub } from "../../context/ClubContext";
 import { useAuth } from "../../context/AuthContext";
-import { emailKey } from "../../lib/paths";
+import {
+  inviteRespondPath,
+  sendClubInvite,
+  type InviteKind,
+} from "../../lib/clubInvite";
+import { clearSignupInvite, markSignupInvite, signupUrl } from "../../lib/signupInvite";
 import { Role, ROLES, ROLE_LABELS } from "../../lib/roles";
+import InviteSignupLink, {
+  CopySignupUrlButton,
+} from "../platform/InviteSignupLink";
+import { useModalLock } from "../../hooks/useModalLock";
 import {
   C,
   RADIUS,
@@ -33,6 +40,8 @@ interface Invite {
   id: string;
   email: string;
   role: Role;
+  kind?: InviteKind;
+  token?: string;
 }
 
 /**
@@ -46,24 +55,20 @@ export default function MembersModal({
   clubName: string;
   onClose: () => void;
 }) {
-  const { col, item } = useClub();
+  const { clubId, col, item } = useClub();
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("dt");
+  const [role, setRole] = useState<Role>("admin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [lastInvite, setLastInvite] = useState("");
+  const [lastInviteUrl, setLastInviteUrl] = useState("");
+  const [lastInviteKind, setLastInviteKind] = useState<InviteKind | "">("");
+  const [lastMailed, setLastMailed] = useState(true);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+  useModalLock(onClose);
 
   useEffect(() => {
     const unsubM = onSnapshot(col("members"), (snap) => {
@@ -79,6 +84,10 @@ export default function MembersModal({
       );
       list.sort((a, b) => a.email.localeCompare(b.email));
       setInvites(list);
+      list.forEach((inv) => {
+        if (inv.kind === "accept") return;
+        void markSignupInvite(inv.email, { clubId }).catch(() => {});
+      });
     });
     return () => {
       unsubM();
@@ -95,21 +104,29 @@ export default function MembersModal({
       return;
     }
     if (members.some((m) => m.email === clean)) {
-      setError("Esa persona ya es miembro del club.");
+      setError("Esa persona ya es administrador del club.");
       return;
     }
     try {
       setBusy(true);
-      await setDoc(item("invites", emailKey(clean)), {
-        email: clean,
-        role,
-        invitedBy: user?.uid || null,
-        createdAt: serverTimestamp(),
-      });
+      const result = await sendClubInvite({ clubId, email: clean, role });
+      setLastInvite(clean);
+      setLastInviteUrl(result.url);
+      setLastInviteKind(result.kind);
+      setLastMailed(result.mailed);
       setEmail("");
     } catch (err) {
       console.error(err);
-      setError("No se pudo crear la invitación.");
+      const code = (err as { code?: string }).code || "";
+      if (code.includes("already-exists")) {
+        setError("Esa persona ya es administrador del club.");
+      } else if (code.includes("unauthenticated")) {
+        setError("Inicia sesión de nuevo para invitar.");
+      } else if (code.includes("permission-denied")) {
+        setError("Solo el presidente o un superadmin puede invitar.");
+      } else {
+        setError("No se pudo crear la invitación.");
+      }
     } finally {
       setBusy(false);
     }
@@ -131,6 +148,8 @@ export default function MembersModal({
 
   const removeInvite = async (inv: Invite) => {
     await deleteDoc(item("invites", inv.id));
+    await clearSignupInvite(inv.email).catch(() => {});
+    if (lastInvite === inv.email) setLastInvite("");
   };
 
   return createPortal(
@@ -151,12 +170,13 @@ export default function MembersModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="members-modal compact-form"
         style={{
           backgroundColor: C.white,
-          borderRadius: RADIUS.xl,
-          padding: "1.5rem",
+          borderRadius: RADIUS.lg,
+          padding: "1rem 1rem 1.1rem",
           width: "100%",
-          maxWidth: "520px",
+          maxWidth: "440px",
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: SHADOWS.xl,
@@ -167,51 +187,28 @@ export default function MembersModal({
           onClick={onClose}
           style={{
             position: "absolute",
-            top: "1rem",
-            right: "1rem",
+            top: "0.7rem",
+            right: "0.7rem",
             background: "none",
             border: "none",
             color: C.gray400,
             cursor: "pointer",
           }}
         >
-          <X size={20} />
+          <X size={16} />
         </button>
 
-        <h3
-          style={{
-            margin: "0 0 0.25rem 0",
-            fontSize: "1.1rem",
-            fontWeight: 900,
-            color: C.navy900,
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-          }}
-        >
-          <UserCog size={18} color={C.amber} /> Miembros de {clubName}
+        <h3 className="members-modal__title">
+          <UserCog size={15} color={C.amber} />
+          Administradores
         </h3>
-        <p
-          style={{
-            margin: "0 0 1.25rem 0",
-            fontSize: "0.8rem",
-            color: C.gray500,
-            lineHeight: 1.4,
-          }}
-        >
-          Invita por correo. Cuando esa persona inicie sesión con ese correo,
-          obtendrá automáticamente el rol asignado.
+        <p className="members-modal__club">{clubName}</p>
+        <p className="members-modal__hint">
+          Invita por correo. Si ya tiene cuenta, le pedimos que acepte el rol. Si no,
+          le mandamos el enlace para crearla.
         </p>
 
-        <form
-          onSubmit={handleInvite}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: "0.5rem",
-            marginBottom: "0.5rem",
-          }}
-        >
+        <form onSubmit={handleInvite} className="members-invite">
           <FormInput
             type="email"
             placeholder="correo@ejemplo.com"
@@ -219,49 +216,79 @@ export default function MembersModal({
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <FormSelect
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            style={{ width: "auto" }}
-          >
-            {ROLES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </FormSelect>
-          <PrimaryButton
-            type="submit"
-            disabled={busy}
-            style={{
-              gridColumn: "1 / -1",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-            }}
-          >
-            <UserPlus size={14} /> {busy ? "Enviando..." : "Invitar"}
-          </PrimaryButton>
+          <div className="members-invite__row">
+            <FormSelect
+              value={role}
+              onChange={(e) => setRole(e.target.value as Role)}
+            >
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </FormSelect>
+            <PrimaryButton
+              type="submit"
+              disabled={busy}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.3rem",
+                padding: "0.45rem 0.75rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <UserPlus size={13} /> {busy ? "Enviando..." : "Invitar"}
+            </PrimaryButton>
+          </div>
         </form>
         {error && (
-          <p style={{ color: C.red, fontSize: "0.8rem", margin: "0 0 1rem" }}>
+          <p style={{ color: C.red, fontSize: "0.72rem", margin: "0.35rem 0 0" }}>
             {error}
           </p>
         )}
+        {lastInvite && (
+          <>
+            <p
+              style={{
+                margin: "0.55rem 0 0",
+                fontSize: "0.72rem",
+                color: lastMailed ? C.green : C.gray500,
+                lineHeight: 1.4,
+              }}
+            >
+              {lastInviteKind === "accept"
+                ? lastMailed
+                  ? `Se envió un correo a ${lastInvite} para aceptar el rol.`
+                  : `No se pudo enviar el correo. Copia el enlace para que acepte el rol.`
+                : lastMailed
+                  ? `Se envió un correo a ${lastInvite} para crear su cuenta.`
+                  : `No se pudo enviar el correo. Copia el enlace de registro.`}
+            </p>
+            <InviteSignupLink
+              url={lastInviteUrl || signupUrl(lastInvite)}
+              label={
+                lastInviteKind === "accept"
+                  ? "URL para aceptar el rol"
+                  : "URL para crear cuenta"
+              }
+            />
+          </>
+        )}
 
-        <div style={{ fontSize: "0.7rem", color: C.gray500, marginBottom: "1rem" }}>
+        <div className="members-roles">
           {ROLES.map((r) => (
-            <div key={r.value}>
-              <strong style={{ color: C.gray700 }}>{r.label}:</strong>{" "}
-              {r.description}
+            <div key={r.value} className="members-roles__item">
+              <strong>{r.label}</strong>
+              <span>{r.description}</span>
             </div>
           ))}
         </div>
 
-        <SectionTitle>Miembros ({members.length})</SectionTitle>
+        <SectionTitle>Administradores ({members.length})</SectionTitle>
         {members.length === 0 && (
-          <EmptyRow>Todavía no hay miembros con acceso.</EmptyRow>
+          <EmptyRow>Todavía no hay administradores con acceso.</EmptyRow>
         )}
         {members.map((m) => (
           <Row key={m.id}>
@@ -306,7 +333,7 @@ export default function MembersModal({
           </Row>
         ))}
 
-        <SectionTitle style={{ marginTop: "1.25rem" }}>
+        <SectionTitle style={{ marginTop: "0.85rem" }}>
           Invitaciones pendientes ({invites.length})
         </SectionTitle>
         {invites.length === 0 && <EmptyRow>Sin invitaciones pendientes.</EmptyRow>}
@@ -327,6 +354,16 @@ export default function MembersModal({
               {inv.email}
             </div>
             <Badge color="blue">{ROLE_LABELS[inv.role]}</Badge>
+            <Badge color="gray">
+              {inv.kind === "accept" ? "Aceptar rol" : "Crear cuenta"}
+            </Badge>
+            <CopySignupUrlButton
+              url={
+                inv.kind === "accept" && inv.token
+                  ? `${window.location.origin}${inviteRespondPath(clubId, inv.id, inv.token)}`
+                  : signupUrl(inv.email)
+              }
+            />
             <IconButton title="Cancelar invitación" onClick={() => removeInvite(inv)}>
               <Trash2 size={14} />
             </IconButton>
@@ -366,11 +403,11 @@ const Row = ({ children }: { children: React.ReactNode }) => (
       display: "flex",
       alignItems: "center",
       gap: "0.5rem",
-      padding: "0.6rem 0.75rem",
+      padding: "0.45rem 0.55rem",
       borderRadius: RADIUS.md,
       border: `1px solid ${C.gray200}`,
       backgroundColor: C.gray50,
-      marginBottom: "0.4rem",
+      marginBottom: "0.3rem",
     }}
   >
     {children}

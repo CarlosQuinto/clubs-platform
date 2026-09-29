@@ -31,6 +31,29 @@ export const formatFriendlyTime = (timeString: string) => {
   return `${formattedHour}:${minute} ${ampm}`;
 };
 
+const SHORT_MONTHS = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+];
+
+/** Fecha corta: 29 SEP 2026 */
+export const formatShortDate = (dateString: string) => {
+  if (!dateString) return "";
+  const [year, month, day] = dateString.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  return `${day} ${SHORT_MONTHS[month - 1] || ""} ${year}`;
+};
+
 export const calculateAge = (dob: string) => {
   if (!dob) return '';
   const diffMs = Date.now() - new Date(dob).getTime();
@@ -40,10 +63,24 @@ export const calculateAge = (dob: string) => {
 
 export const isBirthdayToday = (dateString: string) => {
   if (!dateString) return false;
-  const parts = dateString.split('-');
+  const parts = dateString.split("-");
   if (parts.length !== 3) return false;
   const month = parseInt(parts[1], 10);
   const day = parseInt(parts[2], 10);
   const today = new Date();
-  return month === (today.getMonth() + 1) && day === today.getDate();
+  return month === today.getMonth() + 1 && day === today.getDate();
 };
+
+export function isoDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Suma meses a una fecha ISO (YYYY-MM-DD) conservando el día cuando se puede. */
+export function addMonthsIso(iso: string, months: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1 + months, d);
+  return isoDate(dt);
+}
