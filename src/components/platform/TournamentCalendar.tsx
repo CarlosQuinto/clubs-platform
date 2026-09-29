@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Calendar, ChevronDown, MapPin } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { Calendar, ChevronDown, ChevronRight, Clock, MapPin, Pencil } from "lucide-react";
 import { updateDoc } from "firebase/firestore";
 import { matchRef, tournamentRef } from "../../lib/paths";
 import {
-  calendarStatus,
   groupMatchesByRound,
   isPlayed,
 } from "../../lib/stats";
-import type { Match, MatchSide, Tournament } from "../../lib/types";
-import { formatFriendlyTime, formatShortDate } from "../../utils/helpers";
+import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
+import type { ClubSummary, Match, MatchSide, Tournament } from "../../lib/types";
+import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
 import {
   C,
   FormInput,
   PrimaryButton,
-  RADIUS,
   SectionCard,
 } from "../ui";
 import MatchStatsEditor from "./MatchStatsEditor";
@@ -23,24 +29,44 @@ export default function TournamentCalendar({
   matches,
   loading,
   clubNames,
+  clubsById,
   isAdmin,
 }: {
   tournament: Tournament;
   matches: Match[];
   loading: boolean;
   clubNames: Record<string, string>;
+  clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
 }) {
-  const { openGroups, finishedGroups } = useMemo(() => {
+  const rounds = useMemo(() => {
     const groups = groupMatchesByRound(matches);
-    const open: typeof groups = [];
-    const finished: typeof groups = [];
+    const open: Array<(typeof groups)[number] & { collapsed: boolean }> = [];
+    const finished: typeof open = [];
     for (const group of groups) {
-      if (group.list.length > 0 && group.list.every(isPlayed)) finished.push(group);
-      else open.push(group);
+      const collapsed = group.list.length > 0 && group.list.every(isPlayed);
+      (collapsed ? finished : open).push({ ...group, collapsed });
     }
-    return { openGroups: open, finishedGroups: finished };
+    return [...open, ...finished];
   }, [matches]);
+
+  const [visibleCount, setVisibleCount] = useState(1);
+  const [visibleFor, setVisibleFor] = useState(tournament.id);
+  if (visibleFor !== tournament.id) {
+    setVisibleFor(tournament.id);
+    setVisibleCount(1);
+  }
+  const shownCount = visibleFor === tournament.id ? visibleCount : 1;
+  const revealNext = useCallback(() => {
+    setVisibleCount((count) => count + 1);
+  }, []);
+  const sentinelRef = useRevealNextRound(
+    shownCount < rounds.length,
+    shownCount,
+    revealNext,
+  );
+
+  const visibleRounds = rounds.slice(0, shownCount);
 
   return (
     <SectionCard title="Calendario" icon={<Calendar size={16} />}>
@@ -60,32 +86,123 @@ export default function TournamentCalendar({
               asistencias y tarjetas.
             </p>
           )}
-          {openGroups.map((group) => (
+          {visibleRounds.map((group) => (
             <RoundBlock
               key={group.round}
               round={group.round}
               matches={group.list}
               tournament={tournament}
               clubNames={clubNames}
+              clubsById={clubsById}
               isAdmin={isAdmin}
-              collapsed={false}
+              collapsed={group.collapsed}
             />
           ))}
-          {finishedGroups.map((group) => (
-            <RoundBlock
-              key={group.round}
-              round={group.round}
-              matches={group.list}
-              tournament={tournament}
-              clubNames={clubNames}
-              isAdmin={isAdmin}
-              collapsed
-            />
-          ))}
+          {shownCount < rounds.length && (
+            <div ref={sentinelRef} aria-hidden className="cal-round-sentinel" />
+          )}
         </div>
       )}
     </SectionCard>
   );
+}
+
+function scrollingInner(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  let el: Element | null = target;
+  while (el && el !== document.body) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight + 1
+    ) {
+      return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
+/** Muestra una jornada más cuando el usuario baja hasta el final de la lista. */
+function useRevealNextRound(
+  hasMore: boolean,
+  visibleCount: number,
+  reveal: () => void,
+) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const cooldownUntil = useRef(0);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+
+    let revealed = false;
+    const revealOnce = () => {
+      if (revealed) return;
+      const now = performance.now();
+      if (now < cooldownUntil.current) return;
+      revealed = true;
+      cooldownUntil.current = now + 500;
+      reveal();
+    };
+
+    const nearEnd = () => node.getBoundingClientRect().top <= window.innerHeight + 80;
+    let wasHidden = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        if (!entry.isIntersecting) {
+          wasHidden = true;
+          return;
+        }
+        if (wasHidden) revealOnce();
+      },
+      { root: null, rootMargin: "80px 0px" },
+    );
+    observer.observe(node);
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY <= 0 || scrollingInner(event.target)) return;
+      if (nearEnd()) revealOnce();
+    };
+    let lastTouchY = 0;
+    const onTouchStart = (event: TouchEvent) => {
+      lastTouchY = event.touches[0]?.clientY ?? 0;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const y = event.touches[0]?.clientY ?? 0;
+      const scrollingDown = y < lastTouchY - 12;
+      lastTouchY = y;
+      if (!scrollingDown || scrollingInner(event.target)) return;
+      if (nearEnd()) revealOnce();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowDown" && event.key !== "PageDown" && event.key !== " ") return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (nearEnd()) revealOnce();
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      revealed = true;
+      observer.disconnect();
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [hasMore, visibleCount, reveal]);
+
+  return sentinelRef;
 }
 
 function roundTitle(round: string) {
@@ -97,6 +214,7 @@ function RoundBlock({
   matches,
   tournament,
   clubNames,
+  clubsById,
   isAdmin,
   collapsed,
 }: {
@@ -104,6 +222,7 @@ function RoundBlock({
   matches: Match[];
   tournament: Tournament;
   clubNames: Record<string, string>;
+  clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
   collapsed: boolean;
 }) {
@@ -111,13 +230,14 @@ function RoundBlock({
   const title = roundTitle(round);
 
   const list = (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+    <div className="cal-round">
       {matches.map((m) => (
         <MatchRow
           key={m.id}
           match={m}
           tournament={tournament}
           clubNames={clubNames}
+          clubsById={clubsById}
           isAdmin={isAdmin}
         />
       ))}
@@ -196,18 +316,41 @@ function RoundBlock({
   );
 }
 
+const MONTHS = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+];
+
+function dateParts(iso?: string) {
+  if (!iso) return null;
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return { day, month: MONTHS[month - 1] || "", year };
+}
+
 function MatchRow({
   match,
   tournament,
   clubNames,
+  clubsById,
   isAdmin,
 }: {
   match: Match;
   tournament: Tournament;
   clubNames: Record<string, string>;
+  clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
 }) {
-  const status = calendarStatus(match);
   const played = isPlayed(match);
   const [date, setDate] = useState(match.date || "");
   const [time, setTime] = useState(match.time || "");
@@ -216,6 +359,13 @@ function MatchRow({
   const [editing, setEditing] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const when = dateParts(match.date);
+  const homeName = clubNames[match.homeClubId] || "Local";
+  const awayName = clubNames[match.awayClubId] || "Visitante";
+  const homeLogo = clubsById[match.homeClubId]?.logoUrl;
+  const awayLogo = clubsById[match.awayClubId]?.logoUrl;
+  const kickoff = match.time ? formatFriendlyTime(match.time) : "";
+  const place = match.venue?.trim() || "";
 
   useEffect(() => {
     setDate(match.date || "");
@@ -247,133 +397,87 @@ function MatchRow({
   };
 
   return (
-    <div
-      style={{
-        padding: "0.4rem 0.6rem",
-        border: `1px solid ${C.gray200}`,
-        borderRadius: RADIUS.md,
-        backgroundColor: C.white,
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.4rem",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: "0.65rem",
-              flexWrap: "wrap",
-            }}
+    <div className="cal-match">
+      <div className="cal-match__main">
+        {when ? (
+          <time
+            className="match-card__date"
+            dateTime={match.date}
+            aria-label={formatFriendlyDate(match.date || "")}
           >
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: "0.8rem",
-                lineHeight: 1.25,
-                color: C.gray800,
-                overflowWrap: "break-word",
-              }}
-            >
-              {clubNames[match.homeClubId] || match.homeClubId} vs{" "}
-              {clubNames[match.awayClubId] || match.awayClubId}
-            </div>
-            {played ? (
-              <span
-                style={{
-                  fontWeight: 800,
-                  fontSize: "0.8rem",
-                  fontVariantNumeric: "tabular-nums",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {match.homeScore}-{match.awayScore}
-              </span>
-            ) : null}
-          </div>
-          <div
-            style={{
-              fontSize: "0.68rem",
-              color: C.gray500,
-              fontWeight: 600,
-              marginTop: 1,
-              display: "flex",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.15rem 0.55rem",
-            }}
-          >
-            <span>
-              {status === "unscheduled"
-                ? "Por definir"
-                : [formatShortDate(match.date || ""), formatFriendlyTime(match.time || "")]
-                    .filter(Boolean)
-                    .join(" · ")}
+            <span className="match-card__day">{when.day}</span>
+            <span className="match-card__month">{when.month}</span>
+            <span className="match-card__year">{when.year}</span>
+          </time>
+        ) : (
+          <span className="match-card__date">
+            <span className="cal-match__tbd">Por definir</span>
+          </span>
+        )}
+        <div className="cal-match__body">
+          <div className="cal-match__teams">
+            <span className="cal-match__side">
+              <Crest src={homeLogo} alt="" />
+              {homeName}
             </span>
-            {match.venue && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                }}
-              >
-                <MapPin size={10} /> {match.venue}
-              </span>
-            )}
+            <span className="cal-match__vs">vs</span>
+            <span className="cal-match__side">
+              <Crest src={awayLogo} alt="" />
+              {awayName}
+            </span>
           </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: 2,
-            flexShrink: 0,
-          }}
-        >
-          {hasMatchSummary(match) && (
-            <button
-              type="button"
-              onClick={() => setSummaryOpen((v) => !v)}
-              aria-expanded={summaryOpen}
-              style={linkBtn}
-            >
-              {summaryOpen ? "Ocultar" : "Resumen"}
-            </button>
+          {(kickoff || place) && (
+            <div className="cal-match__meta">
+              {kickoff && (
+                <span>
+                  <Clock size={13} />
+                  {kickoff}
+                </span>
+              )}
+              {place && (
+                <span>
+                  <MapPin size={13} />
+                  {place}
+                </span>
+              )}
+            </div>
           )}
-          {isAdmin && (
-            <>
+        </div>
+        {isAdmin && (
+          <div className="cal-match__aside">
+            <div className="cal-match__actions">
               <button
                 type="button"
                 onClick={() => setEditing((v) => !v)}
-                style={linkBtn}
+                className="cal-match__action"
               >
                 {editing ? "Cerrar" : "Editar"}
+                {!editing && <Pencil size={13} />}
               </button>
               <button
                 type="button"
                 onClick={() => setStatsOpen(true)}
-                style={linkBtn}
+                className="cal-match__action"
               >
                 Marcador
+                <ChevronRight size={14} />
               </button>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {summaryOpen && (
-        <MatchSummaryPanel match={match} clubNames={clubNames} />
-      )}
+      {played ? (
+        <MatchSummary
+          open={summaryOpen}
+          onToggle={() => setSummaryOpen((v) => !v)}
+          match={match}
+          homeName={homeName}
+          awayName={awayName}
+          homeLogo={homeLogo}
+          awayLogo={awayLogo}
+        />
+      ) : null}
 
       {isAdmin && editing && (
         <div
@@ -395,16 +499,10 @@ function MatchRow({
                 style={compactInput}
               />
             </label>
-            <label style={matchField}>
+            <div style={matchField}>
               <span style={matchFieldLabel}>Hora</span>
-              <FormInput
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                aria-label="Hora"
-                style={compactInput}
-              />
-            </label>
+              <TimeField value={time} onChange={setTime} />
+            </div>
           </div>
           <label style={matchField}>
             <span style={matchFieldLabel}>Sede</span>
@@ -440,155 +538,272 @@ function MatchRow({
   );
 }
 
-function hasMatchSummary(match: Match) {
-  const home = match.sides?.[match.homeClubId];
-  const away = match.sides?.[match.awayClubId];
-  return Boolean(
-    goalLines(home).length ||
-      goalLines(away).length ||
-      cardNames(home, "yellowCards").length ||
-      cardNames(away, "yellowCards").length ||
-      cardNames(home, "redCards").length ||
-      cardNames(away, "redCards").length,
-  );
-}
-
-function MatchSummaryPanel({
+function MatchSummary({
+  open,
+  onToggle,
   match,
-  clubNames,
+  homeName,
+  awayName,
+  homeLogo,
+  awayLogo,
 }: {
+  open: boolean;
+  onToggle: () => void;
   match: Match;
-  clubNames: Record<string, string>;
+  homeName: string;
+  awayName: string;
+  homeLogo?: string;
+  awayLogo?: string;
 }) {
   const home = match.sides?.[match.homeClubId];
   const away = match.sides?.[match.awayClubId];
-  const homeName = clubNames[match.homeClubId] || "Local";
-  const awayName = clubNames[match.awayClubId] || "Visita";
-  const homeGoals = goalLines(home);
-  const awayGoals = goalLines(away);
-  const homeY = cardNames(home, "yellowCards");
-  const awayY = cardNames(away, "yellowCards");
-  const homeR = cardNames(home, "redCards");
-  const awayR = cardNames(away, "redCards");
-  const showGoals = homeGoals.length > 0 || awayGoals.length > 0;
-  const showYellow = homeY.length > 0 || awayY.length > 0;
-  const showRed = homeR.length > 0 || awayR.length > 0;
 
   return (
-    <div
-      style={{
-        borderTop: `1px solid ${C.gray200}`,
-        paddingTop: "0.5rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.55rem",
-        fontSize: "0.72rem",
-        color: C.gray700,
-      }}
-    >
-      {showGoals && (
-        <SummaryBlock title="Goles">
-          <TeamLine name={homeName} items={homeGoals} empty="Sin goles" />
-          <TeamLine name={awayName} items={awayGoals} empty="Sin goles" />
-        </SummaryBlock>
-      )}
-      {showYellow && (
-        <SummaryBlock title="Tarjetas amarillas">
-          <TeamLine name={homeName} items={homeY} empty="Ninguna" />
-          <TeamLine name={awayName} items={awayY} empty="Ninguna" />
-        </SummaryBlock>
-      )}
-      {showRed && (
-        <SummaryBlock title="Tarjetas rojas">
-          <TeamLine name={homeName} items={homeR} empty="Ninguna" />
-          <TeamLine name={awayName} items={awayR} empty="Ninguna" />
-        </SummaryBlock>
-      )}
-    </div>
-  );
-}
-
-function SummaryBlock({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: "0.62rem",
-          fontWeight: 800,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          color: C.gray500,
-          marginBottom: "0.2rem",
-        }}
+    <div className="cal-match__summary">
+      <button
+        type="button"
+        className="cal-match__summary-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
       >
-        {title}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {children}
-      </div>
+        <span>Resumen</span>
+        <span className="cal-match__summary-end">
+          <span
+            className="cal-match__score"
+            aria-label={`Marcador ${match.homeScore} a ${match.awayScore}`}
+          >
+            <span className="cal-match__score-n">{match.homeScore}</span>
+            <span className="cal-match__score-sep" aria-hidden>
+              –
+            </span>
+            <span className="cal-match__score-n">{match.awayScore}</span>
+          </span>
+          <ChevronDown
+            size={16}
+            aria-hidden
+            style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
+          />
+        </span>
+      </button>
+      {open && (
+        <div className="cal-match__summary-grid">
+          <SummarySide
+            name={homeName}
+            logo={homeLogo}
+            goals={goalLines(home, match.homeScore)}
+            yellow={cardNames(home, "yellowCards")}
+            red={cardNames(home, "redCards")}
+          />
+          <SummarySide
+            name={awayName}
+            logo={awayLogo}
+            goals={goalLines(away, match.awayScore)}
+            yellow={cardNames(away, "yellowCards")}
+            red={cardNames(away, "redCards")}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function TeamLine({
+function SummarySide({
   name,
-  items,
-  empty,
+  logo,
+  goals,
+  yellow,
+  red,
 }: {
   name: string;
-  items: string[];
-  empty: string;
+  logo?: string;
+  goals: string[];
+  yellow: string[];
+  red: string[];
 }) {
   return (
-    <div style={{ lineHeight: 1.4 }}>
-      <span style={{ fontWeight: 800, color: C.navy900 }}>{name}</span>
-      <span style={{ color: C.gray500 }}> · </span>
-      <span style={{ fontWeight: 600, color: items.length ? C.gray700 : C.gray400 }}>
-        {items.length ? items.join(" · ") : empty}
-      </span>
+    <div className="cal-match__sum-side">
+      <div className="cal-match__sum-team">
+        <Crest src={logo} alt="" />
+        <span>{name}</span>
+      </div>
+      <div className="cal-match__sum-facts">
+        {goals.length > 0 && (
+          <p>
+            <strong>Goles:</strong> {goals.join(" · ")}
+          </p>
+        )}
+        {yellow.length > 0 && (
+          <p>
+            <strong>Tarjetas Amarillas:</strong> {yellow.join(" · ")}
+          </p>
+        )}
+        {red.length > 0 && (
+          <p>
+            <strong>Tarjetas Rojas:</strong> {red.join(" · ")}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-function goalLines(side?: MatchSide) {
-  if (!side?.stats?.length) return [];
-  const names = side.playerNames || {};
-  return side.stats
-    .filter((s) => s.scorer)
-    .map((s) => {
-      const scorer = names[s.scorer] || s.scorer;
-      if (s.isOwnGoal) return `${scorer}, autogol`;
-      if (s.isPenalty) return `${scorer}, penal`;
-      if (s.assist) return `${scorer}, asistencia ${names[s.assist] || s.assist}`;
-      return scorer;
-    });
+function Crest({ src, alt }: { src?: string; alt: string }) {
+  return (
+    <span className="cal-match__crest">
+      <img src={src || DEFAULT_CLUB_LOGO} alt={alt} />
+    </span>
+  );
+}
+
+/** "Jaime Noé" → "Jaime N." Un solo nombre se deja igual. */
+function shortName(full: string) {
+  const clean = full.trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return clean;
+  const initial = parts[parts.length - 1].charAt(0).toLocaleUpperCase("es");
+  return `${parts[0]} ${initial}.`;
+}
+
+function goalLines(side: MatchSide | undefined, score?: number | null) {
+  const names = side?.playerNames || {};
+  const lines = (side?.stats || []).map((s) => {
+    if (!s.scorer?.trim()) return "Jugador";
+    const scorer = shortName(names[s.scorer] || s.scorer);
+    if (s.isOwnGoal) return `${scorer} (autogol)`;
+    if (s.isPenalty) return `${scorer} (P)`;
+    if (s.assist) return `${scorer} (${names[s.assist] || s.assist})`;
+    return scorer;
+  });
+  const total = typeof score === "number" ? score : lines.length;
+  while (lines.length < total) lines.push("Jugador");
+  return lines;
 }
 
 function cardNames(side: MatchSide | undefined, key: "yellowCards" | "redCards") {
   if (!side?.[key]?.length) return [];
   const names = side.playerNames || {};
-  return side[key]!.map((id) => names[id] || id);
+  return side[key]!.map((id) => shortName(names[id] || id));
+}
+
+function TimeField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const parsed = parseClock(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !rootRef.current) return;
+    rootRef.current.querySelectorAll(".time-pick__opt.is-on").forEach((node) => {
+      const el = node as HTMLElement;
+      const col = el.parentElement;
+      if (!col) return;
+      col.scrollTop = el.offsetTop - col.clientHeight / 2 + el.clientHeight / 2;
+    });
+  }, [open, value]);
+
+  const pick = (part: Partial<{ h12: number; minute: number; pm: boolean }>) => {
+    const base = parsed ?? { h12: 12, minute: 0, pm: false };
+    onChange(toClock({ ...base, ...part }));
+  };
+
+  return (
+    <div className="time-pick" ref={rootRef}>
+      <button
+        type="button"
+        className="time-pick__btn"
+        aria-label="Hora"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={value ? undefined : "time-pick__placeholder"}>
+          {value ? formatFriendlyTime(value) : "Hora"}
+        </span>
+        <Clock size={14} />
+      </button>
+      {open && (
+        <div className="time-pick__pop" role="listbox" aria-label="Elegir hora">
+          <div className="time-pick__col">
+            {HOURS.map((hour) => (
+              <button
+                key={hour}
+                type="button"
+                className={`time-pick__opt${parsed?.h12 === hour ? " is-on" : ""}`}
+                onClick={() => pick({ h12: hour })}
+              >
+                {String(hour).padStart(2, "0")}
+              </button>
+            ))}
+          </div>
+          <div className="time-pick__col">
+            {MINUTES.map((minute) => (
+              <button
+                key={minute}
+                type="button"
+                className={`time-pick__opt${parsed?.minute === minute ? " is-on" : ""}`}
+                onClick={() => pick({ minute })}
+              >
+                {String(minute).padStart(2, "0")}
+              </button>
+            ))}
+          </div>
+          <div className="time-pick__col time-pick__col--period">
+            {(["AM", "PM"] as const).map((period) => {
+              const pm = period === "PM";
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  className={`time-pick__opt${parsed && parsed.pm === pm ? " is-on" : ""}`}
+                  onClick={() => pick({ pm })}
+                >
+                  {period}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);
+
+function parseClock(value: string) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const hour24 = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour24 > 23 || minute > 59) return null;
+  const pm = hour24 >= 12;
+  const h12 = hour24 % 12 || 12;
+  return { h12, minute, pm };
+}
+
+function toClock(parts: { h12: number; minute: number; pm: boolean }) {
+  let hour = parts.h12 % 12;
+  if (parts.pm) hour += 12;
+  return `${String(hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
 }
 
 const compactInput: CSSProperties = {
   padding: "0.35rem 0.5rem",
   fontSize: "0.78rem",
-};
-
-const linkBtn: CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: C.navy900,
-  fontSize: "0.68rem",
-  fontWeight: 800,
-  cursor: "pointer",
-  padding: "0.15rem 0",
 };
 
 const compactBtn: CSSProperties = {

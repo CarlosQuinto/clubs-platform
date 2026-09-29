@@ -230,6 +230,7 @@ export default function TournamentPage() {
           matches={matches}
           loading={matchesLoading}
           clubNames={clubNames}
+          clubsById={clubsById}
           isAdmin={isSuperAdmin}
         />
       )}

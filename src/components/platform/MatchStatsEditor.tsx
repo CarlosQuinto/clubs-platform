@@ -1,19 +1,20 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { getDocs, updateDoc } from "firebase/firestore";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import { useModalLock } from "../../hooks/useModalLock";
 import { clubCol, matchRef, tournamentRef } from "../../lib/paths";
 import type { GoalStat, Match, Tournament } from "../../lib/types";
 import {
   C,
-  FormInput,
   FormSelect,
   PrimaryButton,
   RADIUS,
   SecondaryButton,
   SHADOWS,
 } from "../ui";
+
+const SCORE_MAX = 30;
 
 type GoalRow = {
   scorer: string;
@@ -41,13 +42,13 @@ export default function MatchStatsEditor({
   const homeSide = match.sides?.[match.homeClubId];
   const awaySide = match.sides?.[match.awayClubId];
 
-  const [homeScore, setHomeScore] = useState(String(match.homeScore ?? 0));
-  const [awayScore, setAwayScore] = useState(String(match.awayScore ?? 0));
+  const [homeScore, setHomeScore] = useState(clampScore(match.homeScore));
+  const [awayScore, setAwayScore] = useState(clampScore(match.awayScore));
   const [homeGoals, setHomeGoals] = useState<GoalRow[]>(
-    padGoals(homeSide?.stats, Number(match.homeScore ?? 0)),
+    padGoals(homeSide?.stats, clampScore(match.homeScore)),
   );
   const [awayGoals, setAwayGoals] = useState<GoalRow[]>(
-    padGoals(awaySide?.stats, Number(match.awayScore ?? 0)),
+    padGoals(awaySide?.stats, clampScore(match.awayScore)),
   );
   const [homeYellow, setHomeYellow] = useState<string[]>(
     homeSide?.yellowCards?.length ? [...homeSide.yellowCards] : [],
@@ -83,8 +84,8 @@ export default function MatchStatsEditor({
     };
   }, [match.homeClubId, match.awayClubId]);
 
-  const homeN = Math.max(0, parseInt(homeScore, 10) || 0);
-  const awayN = Math.max(0, parseInt(awayScore, 10) || 0);
+  const homeN = homeScore;
+  const awayN = awayScore;
 
   useEffect(() => {
     setHomeGoals((rows) => padGoals(rows, homeN));
@@ -209,61 +210,26 @@ export default function MatchStatsEditor({
               {homeName} vs {awayName}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            style={{
-              border: "none",
-              background: "transparent",
-              color: C.gray500,
-              cursor: "pointer",
-              padding: 4,
-            }}
-          >
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="match-stats-close">
             <X size={18} />
           </button>
         </div>
 
         <div className="match-stats-body">
           <div className="match-scoreboard">
-            <label className="match-scoreboard__team">
-              <span className="match-scoreboard__name">{homeName}</span>
-              <FormInput
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={homeScore}
-                aria-label={`Goles ${homeName}`}
-                onChange={(e) => setHomeScore(e.target.value)}
-                style={{
-                  width: "4.4rem",
-                  textAlign: "center",
-                  fontWeight: 900,
-                  fontVariantNumeric: "tabular-nums",
-                  padding: "0.45rem 0.3rem",
-                }}
-              />
-            </label>
-            <span className="match-scoreboard__sep">–</span>
-            <label className="match-scoreboard__team">
-              <span className="match-scoreboard__name">{awayName}</span>
-              <FormInput
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={awayScore}
-                aria-label={`Goles ${awayName}`}
-                onChange={(e) => setAwayScore(e.target.value)}
-                style={{
-                  width: "4.4rem",
-                  textAlign: "center",
-                  fontWeight: 900,
-                  fontVariantNumeric: "tabular-nums",
-                  padding: "0.45rem 0.3rem",
-                }}
-              />
-            </label>
+            <ScoreStepper
+              name={homeName}
+              value={homeN}
+              onChange={setHomeScore}
+            />
+            <span className="match-scoreboard__sep" aria-hidden="true">
+              –
+            </span>
+            <ScoreStepper
+              name={awayName}
+              value={awayN}
+              onChange={setAwayScore}
+            />
           </div>
 
           {loadingPlayers ? (
@@ -318,6 +284,47 @@ export default function MatchStatsEditor({
   );
 }
 
+function ScoreStepper({
+  name,
+  value,
+  onChange,
+}: {
+  name: string;
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  const up = () => onChange(stepScore(value, 1));
+  const down = () => onChange(stepScore(value, -1));
+  return (
+    <div className="score-stepper">
+      <span className="score-stepper__name">{name}</span>
+      <div className="score-stepper__ctrl">
+        <button
+          type="button"
+          className="score-stepper__btn"
+          aria-label={`Subir marcador de ${name}`}
+          onClick={up}
+          disabled={value >= SCORE_MAX}
+        >
+          <ChevronUp size={18} strokeWidth={2.5} />
+        </button>
+        <span className="score-stepper__value" aria-live="polite">
+          {value}
+        </span>
+        <button
+          type="button"
+          className="score-stepper__btn"
+          aria-label={`Bajar marcador de ${name}`}
+          onClick={down}
+          disabled={value <= 0}
+        >
+          <ChevronDown size={18} strokeWidth={2.5} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TeamBlock({
   name,
   goals,
@@ -355,18 +362,9 @@ function TeamBlock({
 
   return (
     <div className="match-team-block">
-      <div
-        style={{
-          fontWeight: 800,
-          fontSize: "0.85rem",
-          marginBottom: "0.7rem",
-          color: C.navy900,
-        }}
-      >
-        {name}
-      </div>
+      <div className="match-team-block__name">{name}</div>
 
-      <div style={sectionLabel}>Goles</div>
+      <div className="match-section-label">Goles</div>
       {goals === 0 ? (
         <p style={{ margin: "0 0 0.85rem", fontSize: "0.75rem", color: C.gray400 }}>
           Sin goles.
@@ -452,58 +450,55 @@ function TeamBlock({
         </div>
       )}
 
-      <IdList label="Amarillas" ids={yellow} onChange={onYellow} players={options} />
-      <IdList label="Rojas" ids={red} onChange={onRed} players={options} />
+      <IdList
+        label="Amarillas"
+        tone="yellow"
+        ids={yellow}
+        onChange={onYellow}
+        players={options}
+      />
+      <IdList
+        label="Rojas"
+        tone="red"
+        ids={red}
+        onChange={onRed}
+        players={options}
+      />
     </div>
   );
 }
 
 function IdList({
   label,
+  tone,
   ids,
   onChange,
   players,
 }: {
   label: string;
+  tone: "yellow" | "red";
   ids: string[];
   onChange: (ids: string[]) => void;
   players: Player[];
 }) {
   return (
-    <div style={{ marginTop: "0.4rem" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "0.35rem",
-        }}
-      >
-        <span style={sectionLabel}>{label}</span>
+    <div className={`match-discipline match-discipline--${tone}`}>
+      <div className="match-discipline__head">
+        <span className="match-section-label">{label}</span>
         <button
           type="button"
+          className="match-discipline__add"
           onClick={() => onChange([...ids, ""])}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: C.navy900,
-            fontSize: "0.72rem",
-            fontWeight: 800,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-          }}
         >
           <Plus size={12} /> Añadir
         </button>
       </div>
       {ids.length === 0 ? (
-        <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray400 }}>Ninguna.</p>
+        <p className="match-discipline__empty">Ninguna.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+        <div className="match-discipline__list">
           {ids.map((id, i) => (
-            <div key={`${label}-${i}`} style={{ display: "flex", gap: "0.35rem" }}>
+            <div key={`${label}-${i}`} className="match-discipline__row">
               <FormSelect
                 value={id}
                 onChange={(e) =>
@@ -519,15 +514,9 @@ function IdList({
               </FormSelect>
               <button
                 type="button"
-                aria-label="Quitar"
+                className="match-discipline__remove"
+                aria-label={`Quitar ${label.toLowerCase()}`}
                 onClick={() => onChange(ids.filter((_, idx) => idx !== i))}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: C.gray400,
-                  cursor: "pointer",
-                  padding: "0 0.2rem",
-                }}
               >
                 <X size={16} />
               </button>
@@ -537,6 +526,15 @@ function IdList({
       )}
     </div>
   );
+}
+
+function clampScore(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(SCORE_MAX, Math.round(value)));
+}
+
+function stepScore(current: number, delta: number) {
+  return clampScore(current + delta);
 }
 
 function padGoals(stats: GoalStat[] | GoalRow[] | undefined, n: number): GoalRow[] {
@@ -588,11 +586,3 @@ function pick(names: Record<string, string>, ids: (string | undefined)[]) {
   return out;
 }
 
-const sectionLabel: CSSProperties = {
-  fontSize: "0.65rem",
-  fontWeight: 800,
-  color: C.gray500,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  margin: 0,
-};
