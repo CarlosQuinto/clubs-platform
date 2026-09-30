@@ -1,10 +1,28 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Search } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import { PageTitle } from "../components/platform/ArchiveUI";
 import MatchList, { upcomingOfficialMatches } from "../components/platform/MatchList";
-import { useAllMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import { useFutureMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
 import { C, FormInput, FormSelect, RADIUS } from "../components/ui";
+
+const BATCH_QUERY = "(min-width: 800px)";
+const BATCH_NARROW = 6;
+const BATCH_WIDE = 12;
+
+function useMatchBatchSize() {
+  const [wide, setWide] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(BATCH_QUERY).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(BATCH_QUERY);
+    const onChange = () => setWide(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return wide ? BATCH_WIDE : BATCH_NARROW;
+}
 
 function fold(value: string) {
   return value
@@ -22,10 +40,16 @@ export default function MatchesPage() {
     tournaments,
     tournamentsById,
     loading: catalogLoading,
-  } = usePlatformCatalog();
-  const { matches, loading: matchesLoading } = useAllMatches();
+  } = usePlatformCatalog({ seasons: false, localities: false });
+  const { matches, loading: matchesLoading } = useFutureMatches();
   const [tournamentId, setTournamentId] = useState("");
   const [query, setQuery] = useState("");
+  const batch = useMatchBatchSize();
+  const [visibleCount, setVisibleCount] = useState(batch);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const filterKey = `${tournamentId}\0${query}`;
+  const prevFilter = useRef(filterKey);
+  const prevBatch = useRef(batch);
 
   const liveTournaments = useMemo(
     () =>
@@ -70,6 +94,35 @@ export default function MatchesPage() {
   ]);
 
   const loading = catalogLoading || matchesLoading;
+  const visible = filtered.slice(0, visibleCount);
+
+  useEffect(() => {
+    if (prevFilter.current !== filterKey) {
+      prevFilter.current = filterKey;
+      prevBatch.current = batch;
+      setVisibleCount(batch);
+      return;
+    }
+    if (prevBatch.current !== batch) {
+      prevBatch.current = batch;
+      setVisibleCount((count) => Math.max(count, batch));
+    }
+  }, [filterKey, batch]);
+
+  useEffect(() => {
+    if (loading || visibleCount >= filtered.length) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setVisibleCount((count) => Math.min(count + batch, filtered.length));
+      },
+      { rootMargin: "160px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, visibleCount, filtered.length, batch]);
 
   return (
     <PlatformLayout>
@@ -127,17 +180,22 @@ export default function MatchesPage() {
               No hay partidos con esos filtros.
             </p>
           ) : (
-            <MatchList
-              matches={filtered}
-              clubNames={clubNames}
-              clubsById={clubsById}
-              subtitleOf={(m) => {
-                const tournament = tournamentsById[m.tournamentId];
-                const category =
-                  categoryName[tournament?.categoryId || m.categoryId] || "";
-                return [category, tournament?.name].filter(Boolean).join(" · ");
-              }}
-            />
+            <>
+              <MatchList
+                matches={visible}
+                clubNames={clubNames}
+                clubsById={clubsById}
+                subtitleOf={(m) => {
+                  const tournament = tournamentsById[m.tournamentId];
+                  const category =
+                    categoryName[tournament?.categoryId || m.categoryId] || "";
+                  return [category, tournament?.name].filter(Boolean).join(" · ");
+                }}
+              />
+              {visibleCount < filtered.length && (
+                <div ref={sentinelRef} style={{ height: 1 }} />
+              )}
+            </>
           )}
         </>
       )}

@@ -1,4 +1,11 @@
-import { collection, doc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  limit,
+  query,
+  where,
+} from "firebase/firestore";
 import { db } from "./firebase";
 
 /**
@@ -13,7 +20,8 @@ import { db } from "./firebase";
  *   platform/config                        → super administradores
  *   users/{uid}                            → perfil básico del usuario
  *
- * El `clubId` es el slug de la URL en minúsculas (p. ej. /JogaBonitoFC → "jogabonitofc").
+ * El `clubId` es el uid del documento. La URL pública es el campo `slug`
+ * (p. ej. /aguilas-guaymas), no el id.
  */
 
 export type ClubCollection =
@@ -28,6 +36,14 @@ export type ClubCollection =
 
 export const clubsCol = () => collection(db, "clubs");
 export const clubDocRef = (clubId: string) => doc(db, "clubs", clubId);
+
+/** Documento del club cuya URL es `slug`, o null si no hay ninguno. */
+export async function findClubBySlug(slug: string) {
+  const snap = await getDocs(
+    query(clubsCol(), where("slug", "==", slug), limit(1)),
+  );
+  return snap.empty ? null : snap.docs[0];
+}
 export const clubCol = (clubId: string, name: ClubCollection) =>
   collection(db, "clubs", clubId, name);
 export const clubItemRef = (clubId: string, name: ClubCollection, id: string) =>
@@ -59,6 +75,8 @@ export const inquiryRef = (id: string) => doc(db, "inquiries", id);
 export const teamApplicationsCol = () => collection(db, "teamApplications");
 export const teamApplicationRef = (id: string) =>
   doc(db, "teamApplications", id);
+export const adsCol = () => collection(db, "ads");
+export const adRef = (id: string) => doc(db, "ads", id);
 
 /** Ruta de Storage para recursos de la plataforma (carrusel de la landing). */
 export const platformStoragePath = (folder: string, filename: string) =>

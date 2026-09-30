@@ -4,6 +4,7 @@ import { TournamentEditHost } from "./components/admin/TournamentEditModal";
 import DocumentBrand from "./components/platform/DocumentBrand";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Registro from "./pages/Registro";
 import InviteRespond from "./pages/InviteRespond";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -24,6 +25,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/restablecer" element={<ResetPassword />} />
             <Route path="/registro" element={<Registro />} />
             <Route path="/invitar" element={<InviteRespond />} />
             <Route path="/contacto" element={<Contact />} />

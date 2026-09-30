@@ -11,7 +11,7 @@ import { usePlatformCatalog } from "../hooks/usePlatformCatalog";
 
 export default function TournamentArchive() {
   const { tournaments, seasons, seasonName, categoryName, categories, loading } =
-    usePlatformCatalog();
+    usePlatformCatalog({ clubs: false, localities: false });
 
   const closedSeasonIds = useMemo(
     () => new Set(seasons.filter((s) => !s.active).map((s) => s.id)),

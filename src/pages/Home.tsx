@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { LightboxModal } from "../components/AppComponents";
+import { C } from "../components/ui";
 
 // ── Importamos nuestros nuevos módulos limpios ──
 import BirthdayBanner from "../components/home/BirthdayBanner";
@@ -10,12 +11,70 @@ import TeamRecordCard from "../components/home/TeamRecordCard";
 import ClubTrophyCase from "../components/home/ClubTrophyCase";
 import StatsScopeBar from "../components/club/StatsScopeBar";
 
+const noop = () => {};
+
+function useVisibleOnce(enabled: boolean, onVisible: () => void) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        onVisible();
+        observer.disconnect();
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [enabled, onVisible]);
+  return ref;
+}
+
+function DeferredSection({
+  title,
+  loading,
+  sectionRef,
+}: {
+  title: string;
+  loading: boolean;
+  sectionRef: Ref<HTMLDivElement>;
+}) {
+  return (
+    <div ref={sectionRef} style={{ minHeight: 160 }}>
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "1.125rem",
+          fontWeight: 800,
+          color: C.navy900,
+        }}
+      >
+        {title}
+      </h2>
+      {loading && (
+        <p style={{ margin: "1rem 0 0", color: C.gray500, fontWeight: 600 }}>
+          Cargando…
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Home({
   clubInfo,
   players,
   events,
   clubEvents,
   gallery,
+  eventsReady = false,
+  galleryReady = false,
+  hallSeen = false,
+  albumsSeen = false,
+  onHallSeen,
+  onAlbumsSeen,
   perms,
   teamRecord,
   scopeLabel,
@@ -41,7 +100,13 @@ export default function Home({
 
   // ── CÁLCULO DE ESTADÍSTICAS PARA EL MURO DE LA FAMA ──
   // (Las leyendas inactivas SÍ entran a este cálculo para respetar su historia)
+  const hallRef = useVisibleOnce(!hallSeen, onHallSeen ?? noop);
+  const albumsRef = useVisibleOnce(!albumsSeen, onAlbumsSeen ?? noop);
+  const showHall = hallSeen && eventsReady;
+  const showAlbums = albumsSeen && eventsReady && galleryReady;
+
   const clubPlayerStats = useMemo(() => {
+    if (!showHall) return [];
     return players.map((p: any) => {
       let goals = 0,
         assists = 0,
@@ -90,41 +155,7 @@ export default function Home({
         totalAttendance: matchesAttended + trainingsAttended,
       };
     });
-  }, [players, events]);
-
-  const topScorers = [...clubPlayerStats]
-    .filter((p: any) => p.goals > 0)
-    .sort(
-      (a: any, b: any) =>
-        b.goals - a.goals ||
-        b.assists - a.assists ||
-        a.name.localeCompare(b.name),
-    );
-
-  const topAssists = [...clubPlayerStats]
-    .filter((p: any) => p.assists > 0)
-    .sort(
-      (a: any, b: any) =>
-        b.assists - a.assists ||
-        b.goals - a.goals ||
-        a.name.localeCompare(b.name),
-    );
-
-  const topMVPs = [...clubPlayerStats]
-    .filter((p: any) => p.mvps > 0)
-    .sort(
-      (a: any, b: any) =>
-        b.mvps - a.mvps || b.goals - a.goals || a.name.localeCompare(b.name),
-    );
-
-  const topIronMen = [...clubPlayerStats]
-    .filter((p: any) => p.totalAttendance > 0)
-    .sort(
-      (a: any, b: any) =>
-        b.totalAttendance - a.totalAttendance ||
-        b.goals - a.goals ||
-        a.name.localeCompare(b.name),
-    );
+  }, [players, events, showHall]);
 
   return (
     <div
@@ -169,20 +200,30 @@ export default function Home({
         categoryName={categoryName || {}}
       />
 
-      {/* MURO DE LA FAMA (Ya viene purificado de amistosos) */}
-      <HallOfFame
-        topScorers={topScorers}
-        topAssists={topAssists}
-        topMVPs={topMVPs}
-        topIronMen={topIronMen}
-      />
+      {showHall ? (
+        <HallOfFame stats={clubPlayerStats} />
+      ) : (
+        <DeferredSection
+          title="Muro de la Fama"
+          loading={hallSeen}
+          sectionRef={hallRef}
+        />
+      )}
 
-      <GallerySection
-        gallery={gallery}
-        events={clubEvents || events}
-        perms={perms}
-        setLightboxData={setLightboxData}
-      />
+      {showAlbums ? (
+        <GallerySection
+          gallery={gallery}
+          events={clubEvents || events}
+          perms={perms}
+          setLightboxData={setLightboxData}
+        />
+      ) : (
+        <DeferredSection
+          title="Álbumes del Equipo"
+          loading={albumsSeen}
+          sectionRef={albumsRef}
+        />
+      )}
 
       {/* VISOR DE FOTOS GLOBAL (LIGHTBOX) */}
       {lightboxData && (

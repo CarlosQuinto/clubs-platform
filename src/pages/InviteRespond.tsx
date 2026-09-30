@@ -26,6 +26,7 @@ export default function InviteRespond() {
     clubName: string;
     email: string;
     role: string;
+    slug: string;
   } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,7 +66,8 @@ export default function InviteRespond() {
       await respondClubInvite({ clubId, emailKey, token, action });
       setDone(action);
       if (action === "accept") {
-        window.setTimeout(() => navigate(`/${clubId}`, { replace: true }), 900);
+        const path = info?.slug || clubId;
+        window.setTimeout(() => navigate(`/${path}`, { replace: true }), 900);
       }
     } catch (err) {
       const code = (err as { code?: string }).code || "";

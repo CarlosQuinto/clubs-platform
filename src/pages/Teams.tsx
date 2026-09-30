@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Shield, Users } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
+import AdSlot from "../components/platform/AdSlot";
 import { PageTitle, SectionRule } from "../components/platform/ArchiveUI";
 import ClubDirectoryList, {
   CLUB_PAGE_SIZE,
@@ -8,7 +9,12 @@ import ClubDirectoryList, {
 import { StandingsTable } from "../components/platform/TournamentTables";
 import StatsScopeBar from "../components/club/StatsScopeBar";
 import { C, FormInput, SectionCard } from "../components/ui";
-import { useAllMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import {
+  defaultSeasonId,
+  firstCategoryId,
+  usePlatformCatalog,
+  useScopedMatches,
+} from "../hooks/usePlatformCatalog";
 import {
   applyScope,
   applyTournamentScope,
@@ -36,16 +42,20 @@ export default function Teams() {
     clubNames,
     loading: catalogLoading,
   } = usePlatformCatalog();
-  const { matches, loading: matchesLoading } = useAllMatches();
   const [scope, setScope] = useState<StatsScope>({});
   const [scopeReady, setScopeReady] = useState(false);
+  const { matches, loading: matchesLoading } = useScopedMatches(scopeReady ? scope : null);
 
   useEffect(() => {
     if (catalogLoading || scopeReady) return;
-    const active = seasons.find((s) => s.active);
-    setScope(active ? { seasonId: active.id } : {});
+    const seasonId = defaultSeasonId(seasons);
+    const categoryId = firstCategoryId(categories);
+    setScope({
+      ...(seasonId ? { seasonId } : {}),
+      ...(categoryId ? { categoryId } : {}),
+    });
     setScopeReady(true);
-  }, [catalogLoading, seasons, scopeReady]);
+  }, [catalogLoading, categories, scopeReady, seasons]);
 
   const loading = catalogLoading || matchesLoading || !scopeReady;
 
@@ -81,6 +91,7 @@ export default function Teams() {
 
   return (
     <PlatformLayout>
+      <AdSlot placement="teams" layout="top" />
       <PageTitle icon={<Shield size={22} color="#cd9a40" />}>
         Equipos
       </PageTitle>

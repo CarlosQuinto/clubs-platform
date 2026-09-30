@@ -3,7 +3,7 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   addDoc,
   deleteDoc,
-  getDoc,
+  doc,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -23,6 +23,7 @@ import {
 import PlatformLayout from "../components/platform/PlatformLayout";
 import MembersModal from "../components/club/MembersModal";
 import HeroAdmin from "../components/admin/HeroAdmin";
+import AdsAdmin from "../components/admin/AdsAdmin";
 import InboxAdmin from "../components/admin/InboxAdmin";
 import SuperAdminsAdmin from "../components/admin/SuperAdminsAdmin";
 import SeasonsAdmin from "../components/admin/SeasonsAdmin";
@@ -32,11 +33,16 @@ import InviteSignupLink from "../components/platform/InviteSignupLink";
 import ConfirmModal from "../components/ConfirmModal";
 import { ClubProvider } from "../context/ClubContext";
 import { useAuth } from "../context/AuthContext";
-import { usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import {
+  usePlatformCatalog,
+  type PlatformCatalogParts,
+} from "../hooks/usePlatformCatalog";
 import {
   clubDocRef,
   clubItemRef,
+  clubsCol,
   emailKey,
+  findClubBySlug,
   localitiesCol,
   normalizeSlug,
   RESERVED_SLUGS,
@@ -57,20 +63,45 @@ import {
   SectionCard,
 } from "../components/ui";
 
-type Tab = "clubs" | "competition" | "cover" | "inbox" | "admins";
+type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins";
+
+const CATALOG_OFF: PlatformCatalogParts = {
+  clubs: false,
+  localities: false,
+  seasons: false,
+  tournaments: false,
+  categories: false,
+};
+
+function catalogForTab(tab: Tab): PlatformCatalogParts {
+  if (tab === "clubs") {
+    return { ...CATALOG_OFF, clubs: true, localities: true };
+  }
+  if (tab === "competition") {
+    return {
+      ...CATALOG_OFF,
+      seasons: true,
+      categories: true,
+      tournaments: true,
+      slimTournaments: true,
+    };
+  }
+  return CATALOG_OFF;
+}
 
 export default function SuperAdmin() {
   const { user, loading, isSuperAdmin, platformConfig } = useAuth();
-  const catalog = usePlatformCatalog();
   const [params] = useSearchParams();
   const tabParam = params.get("tab");
   const tab: Tab =
     tabParam === "competition" ||
     tabParam === "cover" ||
+    tabParam === "ads" ||
     tabParam === "inbox" ||
     tabParam === "admins"
       ? tabParam
       : "clubs";
+  const catalog = usePlatformCatalog(catalogForTab(tab));
   const [membersClub, setMembersClub] = useState<ClubSummary | null>(null);
 
   if (loading || platformConfig === null) {
@@ -117,6 +148,8 @@ export default function SuperAdmin() {
       </div>
 
       {tab === "cover" && <HeroAdmin config={platformConfig} />}
+
+      {tab === "ads" && <AdsAdmin />}
 
       {tab === "inbox" && <InboxAdmin />}
 
@@ -240,11 +273,11 @@ function ClubsAdmin({
     }
     try {
       setBusy(true);
-      const ref = clubDocRef(cleanSlug);
-      if ((await getDoc(ref)).exists()) {
+      if (await findClubBySlug(cleanSlug)) {
         setError(`Ya existe un club en /${cleanSlug}.`);
         return;
       }
+      const ref = doc(clubsCol());
       await setDoc(ref, {
         slug: cleanSlug,
         name: cleanName,
@@ -259,13 +292,13 @@ function ClubsAdmin({
         createdBy: userId,
       });
       if (cleanEmail) {
-        await setDoc(clubItemRef(cleanSlug, "invites", emailKey(cleanEmail)), {
+        await setDoc(clubItemRef(ref.id, "invites", emailKey(cleanEmail)), {
           email: cleanEmail,
           role: "admin",
           invitedBy: userId,
           createdAt: serverTimestamp(),
         });
-        await markSignupInvite(cleanEmail, { clubId: cleanSlug });
+        await markSignupInvite(cleanEmail, { clubId: ref.id });
         setLastSignupEmail(cleanEmail);
       }
       setSuccess(

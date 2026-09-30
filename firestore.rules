@@ -193,6 +193,59 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    function isIsoDate(value) {
+      return value is string && value.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function validAdHref(value) {
+      return value is string
+        && value.size() < 500
+        && (
+          value.size() == 0
+          || value.matches('^https://.+$')
+          || value.matches('^http://.+$')
+        );
+    }
+
+    function validAd() {
+      return request.resource.data.keys().hasOnly([
+          'brand', 'imageUrl', 'href', 'placements', 'startsAt', 'endsAt',
+          'active', 'order', 'createdAt'
+        ])
+        && request.resource.data.brand is string
+        && request.resource.data.brand.size() > 0
+        && request.resource.data.brand.size() < 80
+        && request.resource.data.imageUrl is string
+        && request.resource.data.imageUrl.size() > 8
+        && request.resource.data.imageUrl.size() < 2000
+        && validAdHref(request.resource.data.href)
+        && request.resource.data.placements is list
+        && request.resource.data.placements.size() > 0
+        && request.resource.data.placements.size() <= 5
+        && request.resource.data.placements.hasOnly([
+          'home', 'home_mid', 'tournament', 'club', 'teams'
+        ])
+        && isIsoDate(request.resource.data.startsAt)
+        && isIsoDate(request.resource.data.endsAt)
+        && request.resource.data.startsAt <= request.resource.data.endsAt
+        && request.resource.data.active is bool
+        && request.resource.data.order is int
+        && request.resource.data.order >= 0
+        && request.resource.data.order < 1000
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    match /ads/{id} {
+      allow read: if true;
+      allow create: if isSuperAdmin()
+        && validAd()
+        && request.resource.data.createdAt == request.time;
+      allow update: if isSuperAdmin()
+        && validAd()
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isSuperAdmin();
+    }
+
     match /teamApplications/{id} {
       allow read, update, delete: if isSuperAdmin();
       allow create: if request.resource.data.keys()

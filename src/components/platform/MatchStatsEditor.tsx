@@ -560,14 +560,39 @@ function compactGoals(rows: GoalRow[], n: number): GoalStat[] {
   });
 }
 
+const squadCache = new Map<string, Player[]>();
+const squadPending = new Map<string, Promise<Player[]>>();
+
+/** Se vacía al salir de la ficha para no conservar plantillas de otra visita. */
+export function clearMatchSquadCache() {
+  squadCache.clear();
+  squadPending.clear();
+}
+
 async function loadPlayers(clubId: string): Promise<Player[]> {
-  const snap = await getDocs(clubCol(clubId, "players"));
-  return snap.docs
-    .map((d) => {
-      const data = d.data() as { name?: string };
-      return { id: d.id, name: data.name || d.id };
+  const cached = squadCache.get(clubId);
+  if (cached) return cached;
+  const pending = squadPending.get(clubId);
+  if (pending) return pending;
+
+  const request = getDocs(clubCol(clubId, "players"))
+    .then((snap) => {
+      const players = snap.docs
+        .map((d) => {
+          const data = d.data() as { name?: string };
+          return { id: d.id, name: data.name || d.id };
+        })
+        .filter((p) => p.name);
+      squadCache.set(clubId, players);
+      squadPending.delete(clubId);
+      return players;
     })
-    .filter((p) => p.name);
+    .catch((err) => {
+      squadPending.delete(clubId);
+      throw err;
+    });
+  squadPending.set(clubId, request);
+  return request;
 }
 
 function nameMap(players: Player[]) {

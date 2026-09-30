@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Medal, Trophy } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
+import AdSlot from "../components/platform/AdSlot";
 import TournamentCalendar from "../components/platform/TournamentCalendar";
 import {
   ScorersTable,
@@ -9,32 +10,51 @@ import {
 } from "../components/platform/TournamentTables";
 import { useAuth } from "../context/AuthContext";
 import {
+  useClubsByIds,
   usePlatformCatalog,
+  useTournament,
   useTournamentMatches,
 } from "../hooks/usePlatformCatalog";
 import { syncTournamentFixtures } from "../lib/fixtures";
-import { computeStandings, computeTopScorers } from "../lib/stats";
+import { ensureTournamentTables } from "../lib/ensureTournamentTables";
+import { computeStandings, computeTopScorers, isPlayed } from "../lib/stats";
 import { C, RADIUS, SectionCard } from "../components/ui";
 import { footballTypeLabel } from "../lib/types";
 import { formatShortDate } from "../utils/helpers";
 import { useTournamentEdit } from "../components/admin/TournamentEditModal";
+import { clearMatchSquadCache } from "../components/platform/MatchStatsEditor";
 
 export default function TournamentPage() {
   const { id = "" } = useParams();
   const { isSuperAdmin } = useAuth();
   const { openEdit } = useTournamentEdit();
+  const { seasonName, categoryName, seasons } = usePlatformCatalog({
+    clubs: false,
+    localities: false,
+    tournaments: false,
+  });
   const {
-    tournamentsById,
-    clubsById,
-    clubNames,
-    seasonName,
-    categoryName,
-    seasons,
-    loading,
-  } = usePlatformCatalog();
+    tournament,
+    loading: tournamentLoading,
+    missing,
+  } = useTournament(id || null);
+  const { clubsById, clubNames } = useClubsByIds(tournament?.clubIds || []);
   const { matches, loading: matchesLoading } = useTournamentMatches(id || null);
-  const tournament = tournamentsById[id];
   const syncing = useRef(false);
+  const ensuredId = useRef<string | null>(null);
+
+  useEffect(() => () => clearMatchSquadCache(), [id]);
+
+  useEffect(() => {
+    if (!id || !tournament || tournamentLoading || matchesLoading) return;
+    const hasTables =
+      Array.isArray(tournament.standings) && Array.isArray(tournament.scorers);
+    if (hasTables || !matches.some(isPlayed) || ensuredId.current === id) return;
+    ensuredId.current = id;
+    void ensureTournamentTables(id).catch((err) => {
+      console.error("No se pudieron crear las tablas del torneo:", err);
+    });
+  }, [id, matches, matchesLoading, tournament, tournamentLoading]);
 
   useEffect(() => {
     if (!isSuperAdmin || !tournament || matchesLoading || syncing.current) return;
@@ -52,7 +72,7 @@ export default function TournamentPage() {
     matches,
   ]);
 
-  if (!loading && !tournament) {
+  if (!tournamentLoading && (missing || !id)) {
     return (
       <PlatformLayout>
         <p style={{ color: C.gray500 }}>Torneo no encontrado.</p>
@@ -63,11 +83,17 @@ export default function TournamentPage() {
     );
   }
 
-  const standings = computeStandings(matches, tournament?.clubIds || []);
-  const scorers = computeTopScorers(matches);
+  const storedStandings =
+    tournament && Array.isArray(tournament.standings) ? tournament.standings : null;
+  const storedScorers =
+    tournament && Array.isArray(tournament.scorers) ? tournament.scorers : null;
+  const standings =
+    storedStandings ?? computeStandings(matches, tournament?.clubIds || []);
+  const scorers = storedScorers ?? computeTopScorers(matches);
 
   return (
     <PlatformLayout>
+      <AdSlot placement="tournament" layout="top" />
       <Link
         to="/torneos"
         style={{
@@ -215,7 +241,7 @@ export default function TournamentPage() {
         standings={standings}
         clubsById={clubsById}
         clubNames={clubNames}
-        loading={matchesLoading}
+        loading={storedStandings == null && (tournamentLoading || matchesLoading)}
       />
 
       <ScorersTable

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { onSnapshot } from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
+import { onSnapshot, type QuerySnapshot } from "firebase/firestore";
 import { clubCol, clubDocRef } from "../lib/paths";
 import {
   DEFAULT_CLUB_DESCRIPTION,
@@ -26,161 +26,262 @@ export interface FirestoreDoc {
   [key: string]: any;
 }
 
-export function useClubData(clubId: string) {
-  const [clubInfo, setClubInfo] = useState<ClubInfo | null>(null);
-  const [clubExists, setClubExists] = useState<boolean | null>(null);
-  const [transactions, setTransactions] = useState<FirestoreDoc[]>([]);
-  const [players, setPlayers] = useState<FirestoreDoc[]>([]);
-  const [inventory, setInventory] = useState<FirestoreDoc[]>([]);
-  const [events, setEvents] = useState<FirestoreDoc[]>([]);
-  const [gallery, setGallery] = useState<FirestoreDoc[]>([]);
-  const [goals, setGoals] = useState<FirestoreDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+export type ClubSlice =
+  | "players"
+  | "events"
+  | "transactions"
+  | "inventory"
+  | "gallery"
+  | "goals";
 
-  useEffect(() => {
-    setLoading(true);
-    setClubExists(null);
-    setClubInfo(null);
+const SLICES: ClubSlice[] = [
+  "players",
+  "events",
+  "transactions",
+  "inventory",
+  "gallery",
+  "goals",
+];
 
-    const handleSnapshotError = (err: any) =>
-      console.error("Firestore Error:", err);
+interface SliceEntry {
+  docs: FirestoreDoc[];
+  ready: boolean;
+  refs: number;
+  unsub?: () => void;
+  subscribers: Set<() => void>;
+}
 
-    const mapDocs = (snapshot: any) =>
-      snapshot.docs.map(
-        (d: any) => ({ id: d.id, ...d.data() }) as FirestoreDoc,
-      );
+interface ClubEntry {
+  info: ClubInfo | null;
+  exists: boolean | null;
+  refs: number;
+  unsub?: () => void;
+  subscribers: Set<() => void>;
+}
 
-    const unsubClub = onSnapshot(
+const sliceCache = new Map<string, SliceEntry>();
+const clubCache = new Map<string, ClubEntry>();
+
+function sliceKey(clubId: string, name: ClubSlice) {
+  return `${clubId}:${name}`;
+}
+
+function mapDocs(snapshot: QuerySnapshot): FirestoreDoc[] {
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as FirestoreDoc);
+}
+
+function sortSlice(name: ClubSlice, docs: FirestoreDoc[]) {
+  if (name === "transactions") {
+    docs.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  } else if (name === "players" || name === "inventory") {
+    docs.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  } else if (name === "events") {
+    docs.sort(
+      (a, b) =>
+        new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime(),
+    );
+  } else if (name === "gallery") {
+    docs.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  } else if (name === "goals") {
+    docs.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+  return docs;
+}
+
+function readClub(data: Record<string, any>, id: string): ClubInfo {
+  const images =
+    data.heroImages?.length > 0
+      ? data.heroImages
+      : data.heroImage
+        ? [data.heroImage]
+        : [DEFAULT_HERO_IMAGE];
+  return {
+    id,
+    slug: data.slug || id,
+    name: data.name || "",
+    description: data.description || DEFAULT_CLUB_DESCRIPTION,
+    location: data.location,
+    localityId: data.localityId,
+    heroImages: images,
+    defaultLineups: data.defaultLineups || {},
+    logoUrl: data.logoUrl,
+    presidentPhone: data.presidentPhone || "",
+    active: data.active !== false,
+    createdAt: data.createdAt,
+  };
+}
+
+function watchClub(clubId: string, onChange: () => void) {
+  let entry = clubCache.get(clubId);
+  if (!entry) {
+    entry = {
+      info: null,
+      exists: null,
+      refs: 0,
+      subscribers: new Set(),
+    };
+    clubCache.set(clubId, entry);
+  }
+  entry.refs += 1;
+  entry.subscribers.add(onChange);
+  if (!entry.unsub) {
+    const current = entry;
+    current.unsub = onSnapshot(
       clubDocRef(clubId),
       (docSnap) => {
         if (!docSnap.exists()) {
-          setClubExists(false);
-          setLoading(false);
-          return;
+          current.info = null;
+          current.exists = false;
+        } else {
+          current.info = readClub(docSnap.data(), docSnap.id);
+          current.exists = true;
         }
-        const data = docSnap.data();
-        const images =
-          data.heroImages?.length > 0
-            ? data.heroImages
-            : data.heroImage
-              ? [data.heroImage]
-              : [DEFAULT_HERO_IMAGE];
-        setClubInfo({
-          id: docSnap.id,
-          slug: data.slug || docSnap.id,
-          name: data.name || "",
-          description: data.description || DEFAULT_CLUB_DESCRIPTION,
-          location: data.location,
-          localityId: data.localityId,
-          heroImages: images,
-          defaultLineups: data.defaultLineups || {},
-          logoUrl: data.logoUrl,
-          presidentPhone: data.presidentPhone || "",
-          active: data.active !== false,
-          createdAt: data.createdAt,
-        });
-        setClubExists(true);
+        current.subscribers.forEach((fn) => fn());
       },
       (err) => {
-        handleSnapshotError(err);
-        setClubExists(false);
-        setLoading(false);
+        console.error("Firestore Error:", err);
+        current.exists = false;
+        current.subscribers.forEach((fn) => fn());
       },
     );
+  }
+  return () => {
+    const current = clubCache.get(clubId);
+    if (!current) return;
+    current.subscribers.delete(onChange);
+    current.refs -= 1;
+    if (current.refs <= 0) {
+      current.unsub?.();
+      current.unsub = undefined;
+      current.refs = 0;
+    }
+  };
+}
 
-    const unsubTx = onSnapshot(
-      clubCol(clubId, "transactions"),
+function watchSlice(clubId: string, name: ClubSlice, onChange: () => void) {
+  const key = sliceKey(clubId, name);
+  let entry = sliceCache.get(key);
+  if (!entry) {
+    entry = { docs: [], ready: false, refs: 0, subscribers: new Set() };
+    sliceCache.set(key, entry);
+  }
+  entry.refs += 1;
+  entry.subscribers.add(onChange);
+  if (!entry.unsub) {
+    const current = entry;
+    current.unsub = onSnapshot(
+      clubCol(clubId, name),
       (snapshot) => {
-        const txs = mapDocs(snapshot);
-        txs.sort(
-          (a: any, b: any) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime(),
-        );
-        setTransactions(txs);
-        setLoading(false);
+        current.docs = sortSlice(name, mapDocs(snapshot));
+        current.ready = true;
+        current.subscribers.forEach((fn) => fn());
       },
-      handleSnapshotError,
-    );
-
-    const unsubPlayers = onSnapshot(
-      clubCol(clubId, "players"),
-      (snapshot) => {
-        const plys = mapDocs(snapshot);
-        plys.sort((a: any, b: any) => a.name.localeCompare(b.name));
-        setPlayers(plys);
+      (err) => {
+        console.error("Firestore Error:", err);
+        current.ready = true;
+        current.subscribers.forEach((fn) => fn());
       },
-      handleSnapshotError,
     );
+  }
+  return () => {
+    const current = sliceCache.get(key);
+    if (!current) return;
+    current.subscribers.delete(onChange);
+    current.refs -= 1;
+    if (current.refs <= 0) {
+      current.unsub?.();
+      current.unsub = undefined;
+      current.refs = 0;
+    }
+  };
+}
 
-    const unsubInventory = onSnapshot(
-      clubCol(clubId, "inventory"),
-      (snapshot) => {
-        const items = mapDocs(snapshot);
-        items.sort((a: any, b: any) => a.name.localeCompare(b.name));
-        setInventory(items);
-      },
-      handleSnapshotError,
-    );
+function emptyReady(): Record<ClubSlice, boolean> {
+  return {
+    players: false,
+    events: false,
+    transactions: false,
+    inventory: false,
+    gallery: false,
+    goals: false,
+  };
+}
 
-    const unsubEvents = onSnapshot(
-      clubCol(clubId, "events"),
-      (snapshot) => {
-        const evts = mapDocs(snapshot);
-        evts.sort(
-          (a: any, b: any) =>
-            new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime(),
-        );
-        setEvents(evts);
-      },
-      handleSnapshotError,
-    );
+export function useClubData(clubId: string, requested: ClubSlice[] = []) {
+  const [, setTick] = useState(0);
+  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  const requestKey = [...requested].sort().join("|");
 
-    const unsubGallery = onSnapshot(
-      clubCol(clubId, "gallery"),
-      (snapshot) => {
-        const imgs = mapDocs(snapshot);
-        imgs.sort(
-          (a: any, b: any) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        );
-        setGallery(imgs);
-      },
-      handleSnapshotError,
-    );
+  const cachedClub = clubCache.get(clubId);
+  const [clubState, setClubState] = useState(() => ({
+    id: clubId,
+    info: cachedClub?.info ?? null,
+    exists: cachedClub?.exists ?? null,
+  }));
 
-    const unsubGoals = onSnapshot(
-      clubCol(clubId, "goals"),
-      (snapshot) => {
-        const fetched = mapDocs(snapshot);
-        fetched.sort(
-          (a: any, b: any) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-        setGoals(fetched);
-      },
-      handleSnapshotError,
-    );
+  if (clubState.id !== clubId) {
+    const hit = clubCache.get(clubId);
+    setClubState({
+      id: clubId,
+      info: hit?.info ?? null,
+      exists: hit?.exists ?? null,
+    });
+  }
 
-    return () => {
-      unsubClub();
-      unsubTx();
-      unsubPlayers();
-      unsubInventory();
-      unsubEvents();
-      unsubGallery();
-      unsubGoals();
-    };
+  useEffect(() => {
+    return watchClub(clubId, () => {
+      const hit = clubCache.get(clubId);
+      setClubState({
+        id: clubId,
+        info: hit?.info ?? null,
+        exists: hit?.exists ?? null,
+      });
+    });
   }, [clubId]);
 
+  useEffect(() => {
+    const names = requestKey ? (requestKey.split("|") as ClubSlice[]) : [];
+    const stops = names.map((name) => watchSlice(clubId, name, refresh));
+    refresh();
+    return () => stops.forEach((stop) => stop());
+  }, [clubId, requestKey, refresh]);
+
+  const ready = emptyReady();
+  const docs: Record<ClubSlice, FirestoreDoc[]> = {
+    players: [],
+    events: [],
+    transactions: [],
+    inventory: [],
+    gallery: [],
+    goals: [],
+  };
+  for (const name of SLICES) {
+    const entry = sliceCache.get(sliceKey(clubId, name));
+    if (!entry) continue;
+    ready[name] = entry.ready;
+    docs[name] = entry.docs;
+  }
+
+  const showingThisClub = clubState.id === clubId;
+
   return {
-    clubInfo,
-    clubExists,
-    transactions,
-    players,
-    inventory,
-    events,
-    gallery,
-    goals,
-    loading,
+    clubInfo: showingThisClub ? clubState.info : (cachedClub?.info ?? null),
+    clubExists: showingThisClub ? clubState.exists : (cachedClub?.exists ?? null),
+    transactions: docs.transactions,
+    players: docs.players,
+    inventory: docs.inventory,
+    events: docs.events,
+    gallery: docs.gallery,
+    goals: docs.goals,
+    ready,
+    loading: (showingThisClub ? clubState.exists : cachedClub?.exists ?? null) === null,
   };
 }

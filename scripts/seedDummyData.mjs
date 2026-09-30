@@ -46,6 +46,41 @@ const app = initializeApp({
 });
 const db = getFirestore(app);
 
+let useFirestoreIds = false;
+
+function uid() {
+  return doc(collection(db, "clubs")).id;
+}
+
+function recordId(fallback) {
+  return useFirestoreIds ? uid() : fallback;
+}
+
+/** Sustituye las claves legibles por uids y reescribe las referencias. El slug del club se conserva. */
+function assignFirestoreIds() {
+  const categoryIds = Object.fromEntries(categories.map((c) => [c.id, uid()]));
+  const localityIds = Object.fromEntries(localities.map((l) => [l.id, uid()]));
+  const seasonIds = Object.fromEntries(seasons.map((s) => [s.id, uid()]));
+  const clubIds = Object.fromEntries(clubs.map((c) => [c.id, uid()]));
+
+  for (const row of categories) row.id = categoryIds[row.id];
+  for (const row of localities) row.id = localityIds[row.id];
+  for (const row of seasons) row.id = seasonIds[row.id];
+  for (const club of clubs) {
+    const previous = club.id;
+    club.slug = previous;
+    club.localityId = localityIds[club.localityId];
+    club.categoryId = categoryIds[club.categoryId];
+    club.id = clubIds[previous];
+  }
+  for (const tournament of tournaments) {
+    tournament.id = uid();
+    tournament.seasonId = seasonIds[tournament.seasonId];
+    tournament.categoryId = categoryIds[tournament.categoryId];
+    tournament.clubIds = tournament.clubIds.map((id) => clubIds[id]);
+  }
+}
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return () => {
@@ -415,7 +450,7 @@ function makePlayer(clubId, index) {
   const month = pad(rand(1, 12));
   const day = pad(rand(1, 28));
   return {
-    id: `${clubId}-p${index + 1}`,
+    id: recordId(`${clubId}-p${index + 1}`),
     name,
     number,
     position,
@@ -431,13 +466,17 @@ function makePlayer(clubId, index) {
   };
 }
 
-const roster = Object.fromEntries(
-  clubs.map((club) => {
-    const n = rand(10, 12);
-    const players = Array.from({ length: n }, (_, i) => makePlayer(club.id, i));
-    return [club.id, players];
-  }),
-);
+let roster = {};
+
+function buildRoster() {
+  roster = Object.fromEntries(
+    clubs.map((club) => {
+      const n = rand(10, 12);
+      const players = Array.from({ length: n }, (_, i) => makePlayer(club.id, i));
+      return [club.id, players];
+    }),
+  );
+}
 
 function namesOf(clubId) {
   return Object.fromEntries((roster[clubId] || []).map((p) => [p.id, p.name]));
@@ -526,7 +565,7 @@ function makeMatches() {
 
     fixtures.forEach((f, i) => {
       const status = statuses[i];
-      const id = `fx_${t.id}_${f.homeClubId}_${f.awayClubId}`;
+      const id = recordId(`fx_${t.id}_${f.homeClubId}_${f.awayClubId}`);
       const time = pick(["16:00", "17:00", "18:00", "19:00", "20:00"]);
       const venue = `${pick(VENUES)} · ${clubs.find((c) => c.id === f.homeClubId)?.location || ""}`;
       const base = {
@@ -619,7 +658,7 @@ function makeClubEvents(club) {
       ? addDays("2026-03-04", i * 14)
       : addDays("2026-10-02", (i - oldTrain) * 7);
     events.push({
-      id: `${club.id}-ent-${i + 1}`,
+      id: recordId(`${club.id}-ent-${i + 1}`),
       eventType: "Entrenamiento",
       matchType: null,
       title: TRAINING_TITLES[i % TRAINING_TITLES.length],
@@ -642,7 +681,7 @@ function makeClubEvents(club) {
     const ours = old ? rand(0, 5) : undefined;
     const theirs = old ? rand(0, 4) : undefined;
     events.push({
-      id: `${club.id}-ami-${i + 1}`,
+      id: recordId(`${club.id}-ami-${i + 1}`),
       eventType: "Partido",
       matchType: "Amistoso",
       title: FRIENDLY_RIVALS[i % FRIENDLY_RIVALS.length],
@@ -713,6 +752,11 @@ async function collectDeletes() {
 
 async function main() {
   const matchesOnly = process.argv.includes("--matches-only");
+  if (!matchesOnly) {
+    useFirestoreIds = true;
+    assignFirestoreIds();
+  }
+  buildRoster();
 
   if (!matchesOnly) {
     console.log("Limpiando dummy anterior (si existe)...");
@@ -746,7 +790,7 @@ async function main() {
       ops.push({
         ref: doc(db, "clubs", club.id),
         data: withTag({
-          slug: club.id,
+          slug: club.slug || club.id,
           name: club.name,
           localityId: club.localityId,
           location: club.location,

@@ -4,6 +4,7 @@ import {
   Crown,
   Image as ImageIcon,
   Inbox,
+  Megaphone,
   LogIn,
   LogOut,
   Mail,
@@ -21,7 +22,7 @@ import { PLATFORM_NAME } from "../../lib/clubDefaults";
 import { hasAnySocial } from "../../lib/social";
 import SocialLinks from "./SocialLinks";
 
-type AdminTab = "clubs" | "competition" | "cover" | "inbox" | "admins";
+type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins";
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
@@ -43,7 +44,11 @@ export default function PlatformLayout({
   const logoUrl = platformConfig?.logoUrl?.trim();
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
-    return tab === "competition" || tab === "cover" || tab === "inbox" || tab === "admins"
+    return tab === "competition" ||
+      tab === "cover" ||
+      tab === "ads" ||
+      tab === "inbox" ||
+      tab === "admins"
       ? tab
       : "clubs";
   })();
@@ -174,6 +179,12 @@ export default function PlatformLayout({
               "Portada",
               <ImageIcon size={16} />,
               pathname === "/admin" && adminTab === "cover",
+            )}
+            {navLink(
+              "/admin?tab=ads",
+              "Publicidad",
+              <Megaphone size={16} />,
+              pathname === "/admin" && adminTab === "ads",
             )}
             {navLink(
               "/admin?tab=inbox",

@@ -1,6 +1,6 @@
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
-import { matchRef } from "./paths";
+import { matchRef, matchesCol } from "./paths";
 import { isPlayed } from "./stats";
 import type { Match, Tournament } from "./types";
 
@@ -195,10 +195,6 @@ export function playedReturnsIfSingleLeg(
   return toDelete.filter(isPlayed);
 }
 
-function fixtureDocId(tournamentId: string, fixture: PlannedFixture) {
-  return `fx_${tournamentId}_${fixture.homeClubId}_${fixture.awayClubId}`;
-}
-
 async function commitInChunks(
   ops: Array<(batch: ReturnType<typeof writeBatch>) => void>,
 ) {
@@ -224,9 +220,7 @@ export async function syncTournamentFixtures(
   const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
 
   for (const fixture of toCreate) {
-    const ref = doc(db, "matches", fixtureDocId(tournament.id, fixture));
-    const existing = await getDoc(ref);
-    if (existing.exists()) continue;
+    const ref = doc(matchesCol());
     ops.push((batch) =>
       batch.set(ref, {
         tournamentId: tournament.id,

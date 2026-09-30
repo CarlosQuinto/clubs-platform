@@ -1,34 +1,17 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import {
-  deleteDoc,
-  getDoc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { deleteDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { Check, Inbox, Mail, Trash2, UserPlus, X } from "lucide-react";
 import ConfirmModal from "../ConfirmModal";
 import Field from "./Field";
 import { useAuth } from "../../context/AuthContext";
 import { usePlatformCatalog } from "../../hooks/usePlatformCatalog";
 import {
-  DEFAULT_CLUB_DESCRIPTION,
-  DEFAULT_HERO_IMAGE,
-} from "../../lib/clubDefaults";
-import {
-  clubDocRef,
-  clubItemRef,
-  emailKey,
   inquiryRef,
   inquiriesCol,
-  normalizeSlug,
-  RESERVED_SLUGS,
-  teamApplicationRef,
   teamApplicationsCol,
 } from "../../lib/paths";
 import { whatsappUrl } from "../../lib/social";
-import { markSignupInvite } from "../../lib/signupInvite";
+import { reviewTeamApplication } from "../../lib/teamReview";
 import InviteSignupLink from "../platform/InviteSignupLink";
 import type { Inquiry, TeamApplication } from "../../lib/types";
 import {
@@ -60,7 +43,13 @@ function formatWhen(value: Inquiry["createdAt"]) {
 
 export default function InboxAdmin() {
   const { user } = useAuth();
-  const { localities } = usePlatformCatalog();
+  const { localities } = usePlatformCatalog({
+    localities: true,
+    clubs: false,
+    seasons: false,
+    tournaments: false,
+    categories: false,
+  });
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [applications, setApplications] = useState<TeamApplication[]>([]);
   const [busyId, setBusyId] = useState("");
@@ -69,8 +58,12 @@ export default function InboxAdmin() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [lastApproved, setLastApproved] = useState<{
     email: string;
-    clubId: string;
+    slug: string;
+    mailed: boolean;
+    url: string;
+    kind: "signup" | "accept";
   } | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const unsubInq = onSnapshot(inquiriesCol(), (snap) => {
@@ -113,57 +106,24 @@ export default function InboxAdmin() {
   const toApprove = pending.find((a) => a.id === approveId) || null;
   const toReject = pending.find((a) => a.id === rejectId) || null;
 
-  const uniqueSlug = async (teamName: string) => {
-    const base = normalizeSlug(teamName) || "equipo";
-    let slug = base;
-    let n = 2;
-    while (
-      RESERVED_SLUGS.includes(slug) ||
-      (await getDoc(clubDocRef(slug))).exists()
-    ) {
-      slug = `${base}-${n++}`;
-    }
-    return slug;
-  };
-
   const confirmApprove = async () => {
     if (!toApprove || !user) return;
     if (!localityId) return;
-    const localityName =
-      localities.find((l) => l.id === localityId)?.name || "";
     try {
       setBusyId(toApprove.id);
-      const slug = await uniqueSlug(toApprove.teamName);
-      await setDoc(clubDocRef(slug), {
-        slug,
-        name: toApprove.teamName.trim(),
+      setNotice("");
+      const result = await reviewTeamApplication({
+        applicationId: toApprove.id,
+        action: "approve",
         localityId,
-        location: localityName,
-        description: DEFAULT_CLUB_DESCRIPTION,
-        heroImages: [DEFAULT_HERO_IMAGE],
-        defaultLineups: {},
-        presidentPhone: toApprove.captainPhone.trim(),
-        active: true,
-        createdAt: serverTimestamp(),
-        createdBy: user.uid,
       });
-      const captainEmail = toApprove.captainEmail.trim().toLowerCase();
-      await setDoc(
-        clubItemRef(slug, "invites", emailKey(captainEmail)),
-        {
-          email: captainEmail,
-          role: "admin",
-          invitedBy: user.uid,
-          createdAt: serverTimestamp(),
-        },
-      );
-      await markSignupInvite(captainEmail, { clubId: slug });
-      await updateDoc(teamApplicationRef(toApprove.id), {
-        status: "approved",
-        clubId: slug,
-        reviewedAt: serverTimestamp(),
+      setLastApproved({
+        email: toApprove.captainEmail.trim().toLowerCase(),
+        slug: result.slug || "",
+        mailed: result.mailed,
+        url: result.url || "",
+        kind: result.kind || "signup",
       });
-      setLastApproved({ email: captainEmail, clubId: slug });
       setApproveId(null);
       setLocalityId("");
     } catch (err) {
@@ -178,10 +138,16 @@ export default function InboxAdmin() {
     if (!toReject) return;
     try {
       setBusyId(toReject.id);
-      await updateDoc(teamApplicationRef(toReject.id), {
-        status: "rejected",
-        reviewedAt: serverTimestamp(),
+      setLastApproved(null);
+      const result = await reviewTeamApplication({
+        applicationId: toReject.id,
+        action: "reject",
       });
+      setNotice(
+        result.mailed
+          ? `Se avisó a ${toReject.captainEmail} que ${toReject.teamName} no quedó registrado.`
+          : `La solicitud de ${toReject.teamName} quedó rechazada, pero no se pudo enviar el correo.`,
+      );
       setRejectId(null);
     } catch (err) {
       console.error(err);
@@ -193,12 +159,33 @@ export default function InboxAdmin() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {notice && (
+        <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray600 }}>{notice}</p>
+      )}
       {lastApproved && (
-        <SectionCard title="URL para el capitán" icon={<UserPlus size={16} color={C.amber} />}>
-          <p style={{ margin: "0 0 0.35rem", fontSize: "0.8rem", color: C.gray600 }}>
-            Club creado en /{lastApproved.clubId}. Envíale esta URL para que cree su cuenta.
+        <SectionCard title="Capitán" icon={<UserPlus size={16} color={C.amber} />}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: lastApproved.mailed ? C.green : C.gray600,
+            }}
+          >
+            Club creado en /{lastApproved.slug}.{" "}
+            {lastApproved.mailed
+              ? `Se envió un correo a ${lastApproved.email}.`
+              : "No se pudo enviar el correo. Copia el enlace."}
           </p>
-          <InviteSignupLink email={lastApproved.email} />
+          {!lastApproved.mailed && lastApproved.url && (
+            <InviteSignupLink
+              url={lastApproved.url}
+              label={
+                lastApproved.kind === "accept"
+                  ? "URL para aceptar la presidencia"
+                  : "URL para crear cuenta"
+              }
+            />
+          )}
         </SectionCard>
       )}
       <SectionCard
@@ -370,7 +357,7 @@ export default function InboxAdmin() {
                   <span style={{ color: C.gray500, fontSize: "0.75rem" }}>
                     {" "}
                     · {app.captainName}
-                    {app.clubId ? ` · /${app.clubId}` : ""}
+                    {app.slug || app.clubId ? ` · /${app.slug || app.clubId}` : ""}
                   </span>
                 </div>
                 <Badge color={app.status === "approved" ? "green" : "gray"}>
@@ -393,7 +380,7 @@ export default function InboxAdmin() {
       <ConfirmModal
         open={!!toApprove}
         title={`Aprobar ${toApprove?.teamName || "equipo"}`}
-        message="Se creará el club. Envíale al capitán la URL para que cree su cuenta de presidente."
+        message="Se creará el club y le enviaremos un correo al capitán para que quede como presidente."
         confirmLabel="Aprobar y crear"
         confirmDisabled={!localityId || !!busyId}
         busy={!!busyId}

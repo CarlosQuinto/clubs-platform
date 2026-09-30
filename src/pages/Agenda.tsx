@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   Trophy,
   Target,
@@ -8,6 +8,8 @@ import {
   CalendarX,
   Archive,
   Layers,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { addDoc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
 import { useClub } from "../context/ClubContext";
@@ -72,6 +74,42 @@ export default function Agenda({
     [events, officialEvents],
   );
   const { statsClub, nextEvents, pastEvents } = useAgendaData(agendaEvents);
+  const HISTORY_STEP = 5;
+  const NEXT_STEP = 3;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyCount, setHistoryCount] = useState(HISTORY_STEP);
+  const [nextCount, setNextCount] = useState(NEXT_STEP);
+  const historySentinel = useRef<HTMLDivElement | null>(null);
+
+  const pastSorted = useMemo(
+    () =>
+      [...pastEvents].sort(
+        (a: any, b: any) =>
+          new Date(b.eventDate + "T" + b.eventTime).getTime() -
+          new Date(a.eventDate + "T" + a.eventTime).getTime(),
+      ),
+    [pastEvents],
+  );
+  const visibleNext = nextEvents.slice(0, nextCount);
+  const visiblePast = pastSorted.slice(0, historyCount);
+
+  useEffect(() => {
+    if (!historyOpen || historyCount >= pastSorted.length) return;
+    const node = historySentinel.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setHistoryCount((count) =>
+            Math.min(count + HISTORY_STEP, pastSorted.length),
+          );
+        }
+      },
+      { rootMargin: "160px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [historyOpen, historyCount, pastSorted.length]);
 
   /** Guarda datos del lado del club en un partido oficial (matches/{id}.sides.{clubId}). */
   const saveOfficialSide = async (ev: any, patch: Record<string, any>) => {
@@ -283,7 +321,8 @@ export default function Agenda({
               </p>
             </div>
           ) : (
-            nextEvents.map((ev: any) => (
+            <>
+              {visibleNext.map((ev: any) => (
               <OfficialMatchCard
                 key={ev.id}
                 ev={ev}
@@ -299,15 +338,66 @@ export default function Agenda({
                   setAlbumModalEvent(events.find((e: any) => e.id === id))
                 }
               />
-            ))
+              ))}
+              {nextCount < nextEvents.length && (
+                <button
+                  type="button"
+                  onClick={() => setNextCount((count) => count + NEXT_STEP)}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    backgroundColor: C.gray50,
+                    color: C.navy900,
+                    border: `1px solid ${C.gray200}`,
+                    borderRadius: "0.75rem",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Ver más
+                </button>
+              )}
+            </>
           )}
         </div>
       </SectionCard>
 
       {/* ── 4. HISTORIAL DE RESULTADOS ── */}
-      <SectionCard title="Historial de Resultados" icon={<History size={16} />}>
+      <SectionCard>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((open) => !open)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: 0,
+            margin: 0,
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            color: C.navy900,
+            fontSize: "0.875rem",
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            textAlign: "left",
+          }}
+        >
+          <History size={16} />
+          <span style={{ flex: 1 }}>Historial de Resultados</span>
+          <span style={{ color: C.gray500, fontWeight: 600 }}>{pastEvents.length}</span>
+          {historyOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {historyOpen && (
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            marginTop: "1.25rem",
+          }}
         >
           {pastEvents.length === 0 ? (
             <div
@@ -336,13 +426,8 @@ export default function Agenda({
               </p>
             </div>
           ) : (
-            pastEvents
-              .sort(
-                (a: any, b: any) =>
-                  new Date(b.eventDate + "T" + b.eventTime).getTime() -
-                  new Date(a.eventDate + "T" + a.eventTime).getTime(),
-              )
-              .map((ev: any) =>
+            <>
+            {visiblePast.map((ev: any) =>
                 ev.isOfficial || ev.eventType === "Entrenamiento" ? (
                   <OfficialMatchCard
                     key={ev.id}
@@ -398,9 +483,14 @@ export default function Agenda({
                   }}
                 />
                 ),
-              )
+              )}
+              {historyCount < pastSorted.length && (
+                <div ref={historySentinel} style={{ height: 1 }} />
+              )}
+            </>
           )}
         </div>
+        )}
       </SectionCard>
 
       {/* ── MODALES (Sin cambios) ── */}

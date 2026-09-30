@@ -56,6 +56,16 @@ export interface Tournament {
   /** Posiciones finales al cerrar el torneo: posición (1, 2, 3...) → clubId. */
   podium?: Record<string, string>;
   description?: string;
+  /**
+   * Tabla de posiciones materializada. Si falta, la página la calcula con los partidos.
+   * Un arreglo vacío es válido (torneo sin clubes).
+   */
+  standings?: StandingRow[];
+  /**
+   * Goleadores materializados. Si falta, la página los calcula con los partidos.
+   * Un arreglo vacío es válido (nadie quedó nombrado).
+   */
+  scorers?: ScorerRow[];
 }
 
 export interface ClubSummary {
@@ -168,5 +178,6 @@ export interface TeamApplication {
   teamName: string;
   status: TeamApplicationStatus;
   clubId?: string;
+  slug?: string;
   createdAt?: { toDate?: () => Date } | null;
 }

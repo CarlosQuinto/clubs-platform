@@ -179,32 +179,46 @@ export function computeTeamRecord(matches: Match[], clubId: string) {
   return row || { clubId, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
 }
 
-/** Goleadores de un conjunto de partidos, a partir de los lados registrados por cada club. */
+/**
+ * Goleadores de un conjunto de partidos, a partir de los lados registrados por cada club.
+ * El nombre es el del partido más reciente de ese jugador. Un autogol no suma.
+ * La copia de esta regla vive en functions/src/tournamentTables.ts.
+ */
 export function computeTopScorers(matches: Match[]): ScorerRow[] {
   const map = new Map<string, ScorerRow>();
-  matches.filter(isPlayed).forEach((m) => {
+  const played = matches.filter(isPlayed).sort((a, b) => {
+    const ta = matchDateTime(a).getTime();
+    const tb = matchDateTime(b).getTime();
+    const byTime = (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+    if (byTime !== 0) return byTime;
+    return a.id.localeCompare(b.id);
+  });
+  for (const m of played) {
     Object.entries(m.sides || {}).forEach(([clubId, side]) => {
       const names = side.playerNames || {};
       (side.stats || []).forEach((s) => {
-        if (s.scorer && !s.isOwnGoal) {
+        if (s.isOwnGoal) return;
+        if (s.scorer) {
           const key = `${clubId}:${s.scorer}`;
           const row =
             map.get(key) ||
             { playerId: s.scorer, name: names[s.scorer] || s.scorer, clubId, goals: 0, assists: 0 };
           row.goals++;
+          row.name = names[s.scorer] || s.scorer;
           map.set(key, row);
         }
-        if (s.assist && !s.isOwnGoal) {
+        if (s.assist) {
           const key = `${clubId}:${s.assist}`;
           const row =
             map.get(key) ||
             { playerId: s.assist, name: names[s.assist] || s.assist, clubId, goals: 0, assists: 0 };
           row.assists++;
+          row.name = names[s.assist] || s.assist;
           map.set(key, row);
         }
       });
     });
-  });
+  }
   return [...map.values()].sort(
     (a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name),
   );

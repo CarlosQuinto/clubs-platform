@@ -11,10 +11,60 @@ import {
 import { C, RADIUS, SHADOWS } from "../ui";
 
 interface HallOfFameProps {
-  topScorers: any[];
-  topAssists: any[];
-  topMVPs: any[];
-  topIronMen: any[];
+  stats: any[];
+}
+
+type HallKey = "scorers" | "assists" | "mvps" | "ironmen";
+
+function rankCategory(stats: any[], key: HallKey) {
+  if (key === "scorers") {
+    return calculateRanks(
+      stats
+        .filter((p) => p.goals > 0)
+        .sort(
+          (a, b) =>
+            b.goals - a.goals ||
+            b.assists - a.assists ||
+            a.name.localeCompare(b.name),
+        ),
+      "goals",
+    );
+  }
+  if (key === "assists") {
+    return calculateRanks(
+      stats
+        .filter((p) => p.assists > 0)
+        .sort(
+          (a, b) =>
+            b.assists - a.assists ||
+            b.goals - a.goals ||
+            a.name.localeCompare(b.name),
+        ),
+      "assists",
+    );
+  }
+  if (key === "mvps") {
+    return calculateRanks(
+      stats
+        .filter((p) => p.mvps > 0)
+        .sort(
+          (a, b) =>
+            b.mvps - a.mvps || b.goals - a.goals || a.name.localeCompare(b.name),
+        ),
+      "mvps",
+    );
+  }
+  return calculateRanks(
+    stats
+      .filter((p) => p.totalAttendance > 0)
+      .sort(
+        (a, b) =>
+          b.totalAttendance - a.totalAttendance ||
+          b.goals - a.goals ||
+          a.name.localeCompare(b.name),
+      ),
+    "totalAttendance",
+  );
 }
 
 // Función auxiliar para calcular rankings con empates
@@ -41,88 +91,85 @@ const calculateRanks = (list: any[], scoreKey: string) => {
   });
 };
 
-export default function HallOfFame({
-  topScorers,
-  topAssists,
-  topMVPs,
-  topIronMen,
-}: HallOfFameProps) {
-  // ── Estado para el carrusel ──
+export default function HallOfFame({ stats }: HallOfFameProps) {
   const [hofIndex, setHofIndex] = useState(0);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [shown, setShown] = useState<Record<string, number>>({});
   const hallRef = useRef<HTMLDivElement>(null);
+  const rankedRef = useRef<{ source: any[]; lists: Partial<Record<HallKey, any[]>> }>({
+    source: stats,
+    lists: {},
+  });
+  if (rankedRef.current.source !== stats) {
+    rankedRef.current = { source: stats, lists: {} };
+  }
 
-  // Límite de jugadores a mostrar por defecto (TOP 5)
   const LIMIT = 5;
 
-  // ── Calcular Rankings con Empates ──
-  const rankedScorers = useMemo(
-    () => calculateRanks(topScorers, "goals"),
-    [topScorers],
-  );
-  const rankedAssists = useMemo(
-    () => calculateRanks(topAssists, "assists"),
-    [topAssists],
-  );
-  const rankedMVPs = useMemo(() => calculateRanks(topMVPs, "mvps"), [topMVPs]);
-  const rankedIronMen = useMemo(
-    () => calculateRanks(topIronMen, "totalAttendance"),
-    [topIronMen],
-  );
+  const counts = useMemo(() => {
+    const tally = { scorers: 0, assists: 0, mvps: 0, ironmen: 0 };
+    for (const player of stats) {
+      if (player.goals > 0) tally.scorers += 1;
+      if (player.assists > 0) tally.assists += 1;
+      if (player.mvps > 0) tally.mvps += 1;
+      if (player.totalAttendance > 0) tally.ironmen += 1;
+    }
+    return tally;
+  }, [stats]);
 
-  // ── Construir y ordenar las categorías dinámicamente ──
   const categories = useMemo(() => {
     const allCategories = [
       {
-        key: "scorers",
+        key: "scorers" as HallKey,
         title: "El Pichichi",
         subtitle: "Máximos Goleadores",
         icon: <Goal size={18} />,
         iconBg: "rgba(16, 185, 129, 0.1)",
         iconColor: C.green,
         accent: C.amber,
-        list: rankedScorers,
         scoreText: (p: any) => `${p.goals} goles`,
       },
       {
-        key: "assists",
+        key: "assists" as HallKey,
         title: "El Maestro",
         subtitle: "Más Asistencias",
         icon: <TrendingUp size={18} />,
         iconBg: "rgba(56, 189, 248, 0.1)",
         iconColor: C.blueAccent,
         accent: C.blueAccent,
-        list: rankedAssists,
         scoreText: (p: any) => `${p.assists} asistencias`,
       },
       {
-        key: "mvps",
+        key: "mvps" as HallKey,
         title: "El Galáctico",
         subtitle: "Premios MVP",
         icon: <Award size={18} />,
         iconBg: "rgba(245, 158, 11, 0.1)",
         iconColor: C.amber,
         accent: C.amber,
-        list: rankedMVPs,
         scoreText: (p: any) => `${p.mvps} MVPs`,
       },
       {
-        key: "ironmen",
+        key: "ironmen" as HallKey,
         title: "El de Hierro",
         subtitle: "Más Presencias",
         icon: <Shield size={18} />,
         iconBg: "rgba(100, 116, 139, 0.1)",
         iconColor: C.navy500,
         accent: C.navy500,
-        list: rankedIronMen,
         scoreText: (p: any) => `${p.totalAttendance} presencias`,
       },
     ];
 
     return allCategories
-      .filter((cat) => cat.list.length > 0)
-      .sort((a, b) => b.list.length - a.list.length);
-  }, [rankedScorers, rankedAssists, rankedMVPs, rankedIronMen]);
+      .filter((cat) => counts[cat.key] > 0)
+      .sort((a, b) => counts[b.key] - counts[a.key]);
+  }, [counts]);
+
+  const active = categories[hofIndex] ?? categories[0];
+  if (active && !rankedRef.current.lists[active.key]) {
+    rankedRef.current.lists[active.key] = rankCategory(stats, active.key);
+  }
+  const activeList = active ? rankedRef.current.lists[active.key] || [] : [];
 
   // ── Scroll personalizado: más suave y con offset hacia arriba ──
   const scrollToHall = () => {
@@ -137,38 +184,30 @@ export default function HallOfFame({
   };
 
   const nextHof = () => {
-    setExpanded({});
     setHofIndex((prev) => (prev + 1) % categories.length);
     scrollToHall();
   };
   const prevHof = () => {
-    setExpanded({});
     setHofIndex((prev) => (prev - 1 + categories.length) % categories.length);
     scrollToHall();
   };
   const goToSlide = (idx: number) => {
-    setExpanded({});
     setHofIndex(idx);
     scrollToHall();
   };
 
-  const toggleExpand = (catKey: string) => {
-    setExpanded((prev) => {
-      const newExpanded = { ...prev, [catKey]: !prev[catKey] };
-      setTimeout(() => {
-        scrollToHall();
-      }, 100);
-      return newExpanded;
-    });
-  };
-
   const renderSeeAllButton = (catKey: string, totalItems: number) => {
-    if (totalItems <= LIMIT) return null;
-    const isExpanded = !!expanded[catKey];
+    const visible = shown[catKey] ?? LIMIT;
+    if (visible >= totalItems) return null;
 
     return (
       <button
-        onClick={() => toggleExpand(catKey)}
+        onClick={() =>
+          setShown((prev) => ({
+            ...prev,
+            [catKey]: Math.min((prev[catKey] ?? LIMIT) + LIMIT, totalItems),
+          }))
+        }
         style={{
           width: "100%",
           padding: "0.75rem",
@@ -192,7 +231,7 @@ export default function HallOfFame({
           e.currentTarget.style.backgroundColor = C.gray50;
         }}
       >
-        {isExpanded ? "Ocultar tabla ↑" : "Ver más ↓"}
+        Ver más ↓
       </button>
     );
   };
@@ -273,6 +312,12 @@ export default function HallOfFame({
       </div>
     );
   }
+
+  const cat = {
+    ...(categories[hofIndex] ?? categories[0]),
+    list: activeList,
+  };
+  const visiblePlayers = cat.list.slice(0, shown[cat.key] ?? LIMIT);
 
   return (
     <div
@@ -358,15 +403,8 @@ export default function HallOfFame({
           borderRadius: RADIUS.lg,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            transition: "transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
-            transform: `translateX(-${hofIndex * 100}%)`,
-          }}
-        >
-          {categories.map((cat) => (
-            <div key={cat.key} style={{ flex: "0 0 100%", width: "100%" }}>
+        <div>
+          <div key={cat.key}>
               <div
                 style={{
                   backgroundColor: C.white,
@@ -434,10 +472,7 @@ export default function HallOfFame({
                     flex: 1,
                   }}
                 >
-                  {(expanded[cat.key]
-                    ? cat.list
-                    : cat.list.slice(0, LIMIT)
-                  ).map((p: any) => {
+                  {visiblePlayers.map((p: any) => {
                     const styles = getRankStyles(p.rank, cat.accent);
                     const isActive = p.active !== false; // 👈 NUEVA VALIDACIÓN
 
@@ -541,8 +576,7 @@ export default function HallOfFame({
                   {renderSeeAllButton(cat.key, cat.list.length)}
                 </div>
               </div>
-            </div>
-          ))}
+          </div>
         </div>
       </div>
 

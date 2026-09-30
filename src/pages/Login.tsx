@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, Mail } from "lucide-react";
 import { authErrorMessage, useAuth } from "../context/AuthContext";
 import { usePostLoginRedirect } from "../hooks/usePostLoginRedirect";
@@ -12,7 +12,11 @@ type Mode = "login" | "reset";
 export default function Login() {
   const { user, loading, login, resetPassword, platformConfig } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
+  const passwordJustReset = Boolean(
+    (location.state as { passwordReset?: boolean } | null)?.passwordReset,
+  );
   const next = params.get("next") || "/";
   const platformUnclaimed = platformConfig === undefined;
 
@@ -145,6 +149,11 @@ export default function Login() {
             />
           )}
 
+          {passwordJustReset && !error && !info && (
+            <p style={{ margin: 0, fontSize: "0.8rem", color: C.green }}>
+              Contraseña actualizada. Ya puedes entrar.
+            </p>
+          )}
           {error && (
             <p style={{ margin: 0, fontSize: "0.8rem", color: C.red }}>{error}</p>
           )}

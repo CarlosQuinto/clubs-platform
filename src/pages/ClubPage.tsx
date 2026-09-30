@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Home as HomeIcon,
@@ -18,10 +18,14 @@ import {
   Crown,
   ArrowLeft,
 } from "lucide-react";
-import { useClubData } from "../hooks/useClubData";
+import { useClubData, type ClubSlice } from "../hooks/useClubData";
 import { useModalLock } from "../hooks/useModalLock";
 import { useMembership } from "../hooks/useMembership";
-import { useClubMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import {
+  defaultSeasonId,
+  useClubScopedMatches,
+  usePlatformCatalog,
+} from "../hooks/usePlatformCatalog";
 import StatsScopeBar from "../components/club/StatsScopeBar";
 import {
   applyScope,
@@ -35,7 +39,7 @@ import type { StatsScope } from "../lib/types";
 import { useAuth } from "../context/AuthContext";
 import { ClubProvider, useClub } from "../context/ClubContext";
 import { buildPerms, ROLE_LABELS } from "../lib/roles";
-import { normalizeSlug } from "../lib/paths";
+import { findClubBySlug, normalizeSlug } from "../lib/paths";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../lib/clubDefaults";
 import {
   C,
@@ -45,13 +49,13 @@ import {
   PrimaryButton,
   SecondaryButton,
 } from "../components/ui";
-import { formatFriendlyDate, formatFriendlyTime } from "../utils/helpers";
 import Home from "./Home";
 import Agenda from "./Agenda";
 import Players from "./Players";
 import Finances from "./Finances";
 import Inventory from "./Inventory";
 import MembersModal from "../components/club/MembersModal";
+import AdSlot from "../components/platform/AdSlot";
 import { updateDoc } from "firebase/firestore";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { uploadImageFile } from "../lib/uploadImage";
@@ -80,12 +84,38 @@ function useWindowSize() {
   return windowSize;
 }
 
-/** Resuelve el slug de la URL y monta el contexto del club. */
+/** Resuelve el slug de la URL al uid del documento y monta el contexto del club. */
 export default function ClubPage() {
-  const { slug = "" } = useParams();
-  const clubId = normalizeSlug(slug);
+  const { slug: raw = "" } = useParams();
+  const slug = normalizeSlug(raw);
+  const [clubId, setClubId] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
 
-  if (!clubId) return <ClubNotFound slug={slug} />;
+  useEffect(() => {
+    if (!slug) {
+      setClubId(null);
+      setMissing(true);
+      return;
+    }
+    let cancelled = false;
+    setClubId(null);
+    setMissing(false);
+    findClubBySlug(slug)
+      .then((snap) => {
+        if (cancelled) return;
+        if (!snap) setMissing(true);
+        else setClubId(snap.id);
+      })
+      .catch(() => {
+        if (!cancelled) setMissing(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  if (!slug || missing) return <ClubNotFound slug={raw} />;
+  if (!clubId) return null;
 
   return (
     <ClubProvider key={clubId} clubId={clubId}>
@@ -134,11 +164,94 @@ function ClubNotFound({ slug }: { slug: string }) {
   );
 }
 
+function SectionPending() {
+  return (
+    <p
+      style={{
+        textAlign: "center",
+        color: C.gray500,
+        fontWeight: 600,
+        padding: "3rem 1rem",
+      }}
+    >
+      Cargando…
+    </p>
+  );
+}
+
 function ClubShell() {
+  const { slug: routeSlug = "" } = useParams();
   const { clubId, clubRef, storagePath } = useClub();
   const navigate = useNavigate();
   const { user, isSuperAdmin, logout } = useAuth();
   const { role } = useMembership(clubId);
+  const [activeTab, setActiveTab] = useState<
+    "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario"
+  >("inicio");
+  const [visitState, setVisitState] = useState({
+    clubId,
+    tabs: {
+      inicio: true,
+      agenda: false,
+      jugadores: false,
+      finanzas: false,
+      inventario: false,
+    },
+  });
+  const [zoneState, setZoneState] = useState({
+    clubId,
+    hall: false,
+    albums: false,
+  });
+  if (visitState.clubId !== clubId) {
+    setActiveTab("inicio");
+    setVisitState({
+      clubId,
+      tabs: {
+        inicio: true,
+        agenda: false,
+        jugadores: false,
+        finanzas: false,
+        inventario: false,
+      },
+    });
+  }
+  if (zoneState.clubId !== clubId) {
+    setZoneState({ clubId, hall: false, albums: false });
+  }
+  const visited =
+    visitState.clubId === clubId
+      ? visitState.tabs
+      : {
+          inicio: true,
+          agenda: false,
+          jugadores: false,
+          finanzas: false,
+          inventario: false,
+        };
+
+  const hallSeen = zoneState.clubId === clubId && zoneState.hall;
+  const albumsSeen = zoneState.clubId === clubId && zoneState.albums;
+  const markHallSeen = useCallback(() => {
+    setZoneState((prev) => (prev.hall ? prev : { ...prev, hall: true }));
+  }, []);
+  const markAlbumsSeen = useCallback(() => {
+    setZoneState((prev) => (prev.albums ? prev : { ...prev, albums: true }));
+  }, []);
+
+  const slices = useMemo(() => {
+    const need = new Set<ClubSlice>();
+    if (visited.inicio || visited.agenda || visited.jugadores || visited.finanzas) {
+      need.add("players");
+    }
+    if (visited.agenda || hallSeen || albumsSeen) need.add("events");
+    if (albumsSeen) need.add("gallery");
+    if (visited.jugadores) need.add("goals");
+    if (visited.finanzas) need.add("transactions");
+    if (visited.inventario) need.add("inventory");
+    return [...need];
+  }, [visited, hallSeen, albumsSeen]);
+
   const {
     clubInfo,
     clubExists,
@@ -148,15 +261,24 @@ function ClubShell() {
     events,
     gallery,
     goals,
+    ready,
     loading,
-  } = useClubData(clubId);
+  } = useClubData(clubId, slices);
   const [showMembers, setShowMembers] = useState(false);
 
   // ── Competición: partidos oficiales del club y catálogo de la plataforma ──
-  const { matches } = useClubMatches(clubId);
-  const { seasons, categories, tournaments, clubNames, tournamentsById, seasonName, categoryName } =
+  const { seasons, categories, tournaments, clubNames, tournamentsById, seasonName, categoryName, loading: catalogLoading } =
     usePlatformCatalog();
   const [scope, setScope] = useState<StatsScope>({});
+  const [scopeReady, setScopeReady] = useState(false);
+  const { matches } = useClubScopedMatches(clubId, scopeReady ? scope : null);
+
+  useEffect(() => {
+    if (catalogLoading || scopeReady) return;
+    const seasonId = defaultSeasonId(seasons);
+    setScope(seasonId ? { seasonId } : {});
+    setScopeReady(true);
+  }, [catalogLoading, scopeReady, seasons]);
 
   /** Todos los partidos oficiales (programados y jugados) en forma de evento, para la agenda. */
   const officialEvents = useMemo(
@@ -205,9 +327,6 @@ function ClubShell() {
     ].filter(Boolean);
     return parts.join(" · ");
   }, [scope, seasonName, categoryName]);
-  const [activeTab, setActiveTab] = useState<
-    "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario"
-  >("inicio");
 
   // Uso del hook de responsividad
   const { width } = useWindowSize();
@@ -216,11 +335,6 @@ function ClubShell() {
 
   const navContainerRef = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
-  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(
-    null,
-  );
-  const pendingTransitionCleanup = useRef<(() => void) | null>(null);
-  const highlightTimeoutRef = useRef<number | null>(null);
 
   const [showEditClub, setShowEditClub] = useState(false);
   const [editClubName, setEditClubName] = useState("");
@@ -373,114 +487,26 @@ function ClubShell() {
     }
   }, [activeIndex]);
 
-  const nextEvent = useMemo(() => {
-    const now = new Date();
-    const sorted = [...events].sort(
-      (a: any, b: any) =>
-        new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime(),
-    );
-    return sorted.find((e) => new Date(e.eventDate + "T" + e.eventTime) >= now);
-  }, [events]);
-
-  const [timeLeft, setTimeLeft] = useState("");
-
-  useEffect(() => {
-    if (!nextEvent) {
-      setTimeLeft("");
-      return;
-    }
-
-    const updateCountdown = () => {
-      const targetDate = new Date(
-        `${nextEvent.eventDate}T${nextEvent.eventTime}`,
-      ).getTime();
-      const now = new Date().getTime();
-      const diff = targetDate - now;
-
-      if (diff <= 0) {
-        setTimeLeft("¡EN JUEGO! ⚽");
-        return;
-      }
-
-      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const s = Math.floor((diff % (1000 * 60)) / 1000);
-
-      const daysStr = d > 0 ? `${d}d ` : "";
-      setTimeLeft(
-        `${daysStr}${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`,
-      );
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [nextEvent]);
-
-  const clearPendingScroll = () => {
-    if (pendingTransitionCleanup.current) {
-      pendingTransitionCleanup.current();
-      pendingTransitionCleanup.current = null;
-    }
-    if (highlightTimeoutRef.current) {
-      window.clearTimeout(highlightTimeoutRef.current);
-      highlightTimeoutRef.current = null;
-    }
-    setHighlightedEventId(null);
-  };
-
-  const handleBannerClick = () => {
-    if (!nextEvent) return;
-    clearPendingScroll();
-    setHighlightedEventId(nextEvent.id);
-
-    const scrollToEvent = () => {
-      const element = document.getElementById(`event-card-${nextEvent.id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      highlightTimeoutRef.current = window.setTimeout(() => {
-        setHighlightedEventId(null);
-      }, 3000);
-    };
-
-    if (activeTab === "agenda") {
-      window.setTimeout(scrollToEvent, 50);
-    } else {
-      setActiveTab("agenda");
-      const slider = sliderRef.current;
-      if (slider) {
-        const handleTransitionEnd = () => {
-          scrollToEvent();
-          slider.removeEventListener("transitionend", handleTransitionEnd);
-          pendingTransitionCleanup.current = null;
-        };
-        slider.addEventListener("transitionend", handleTransitionEnd);
-        pendingTransitionCleanup.current = () => {
-          slider.removeEventListener("transitionend", handleTransitionEnd);
-        };
-        window.setTimeout(() => {
-          if (pendingTransitionCleanup.current) {
-            pendingTransitionCleanup.current();
-            pendingTransitionCleanup.current = null;
-            scrollToEvent();
-          }
-        }, 500);
-      } else {
-        window.setTimeout(scrollToEvent, 50);
-      }
-    }
-  };
-
   const handleTabChange = (tab: typeof activeTab) => {
-    clearPendingScroll();
     setActiveTab(tab);
+    setVisitState((prev) =>
+      prev.tabs[tab]
+        ? prev
+        : { ...prev, tabs: { ...prev.tabs, [tab]: true } },
+    );
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const sectionReady = (key: typeof activeTab) => {
+    if (key === "inicio") return ready.players;
+    if (key === "agenda") return ready.players && ready.events;
+    if (key === "jugadores") return ready.players && ready.goals;
+    if (key === "finanzas") return ready.players && ready.transactions;
+    return ready.inventory;
+  };
+
   if (clubExists === false) {
-    return <ClubNotFound slug={clubId} />;
+    return <ClubNotFound slug={normalizeSlug(routeSlug)} />;
   }
 
   return (
@@ -799,122 +825,7 @@ function ClubShell() {
         </div>
       </header>
 
-      {/* ── NEXT EVENT BANNER (MINIMALISTA & PREMIUM) ── */}
-      {nextEvent && (
-        <div
-          onClick={handleBannerClick}
-          style={{
-            background: `linear-gradient(to right, ${C.navy900}, #0f172a)`,
-            padding: "1.5rem",
-            margin: "1rem auto",
-            width: "calc(100% - 2rem)",
-            maxWidth: "768px",
-            borderRadius: RADIUS.xl, // Bordes un poco más suaves
-            border: "1px solid rgba(255,255,255,0.05)", // Borde sutil de cristal
-            textAlign: "center",
-            cursor: "pointer",
-            position: "relative",
-            overflow: "hidden",
-            transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
-            boxShadow: "0 10px 25px -5px rgba(0,0,0,0.15)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-3px)";
-            e.currentTarget.style.boxShadow =
-              "0 20px 25px -5px rgba(0,0,0,0.25)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow =
-              "0 10px 25px -5px rgba(0,0,0,0.15)";
-          }}
-        >
-          {/* Línea de acento superior (Detalle sutil FinTech) */}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "30%",
-              height: "2px",
-              background: `linear-gradient(90deg, transparent, ${C.amber}, transparent)`,
-              opacity: 0.6,
-            }}
-          />
-
-          {/* Etiqueta Superior (Punto luminoso + Texto) */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <div
-              style={{
-                width: "6px",
-                height: "6px",
-                borderRadius: "50%",
-                backgroundColor: C.amber,
-                boxShadow: `0 0 8px ${C.amber}`,
-              }}
-            />
-            <span
-              style={{
-                fontSize: "0.65rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.15em",
-                color: C.gray400,
-                fontWeight: "700",
-              }}
-            >
-              Próximo {nextEvent.eventType}
-            </span>
-          </div>
-
-          {/* Cuenta Regresiva (Limpia y protagónica) */}
-          <div
-            style={{
-              fontSize: "2.25rem",
-              fontWeight: "900",
-              color: C.white,
-              letterSpacing: "-0.03em",
-              marginBottom: "0.5rem",
-              lineHeight: 1.1,
-            }}
-          >
-            {timeLeft}
-          </div>
-
-          {/* Detalles secundarios (Jerarquía de colores controlada) */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-              flexWrap: "wrap",
-              fontSize: "0.8rem",
-              color: C.gray500,
-              fontWeight: "500",
-            }}
-          >
-            <span style={{ color: C.gray200, fontWeight: "700" }}>
-              {nextEvent.title}
-            </span>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <span>{nextEvent.location}</span>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <span>
-              {formatFriendlyDate(nextEvent.eventDate)} -{" "}
-              {formatFriendlyTime(nextEvent.eventTime)}
-            </span>
-          </div>
-        </div>
-      )}
+      <AdSlot placement="club" layout="club" />
 
       {/* ── MODAL EDITAR INFO DEL CLUB ── */}
       {showEditClub && (
@@ -1370,21 +1281,20 @@ function ClubShell() {
                     overflow: "hidden",
                   }}
                 >
-                  {item.key === "jugadores" && (
-                    <StatsScopeBar
-                      scope={scope}
-                      onChange={setScope}
-                      seasons={seasons}
-                      categories={categories}
-                    />
-                  )}
-                  {item.key === "inicio" && (
+                  {item.key === "inicio" &&
+                    (sectionReady("inicio") ? (
                     <Home
                       clubInfo={clubInfo}
                       players={players}
                       events={statsEvents}
                       clubEvents={events}
                       gallery={gallery}
+                      eventsReady={ready.events}
+                      galleryReady={ready.gallery}
+                      hallSeen={hallSeen}
+                      albumsSeen={albumsSeen}
+                      onHallSeen={markHallSeen}
+                      onAlbumsSeen={markAlbumsSeen}
                       perms={perms}
                       teamRecord={teamRecord}
                       scopeLabel={scopeLabel}
@@ -1396,35 +1306,60 @@ function ClubShell() {
                       seasons={seasons}
                       categories={categories}
                     />
-                  )}
-                  {item.key === "agenda" && (
+                    ) : (
+                      <SectionPending />
+                    ))}
+                  {item.key === "agenda" &&
+                    visited.agenda &&
+                    (sectionReady("agenda") ? (
                     <Agenda
                       events={events}
                       officialEvents={officialEvents}
                       players={players}
                       clubInfo={clubInfo}
                       perms={perms}
-                      highlightedEventId={highlightedEventId}
                     />
-                  )}
-                  {item.key === "jugadores" && (
+                    ) : (
+                      <SectionPending />
+                    ))}
+                  {item.key === "jugadores" && visited.jugadores && (
+                    sectionReady("jugadores") ? (
+                    <>
+                    <StatsScopeBar
+                      scope={scope}
+                      onChange={setScope}
+                      seasons={seasons}
+                      categories={categories}
+                    />
                     <Players
                       players={players}
                       events={statsEvents}
                       perms={perms}
                       goals={goals}
                     />
+                    </>
+                    ) : (
+                      <SectionPending />
+                    )
                   )}
-                  {item.key === "finanzas" && (
+                  {item.key === "finanzas" &&
+                    visited.finanzas &&
+                    (sectionReady("finanzas") ? (
                     <Finances
                       transactions={transactions as any}
                       players={players as any}
                       perms={perms}
                     />
-                  )}
-                  {item.key === "inventario" && (
+                    ) : (
+                      <SectionPending />
+                    ))}
+                  {item.key === "inventario" &&
+                    visited.inventario &&
+                    (sectionReady("inventario") ? (
                     <Inventory inventory={inventory} perms={perms} />
-                  )}
+                    ) : (
+                      <SectionPending />
+                    ))}
                 </div>
               );
             })}

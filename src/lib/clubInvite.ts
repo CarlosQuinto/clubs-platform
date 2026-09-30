@@ -30,7 +30,14 @@ export async function getClubInvite(params: {
 }) {
   const fn = httpsCallable<
     typeof params,
-    { clubId: string; clubName: string; email: string; role: string; kind: InviteKind }
+    {
+      clubId: string;
+      slug: string;
+      clubName: string;
+      email: string;
+      role: string;
+      kind: InviteKind;
+    }
   >(functions, "getClubInvite");
   const res = await fn(params);
   return res.data;
@@ -44,7 +51,7 @@ export async function respondClubInvite(params: {
 }) {
   const fn = httpsCallable<
     typeof params,
-    { ok: boolean; action: string; clubId?: string }
+    { ok: boolean; action: string; clubId?: string; slug?: string }
   >(functions, "respondClubInvite");
   const res = await fn(params);
   return res.data;

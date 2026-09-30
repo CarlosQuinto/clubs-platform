@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { CalendarRange, Trash2 } from "lucide-react";
 import { addDoc, deleteDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { seasonRef, seasonsCol } from "../../lib/paths";
-import type { Season, Tournament } from "../../lib/types";
+import type { Season } from "../../lib/types";
 import Field from "./Field";
 import {
   Badge,
@@ -16,7 +16,7 @@ import {
 
 interface Props {
   seasons: Season[];
-  tournaments: Tournament[];
+  tournaments: { seasonId: string }[];
 }
 
 function formatSeasonRange(start?: string, end?: string) {
