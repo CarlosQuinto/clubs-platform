@@ -28,6 +28,7 @@ import InboxAdmin from "../components/admin/InboxAdmin";
 import SuperAdminsAdmin from "../components/admin/SuperAdminsAdmin";
 import SeasonsAdmin from "../components/admin/SeasonsAdmin";
 import TournamentsAdmin from "../components/admin/TournamentsAdmin";
+import CourtsAdmin from "../components/admin/CourtsAdmin";
 import Field from "../components/admin/Field";
 import InviteSignupLink from "../components/platform/InviteSignupLink";
 import ConfirmModal from "../components/ConfirmModal";
@@ -63,7 +64,7 @@ import {
   SectionCard,
 } from "../components/ui";
 
-type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins";
+type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
 
 const CATALOG_OFF: PlatformCatalogParts = {
   clubs: false,
@@ -98,7 +99,8 @@ export default function SuperAdmin() {
     tabParam === "cover" ||
     tabParam === "ads" ||
     tabParam === "inbox" ||
-    tabParam === "admins"
+    tabParam === "admins" ||
+    tabParam === "courts"
       ? tabParam
       : "clubs";
   const catalog = usePlatformCatalog(catalogForTab(tab));
@@ -154,6 +156,8 @@ export default function SuperAdmin() {
       {tab === "inbox" && <InboxAdmin />}
 
       {tab === "admins" && <SuperAdminsAdmin />}
+
+      {tab === "courts" && <CourtsAdmin />}
 
       {tab === "competition" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>

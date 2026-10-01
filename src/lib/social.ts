@@ -23,15 +23,20 @@ export function facebookUrl(value: string) {
 }
 
 /** Enlace a WhatsApp. Acepta número o URL. México (52) si no trae lada. */
-export function whatsappUrl(value: string) {
+export function whatsappUrl(value: string, text?: string) {
   const v = value.trim();
   if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
-  const digits = v.replace(/\D/g, "");
-  if (!digits) return "";
-  const withCountry =
-    digits.startsWith("52") || digits.startsWith("1") ? digits : `52${digits}`;
-  return `https://wa.me/${withCountry}`;
+  let url = v;
+  if (!/^https?:\/\//i.test(v)) {
+    const digits = v.replace(/\D/g, "");
+    if (!digits) return "";
+    const withCountry =
+      digits.startsWith("52") || digits.startsWith("1") ? digits : `52${digits}`;
+    url = `https://wa.me/${withCountry}`;
+  }
+  if (!text?.trim()) return url;
+  const joiner = url.includes("?") ? "&" : "?";
+  return `${url}${joiner}text=${encodeURIComponent(text.trim())}`;
 }
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

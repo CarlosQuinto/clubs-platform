@@ -25,9 +25,12 @@ import { isPlayed } from "../../lib/stats";
 import {
   FOOTBALL_TYPES,
   asFootballType,
+  asMatchDuration,
   footballTypeLabel,
+  MATCH_DURATIONS,
   type ClubSummary,
   type FootballType,
+  type MatchDurationMinutes,
   type Tournament,
 } from "../../lib/types";
 import ConfirmModal from "../ConfirmModal";
@@ -86,6 +89,7 @@ export default function TournamentEditModal({
   const [draftLegs, setDraftLegs] = useState<1 | 2>(2);
   const [draftFootballType, setDraftFootballType] = useState<FootballType>(7);
   const [draftStartDate, setDraftStartDate] = useState("");
+  const [draftDuration, setDraftDuration] = useState<MatchDurationMinutes>(90);
   const [saveOpen, setSaveOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
@@ -99,6 +103,7 @@ export default function TournamentEditModal({
     setDraftLegs(tournamentLegs(tournament));
     setDraftFootballType(asFootballType(tournament.footballType));
     setDraftStartDate(tournament.startDate || "");
+    setDraftDuration(asMatchDuration(tournament.durationMinutes));
     setSaveOpen(false);
     setReady(true);
   }, [tournamentId, hasTournament]);
@@ -129,10 +134,12 @@ export default function TournamentEditModal({
   const savedLegs = tournamentLegs(tournament);
   const savedFootballType = asFootballType(tournament.footballType);
   const savedStartDate = tournament.startDate || "";
+  const savedDuration = asMatchDuration(tournament.durationMinutes);
   const dirty =
     draftLegs !== savedLegs ||
     draftFootballType !== savedFootballType ||
     draftStartDate !== savedStartDate ||
+    draftDuration !== savedDuration ||
     !sameIdList(draftClubIds, tournament.clubIds);
   const planned = expectedMatchCount(draftClubIds.length, draftLegs);
   const playedReturns =
@@ -158,6 +165,7 @@ export default function TournamentEditModal({
     setDraftLegs(savedLegs);
     setDraftFootballType(savedFootballType);
     setDraftStartDate(savedStartDate);
+    setDraftDuration(savedDuration);
     setSaveOpen(false);
     onClose();
   };
@@ -174,6 +182,7 @@ export default function TournamentEditModal({
         legs: draftLegs,
         footballType: draftFootballType,
         startDate: draftStartDate || null,
+        durationMinutes: draftDuration,
       });
       setSaveOpen(false);
     } catch (err) {
@@ -308,6 +317,18 @@ export default function TournamentEditModal({
               />
             </div>
           </Field>
+          <Field label="Duración del partido" hint="Minutos que ocupa la cancha.">
+            <div style={{ maxWidth: 420 }}>
+              <SegmentedControl
+                value={String(draftDuration)}
+                onChange={(v) => setDraftDuration(asMatchDuration(Number(v)))}
+                options={MATCH_DURATIONS.map((minutes) => ({
+                  label: `${minutes} min`,
+                  value: String(minutes),
+                }))}
+              />
+            </div>
+          </Field>
           <Field label="Fecha de inicio">
             <FormInput
               type="date"
@@ -381,6 +402,8 @@ export default function TournamentEditModal({
             savedFootballType,
             draftStartDate,
             savedStartDate,
+            draftDuration,
+            savedDuration,
             clubNames,
             playedReturns,
           )}
@@ -624,6 +647,8 @@ function saveMessage(
   savedFootballType: FootballType,
   draftStartDate: string,
   savedStartDate: string,
+  draftDuration: MatchDurationMinutes,
+  savedDuration: MatchDurationMinutes,
   clubNames: Record<string, string>,
   playedReturns: { homeClubId: string; awayClubId: string }[],
 ) {
@@ -650,6 +675,9 @@ function saveMessage(
   }
   if (draftFootballType !== savedFootballType) {
     lines.push(`El tipo pasa a ${footballTypeLabel(draftFootballType)}.`);
+  }
+  if (draftDuration !== savedDuration) {
+    lines.push(`Cada partido dura ${draftDuration} minutos.`);
   }
   if (draftStartDate !== savedStartDate) {
     lines.push(

@@ -276,6 +276,100 @@ export function teamRejectedEmailText(opts: {
   ].join("\n");
 }
 
+export function enrollmentEmailHtml(opts: {
+  platformName: string;
+  clubName: string;
+  tournamentName: string;
+  startDate: string;
+  actionUrl: string;
+}) {
+  const platformName = escapeHtml(opts.platformName);
+  const clubName = escapeHtml(opts.clubName);
+  const tournamentName = escapeHtml(opts.tournamentName);
+  const start = escapeHtml(opts.startDate || "la fecha indicada en el torneo");
+  return `
+    <div style="font-family:Inter,system-ui,sans-serif;color:#292621;line-height:1.5;max-width:520px">
+      <p>Hola:</p>
+      <p><strong>${clubName}</strong> quedó inscrito en <strong>${tournamentName}</strong>, que inicia el ${start}.</p>
+      <p>Hace falta la disponibilidad del equipo: los días y el rango de horas en que pueden jugar.</p>
+      <p style="margin:24px 0">${mailButton(opts.actionUrl, "Cargar disponibilidad")}</p>
+      ${mailClose(platformName)}
+    </div>
+  `;
+}
+
+export function enrollmentEmailText(opts: {
+  platformName: string;
+  clubName: string;
+  tournamentName: string;
+  startDate: string;
+  actionUrl: string;
+}) {
+  return [
+    `Hola:`,
+    ``,
+    `${opts.clubName} quedó inscrito en ${opts.tournamentName}, que inicia el ${opts.startDate || "la fecha indicada en el torneo"}.`,
+    ``,
+    `Hace falta la disponibilidad del equipo: los días y el rango de horas en que pueden jugar.`,
+    ``,
+    opts.actionUrl,
+    ``,
+    `Gracias,`,
+    ``,
+    `El equipo de ${opts.platformName}`,
+  ].join("\n");
+}
+
+export function scheduleEmailHtml(opts: {
+  platformName: string;
+  clubName: string;
+  rivalName: string;
+  tournamentName: string;
+  when: string;
+  venue: string;
+  previous?: string;
+}) {
+  const platformName = escapeHtml(opts.platformName);
+  const intro = opts.previous
+    ? `<p>Se reprogramó el partido de <strong>${escapeHtml(opts.clubName)}</strong> contra <strong>${escapeHtml(opts.rivalName)}</strong> en <strong>${escapeHtml(opts.tournamentName)}</strong>.</p>
+       <p>Antes: ${escapeHtml(opts.previous)}</p>
+       <p>Ahora: <strong>${escapeHtml(opts.when)}</strong>${opts.venue ? ` · ${escapeHtml(opts.venue)}` : ""}</p>`
+    : `<p>Quedó calendarizado el partido de <strong>${escapeHtml(opts.clubName)}</strong> contra <strong>${escapeHtml(opts.rivalName)}</strong> en <strong>${escapeHtml(opts.tournamentName)}</strong>.</p>
+       <p><strong>${escapeHtml(opts.when)}</strong>${opts.venue ? ` · ${escapeHtml(opts.venue)}` : ""}</p>`;
+  return `
+    <div style="font-family:Inter,system-ui,sans-serif;color:#292621;line-height:1.5;max-width:520px">
+      <p>Hola:</p>
+      ${intro}
+      ${mailClose(platformName)}
+    </div>
+  `;
+}
+
+export function scheduleEmailText(opts: {
+  platformName: string;
+  clubName: string;
+  rivalName: string;
+  tournamentName: string;
+  when: string;
+  venue: string;
+  previous?: string;
+}) {
+  const place = opts.venue ? ` · ${opts.venue}` : "";
+  const body = opts.previous
+    ? [
+        `Se reprogramó el partido de ${opts.clubName} contra ${opts.rivalName} en ${opts.tournamentName}.`,
+        ``,
+        `Antes: ${opts.previous}`,
+        `Ahora: ${opts.when}${place}`,
+      ]
+    : [
+        `Quedó calendarizado el partido de ${opts.clubName} contra ${opts.rivalName} en ${opts.tournamentName}.`,
+        ``,
+        `${opts.when}${place}`,
+      ];
+  return [...body, ``, `Gracias,`, ``, `El equipo de ${opts.platformName}`].join("\n");
+}
+
 export function gmailConfigured() {
   return Boolean(process.env.GMAIL_USER?.trim() && process.env.GMAIL_APP_PASSWORD?.trim());
 }

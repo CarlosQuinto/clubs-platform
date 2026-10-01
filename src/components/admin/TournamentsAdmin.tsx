@@ -79,6 +79,7 @@ export default function TournamentsAdmin({
           groupId,
           legs: 2,
           footballType,
+          durationMinutes: 90,
           startDate,
           createdAt: serverTimestamp(),
         });

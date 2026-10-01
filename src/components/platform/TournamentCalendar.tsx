@@ -7,18 +7,32 @@ import {
   type CSSProperties,
 } from "react";
 import { Calendar, ChevronDown, ChevronRight, Clock, MapPin, Pencil } from "lucide-react";
-import { updateDoc } from "firebase/firestore";
-import { matchRef, tournamentRef } from "../../lib/paths";
+import { onSnapshot } from "firebase/firestore";
+import { availabilityCol } from "../../lib/paths";
 import {
   groupMatchesByRound,
   isPlayed,
 } from "../../lib/stats";
 import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
-import type { ClubSummary, Match, MatchSide, Tournament } from "../../lib/types";
+import type { ClubSummary, Court, CourtHold, Match, MatchSide, TimeWindow, Tournament } from "../../lib/types";
+import { asCourtSlot, asMatchDuration } from "../../lib/types";
+import { useAuth } from "../../context/AuthContext";
+import { useCourtHolds, useCourts } from "../../hooks/useCourts";
+import {
+  addDays,
+  courtsFreeAt,
+  readWindows,
+  shortSlotLabel,
+  suggestSlots,
+  todayIso,
+  type SlotSuggestion,
+} from "../../lib/courts";
+import { scheduleMatch } from "../../lib/scheduleMatch";
 import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
 import {
   C,
   FormInput,
+  FormSelect,
   PrimaryButton,
   SectionCard,
 } from "../ui";
@@ -67,6 +81,49 @@ export default function TournamentCalendar({
   );
 
   const visibleRounds = rounds.slice(0, shownCount);
+  const { platformConfig } = useAuth();
+  const courtsEnabled = isAdmin && platformConfig?.courtsEnabled === true;
+  const { courts } = useCourts(courtsEnabled);
+  const horizonStart = useMemo(() => {
+    const today = todayIso();
+    const start = tournament.startDate || "";
+    return start && start > today ? start : today;
+  }, [tournament.startDate]);
+  const { holds, loading: holdsLoading } = useCourtHolds(
+    courtsEnabled ? horizonStart : null,
+    courtsEnabled ? addDays(horizonStart, 20) : null,
+  );
+  const [availability, setAvailability] = useState<Record<string, TimeWindow[]>>({});
+  const [availabilityReady, setAvailabilityReady] = useState(false);
+  useEffect(() => {
+    if (!isAdmin) {
+      setAvailability({});
+      setAvailabilityReady(false);
+      return;
+    }
+    const unsub = onSnapshot(
+      availabilityCol(tournament.id),
+      (snap) => {
+        const next: Record<string, TimeWindow[]> = {};
+        snap.docs.forEach((docSnap) => {
+          next[docSnap.id] = readWindows(docSnap.data().windows);
+        });
+        setAvailability(next);
+        setAvailabilityReady(true);
+      },
+      () => setAvailabilityReady(true),
+    );
+    return () => unsub();
+  }, [isAdmin, tournament.id]);
+  const schedule: ScheduleBundle = {
+    courtsEnabled,
+    slotMinutes: asCourtSlot(platformConfig?.courtSlotMinutes),
+    openWindows: readWindows(platformConfig?.courtOpenWindows),
+    courts,
+    holds,
+    availability,
+    ready: !courtsEnabled || (!holdsLoading && availabilityReady),
+  };
 
   return (
     <SectionCard title="Calendario" icon={<Calendar size={16} />}>
@@ -95,6 +152,7 @@ export default function TournamentCalendar({
               clubNames={clubNames}
               clubsById={clubsById}
               isAdmin={isAdmin}
+              schedule={schedule}
               collapsed={group.collapsed}
             />
           ))}
@@ -205,6 +263,16 @@ function useRevealNextRound(
   return sentinelRef;
 }
 
+type ScheduleBundle = {
+  courtsEnabled: boolean;
+  slotMinutes: 30 | 60;
+  openWindows: TimeWindow[];
+  courts: Court[];
+  holds: CourtHold[];
+  availability: Record<string, TimeWindow[]>;
+  ready: boolean;
+};
+
 function roundTitle(round: string) {
   return /^\d+$/.test(round) ? `Jornada ${round}` : round;
 }
@@ -216,6 +284,7 @@ function RoundBlock({
   clubNames,
   clubsById,
   isAdmin,
+  schedule,
   collapsed,
 }: {
   round: string;
@@ -224,6 +293,7 @@ function RoundBlock({
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
+  schedule: ScheduleBundle;
   collapsed: boolean;
 }) {
   const [open, setOpen] = useState(!collapsed);
@@ -239,6 +309,7 @@ function RoundBlock({
           clubNames={clubNames}
           clubsById={clubsById}
           isAdmin={isAdmin}
+          schedule={schedule}
         />
       ))}
     </div>
@@ -344,17 +415,20 @@ function MatchRow({
   clubNames,
   clubsById,
   isAdmin,
+  schedule,
 }: {
   match: Match;
   tournament: Tournament;
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
+  schedule: ScheduleBundle;
 }) {
   const played = isPlayed(match);
   const [date, setDate] = useState(match.date || "");
   const [time, setTime] = useState(match.time || "");
   const [venue, setVenue] = useState(match.venue || "");
+  const [courtId, setCourtId] = useState(match.courtId || "");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -371,26 +445,86 @@ function MatchRow({
     setDate(match.date || "");
     setTime(match.time || "");
     setVenue(match.venue || "");
-  }, [match.date, match.time, match.venue]);
+    setCourtId(match.courtId || "");
+  }, [match.date, match.time, match.venue, match.courtId]);
+
+  const duration = asMatchDuration(tournament.durationMinutes);
+  const freeCourts = useMemo(() => {
+    if (!schedule.courtsEnabled || !date || !time) return [];
+    return courtsFreeAt({
+      courts: schedule.courts,
+      holds: schedule.holds,
+      openWindows: schedule.openWindows,
+      date,
+      time,
+      slotMinutes: schedule.slotMinutes,
+      duration,
+      ignoreMatchId: match.id,
+    });
+  }, [schedule, date, time, duration, match.id]);
+
+  useEffect(() => {
+    if (!schedule.courtsEnabled || !schedule.ready || !courtId || !date || !time) return;
+    if (!freeCourts.some((court) => court.id === courtId)) setCourtId("");
+  }, [schedule.courtsEnabled, schedule.ready, courtId, date, time, freeCourts]);
+
+  const homeWindows = schedule.availability[match.homeClubId] || [];
+  const awayWindows = schedule.availability[match.awayClubId] || [];
+  const missingAvailability = [
+    homeWindows.length ? "" : clubNames[match.homeClubId] || "Local",
+    awayWindows.length ? "" : clubNames[match.awayClubId] || "Visitante",
+  ].filter(Boolean);
+  const suggestions = useMemo(() => {
+    if (!schedule.courtsEnabled || !schedule.ready || missingAvailability.length) return [];
+    const today = todayIso();
+    const start = tournament.startDate && tournament.startDate > today
+      ? tournament.startDate
+      : today;
+    return suggestSlots({
+      fromDate: start,
+      days: 21,
+      slotMinutes: schedule.slotMinutes,
+      duration,
+      openWindows: schedule.openWindows,
+      homeWindows,
+      awayWindows,
+      courts: schedule.courts,
+      holds: schedule.holds,
+      ignoreMatchId: match.id,
+    });
+  }, [
+    schedule,
+    missingAvailability.length,
+    tournament.startDate,
+    duration,
+    homeWindows,
+    awayWindows,
+    match.id,
+  ]);
+
+  const applySuggestion = (slot: SlotSuggestion) => {
+    setDate(slot.date);
+    setTime(slot.time);
+    setCourtId(slot.courtId);
+    setVenue(slot.courtName);
+  };
 
   const saveSchedule = async () => {
     try {
       setBusy(true);
-      const scheduled = Boolean(date && time);
-      await updateDoc(matchRef(match.id), {
-        date: date || "",
-        time: time || "",
-        venue: venue.trim(),
-        status: played ? "played" : scheduled ? "scheduled" : "unscheduled",
-        updatedAt: new Date().toISOString(),
+      const chosen = freeCourts.find((court) => court.id === courtId);
+      await scheduleMatch({
+        matchId: match.id,
+        date,
+        time,
+        venue: schedule.courtsEnabled ? chosen?.name || "" : venue.trim(),
+        courtId: schedule.courtsEnabled ? (chosen ? courtId : "") : "",
       });
-      if (scheduled && tournament.status === "upcoming") {
-        await updateDoc(tournamentRef(tournament.id), { status: "active" });
-      }
       setEditing(false);
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar la programación.");
+      const message = err instanceof Error ? err.message : "";
+      alert(message || "No se pudo guardar la programación.");
     } finally {
       setBusy(false);
     }
@@ -488,6 +622,41 @@ function MatchRow({
             paddingTop: "0.15rem",
           }}
         >
+          {schedule.courtsEnabled && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+              {missingAvailability.length > 0 ? (
+                <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray500 }}>
+                  Falta la disponibilidad de {missingAvailability.join(" y ")}.
+                </p>
+              ) : suggestions.length > 0 ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                  {suggestions.map((slot) => (
+                    <button
+                      key={`${slot.date}-${slot.time}-${slot.courtId}`}
+                      type="button"
+                      onClick={() => applySuggestion(slot)}
+                      style={{
+                        border: `1px solid ${C.gray200}`,
+                        background: C.gray50,
+                        color: C.navy900,
+                        borderRadius: 8,
+                        padding: "0.3rem 0.5rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {shortSlotLabel(slot.date, slot.time)} · {slot.courtName}
+                    </button>
+                  ))}
+                </div>
+              ) : schedule.ready ? (
+                <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray500 }}>
+                  No hay un horario en que ambos equipos y una cancha coincidan.
+                </p>
+              ) : null}
+            </div>
+          )}
           <div className="match-edit-when">
             <label style={matchField}>
               <span style={matchFieldLabel}>Fecha</span>
@@ -504,16 +673,47 @@ function MatchRow({
               <TimeField value={time} onChange={setTime} />
             </div>
           </div>
-          <label style={matchField}>
-            <span style={matchFieldLabel}>Sede</span>
-            <FormInput
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-              placeholder="Sede"
-              aria-label="Sede"
-              style={compactInput}
-            />
-          </label>
+          {schedule.courtsEnabled ? (
+            <label style={matchField}>
+              <span style={matchFieldLabel}>Cancha</span>
+              <FormSelect
+                aria-label="Cancha"
+                value={freeCourts.some((court) => court.id === courtId) ? courtId : ""}
+                disabled={!date || !time}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setCourtId(next);
+                  const court = freeCourts.find((item) => item.id === next);
+                  setVenue(court?.name || "");
+                }}
+                style={compactInput}
+              >
+                <option value="">
+                  {!date || !time
+                    ? "Elige fecha y hora"
+                    : freeCourts.length
+                      ? "Sin cancha"
+                      : "Ninguna cancha libre en ese horario"}
+                </option>
+                {freeCourts.map((court) => (
+                  <option key={court.id} value={court.id}>
+                    {court.name}
+                  </option>
+                ))}
+              </FormSelect>
+            </label>
+          ) : (
+            <label style={matchField}>
+              <span style={matchFieldLabel}>Sede</span>
+              <FormInput
+                value={venue}
+                onChange={(e) => setVenue(e.target.value)}
+                placeholder="Sede"
+                aria-label="Sede"
+                style={compactInput}
+              />
+            </label>
+          )}
           <div className="match-edit-actions">
             <PrimaryButton
               type="button"

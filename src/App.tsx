@@ -15,6 +15,7 @@ import TeamsPage from "./pages/Teams";
 import MatchesPage from "./pages/Matches";
 import Contact from "./pages/Contact";
 import RegisterTeam from "./pages/RegisterTeam";
+import CourtsPage from "./pages/Courts";
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/temporadas/:id" element={<Navigate to="/torneos" replace />} />
             <Route path="/equipos" element={<TeamsPage />} />
             <Route path="/partidos" element={<MatchesPage />} />
+            <Route path="/canchas" element={<CourtsPage />} />
             <Route path="/:slug" element={<ClubPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

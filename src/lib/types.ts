@@ -51,6 +51,11 @@ export interface Tournament {
    * Modalidad: 7, 9 u 11. Si falta, se asume 11.
    */
   footballType?: FootballType;
+  /**
+   * Minutos que ocupa un partido en la cancha.
+   * Si falta, se asume 90.
+   */
+  durationMinutes?: MatchDurationMinutes;
   /** Fecha de inicio (YYYY-MM-DD). Si falta, se usa la de la temporada. */
   startDate?: string;
   /** Posiciones finales al cerrar el torneo: posición (1, 2, 3...) → clubId. */
@@ -115,6 +120,10 @@ export interface Match {
   date?: string;
   time?: string;
   venue?: string;
+  /** Cancha de la plataforma. Vacío si la sede es texto libre. */
+  courtId?: string;
+  /** date|time|courtId del último aviso enviado a los presidentes. */
+  scheduleNoticeKey?: string;
   status: MatchStatus;
   homeScore?: number | null;
   awayScore?: number | null;
@@ -153,6 +162,55 @@ export interface PlatformSocial {
   instagram?: string;
   facebook?: string;
   whatsapp?: string;
+}
+
+/** Lunes = 1 … domingo = 7. */
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export interface TimeWindow {
+  day: Weekday;
+  /** HH:mm */
+  start: string;
+  /** HH:mm */
+  end: string;
+}
+
+export type CourtSlotMinutes = 30 | 60;
+
+export type MatchDurationMinutes = 30 | 60 | 90 | 120;
+
+export const MATCH_DURATIONS: MatchDurationMinutes[] = [30, 60, 90, 120];
+
+export function asMatchDuration(value: unknown): MatchDurationMinutes {
+  return value === 30 || value === 60 || value === 90 || value === 120
+    ? value
+    : 90;
+}
+
+export function asCourtSlot(value: unknown): CourtSlotMinutes {
+  return value === 30 ? 30 : 60;
+}
+
+export interface Court {
+  id: string;
+  name: string;
+  description: string;
+  hourlyRate: number;
+  active: boolean;
+  order: number;
+}
+
+export type CourtHoldSource = "match" | "manual";
+
+export interface CourtHold {
+  id: string;
+  courtId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  source: CourtHoldSource;
+  matchId?: string;
+  note?: string;
 }
 
 export type InquiryStatus = "new" | "done";

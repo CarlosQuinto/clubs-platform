@@ -18,7 +18,7 @@ import { onSnapshot, serverTimestamp, setDoc, getDoc, updateDoc, deleteDoc, arra
 import { httpsCallable } from "firebase/functions";
 import { auth, functions } from "../lib/firebase";
 import { emailKey, platformConfigRef, platformInviteRef, userDocRef } from "../lib/paths";
-import type { PlatformSocial } from "../lib/types";
+import type { CourtSlotMinutes, PlatformSocial, TimeWindow } from "../lib/types";
 
 export type { PlatformSocial };
 
@@ -32,6 +32,12 @@ export interface PlatformConfig {
   headline?: string;
   tagline?: string;
   social?: PlatformSocial;
+  /** Módulo público de canchas. Si falta, está apagado. */
+  courtsEnabled?: boolean;
+  /** Rejilla del apartado: 30 o 60. Si falta, 60. */
+  courtSlotMinutes?: CourtSlotMinutes;
+  /** Días y horas en que las canchas abren. */
+  courtOpenWindows?: TimeWindow[];
 }
 
 interface AuthContextValue {

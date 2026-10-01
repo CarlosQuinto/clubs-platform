@@ -10,6 +10,7 @@ import {
   Mail,
   Menu,
   Calendar,
+  MapPin,
   Shield,
   Trophy,
   UserPlus,
@@ -22,7 +23,7 @@ import { PLATFORM_NAME } from "../../lib/clubDefaults";
 import { hasAnySocial } from "../../lib/social";
 import SocialLinks from "./SocialLinks";
 
-type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins";
+type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
@@ -48,7 +49,8 @@ export default function PlatformLayout({
       tab === "cover" ||
       tab === "ads" ||
       tab === "inbox" ||
-      tab === "admins"
+      tab === "admins" ||
+      tab === "courts"
       ? tab
       : "clubs";
   })();
@@ -146,6 +148,13 @@ export default function PlatformLayout({
           <Shield size={16} />,
           pathname === "/equipos",
         )}
+        {platformConfig?.courtsEnabled &&
+          navLink(
+            "/canchas",
+            "Canchas",
+            <MapPin size={16} />,
+            pathname === "/canchas",
+          )}
         {navLink(
           "/contacto",
           "Contacto",
@@ -191,6 +200,12 @@ export default function PlatformLayout({
               "Solicitudes",
               <Inbox size={16} />,
               pathname === "/admin" && adminTab === "inbox",
+            )}
+            {navLink(
+              "/admin?tab=courts",
+              "Canchas",
+              <MapPin size={16} />,
+              pathname === "/admin" && adminTab === "courts",
             )}
             {navLink(
               "/admin?tab=admins",

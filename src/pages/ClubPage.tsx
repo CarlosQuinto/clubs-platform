@@ -27,6 +27,7 @@ import {
   usePlatformCatalog,
 } from "../hooks/usePlatformCatalog";
 import StatsScopeBar from "../components/club/StatsScopeBar";
+import AvailabilityPanel from "../components/club/AvailabilityPanel";
 import {
   applyScope,
   calendarStatus,
@@ -486,6 +487,22 @@ function ClubShell() {
       }
     }
   }, [activeIndex]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#disponibilidad") return;
+    setActiveTab("agenda");
+    setVisitState((prev) =>
+      prev.tabs.agenda
+        ? prev
+        : { ...prev, tabs: { ...prev.tabs, agenda: true } },
+    );
+  }, [clubId]);
+
+  useEffect(() => {
+    if (activeTab !== "agenda" || window.location.hash !== "#disponibilidad") return;
+    const node = document.getElementById("disponibilidad");
+    node?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeTab, clubId]);
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
@@ -1312,6 +1329,12 @@ function ClubShell() {
                   {item.key === "agenda" &&
                     visited.agenda &&
                     (sectionReady("agenda") ? (
+                    <>
+                    {perms.canEditAgenda && (
+                      <div style={{ padding: "1rem 1rem 0" }}>
+                        <AvailabilityPanel clubId={clubId} tournaments={tournaments} />
+                      </div>
+                    )}
                     <Agenda
                       events={events}
                       officialEvents={officialEvents}
@@ -1319,6 +1342,7 @@ function ClubShell() {
                       clubInfo={clubInfo}
                       perms={perms}
                     />
+                    </>
                     ) : (
                       <SectionPending />
                     ))}
