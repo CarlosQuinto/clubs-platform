@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Crown,
@@ -24,6 +24,9 @@ import { hasAnySocial } from "../../lib/social";
 import SocialLinks from "./SocialLinks";
 
 type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
+
+/** Sobrevive al remonte del layout al cambiar de ruta. */
+let scrollTopAfterNav = false;
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
@@ -63,6 +66,47 @@ export default function PlatformLayout({
 
   const closeMenu = () => setMenuOpen(false);
 
+  const scrollWindowTop = () => window.scrollTo(0, 0);
+
+  // useLayoutEffect evita el destello; useEffect corre después de que el
+  // menú suelta el bloqueo y restaura el scroll anterior.
+  useLayoutEffect(() => {
+    if (!scrollTopAfterNav) return;
+    scrollWindowTop();
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!scrollTopAfterNav) return;
+    scrollTopAfterNav = false;
+    scrollWindowTop();
+  }, [pathname]);
+
+  /** Footer, Secciones y Administración: al tope, salvo Contacto y Registrar equipo. */
+  const onDestinationClick = (to: string) => {
+    closeMenu();
+    const hash = to.includes("#") ? to.slice(to.indexOf("#")) : "";
+    const path = to.split("#")[0].split("?")[0];
+
+    if (hash === "#formulario") {
+      if (pathname === path && window.location.hash === "#formulario") {
+        window.setTimeout(() => {
+          document.getElementById("formulario")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }, 0);
+      }
+      return;
+    }
+
+    if (pathname === path) {
+      scrollWindowTop();
+      window.setTimeout(scrollWindowTop, 0);
+      return;
+    }
+    scrollTopAfterNav = true;
+  };
+
   const renderAuthButton = () =>
     user ? (
       <button
@@ -94,10 +138,11 @@ export default function PlatformLayout({
     label: string,
     icon: ReactNode,
     active: boolean,
+    scrollToDest = false,
   ) => (
     <Link
       to={to}
-      onClick={closeMenu}
+      onClick={() => (scrollToDest ? onDestinationClick(to) : closeMenu())}
       className={active ? "platform-nav__link is-on" : "platform-nav__link"}
     >
       {icon}
@@ -135,18 +180,21 @@ export default function PlatformLayout({
           "Torneos",
           <Trophy size={16} />,
           pathname === "/torneos" || pathname.startsWith("/torneos/"),
+          true,
         )}
         {navLink(
           "/partidos",
           "Partidos",
           <Calendar size={16} />,
           pathname === "/partidos",
+          true,
         )}
         {navLink(
           "/equipos",
           "Equipos",
           <Shield size={16} />,
           pathname === "/equipos",
+          true,
         )}
         {platformConfig?.courtsEnabled &&
           navLink(
@@ -154,18 +202,21 @@ export default function PlatformLayout({
             "Canchas",
             <MapPin size={16} />,
             pathname === "/canchas",
+            true,
           )}
         {navLink(
-          "/contacto",
+          "/contacto#formulario",
           "Contacto",
           <Mail size={16} />,
           pathname === "/contacto",
+          true,
         )}
         {navLink(
-          "/registrar-equipo",
+          "/registrar-equipo#formulario",
           "Registrar equipo",
           <UserPlus size={16} />,
           pathname === "/registrar-equipo",
+          true,
         )}
 
         {isSuperAdmin && (
@@ -176,42 +227,49 @@ export default function PlatformLayout({
               "Clubes",
               <Shield size={16} />,
               pathname === "/admin" && adminTab === "clubs",
+              true,
             )}
             {navLink(
               "/admin?tab=competition",
               "Competición",
               <Trophy size={16} />,
               pathname === "/admin" && adminTab === "competition",
+              true,
             )}
             {navLink(
               "/admin?tab=cover",
               "Portada",
               <ImageIcon size={16} />,
               pathname === "/admin" && adminTab === "cover",
+              true,
             )}
             {navLink(
               "/admin?tab=ads",
               "Publicidad",
               <Megaphone size={16} />,
               pathname === "/admin" && adminTab === "ads",
+              true,
             )}
             {navLink(
               "/admin?tab=inbox",
               "Solicitudes",
               <Inbox size={16} />,
               pathname === "/admin" && adminTab === "inbox",
+              true,
             )}
             {navLink(
               "/admin?tab=courts",
               "Canchas",
               <MapPin size={16} />,
               pathname === "/admin" && adminTab === "courts",
+              true,
             )}
             {navLink(
               "/admin?tab=admins",
               "Administradores",
               <Crown size={16} />,
               pathname === "/admin" && adminTab === "admins",
+              true,
             )}
           </div>
         )}
@@ -279,22 +337,28 @@ export default function PlatformLayout({
               </Link>
             </div>
             <nav className="platform-footer__nav" aria-label="Enlaces del pie">
-              <Link to="/" onClick={closeMenu}>
+              <Link to="/" onClick={() => onDestinationClick("/")}>
                 Inicio
               </Link>
-              <Link to="/equipos" onClick={closeMenu}>
+              <Link to="/equipos" onClick={() => onDestinationClick("/equipos")}>
                 Equipos
               </Link>
-              <Link to="/torneos" onClick={closeMenu}>
+              <Link to="/torneos" onClick={() => onDestinationClick("/torneos")}>
                 Torneos
               </Link>
-              <Link to="/partidos" onClick={closeMenu}>
+              <Link to="/partidos" onClick={() => onDestinationClick("/partidos")}>
                 Partidos
               </Link>
-              <Link to="/contacto#formulario" onClick={closeMenu}>
+              <Link
+                to="/contacto#formulario"
+                onClick={() => onDestinationClick("/contacto#formulario")}
+              >
                 Contacto
               </Link>
-              <Link to="/registrar-equipo#formulario" onClick={closeMenu}>
+              <Link
+                to="/registrar-equipo#formulario"
+                onClick={() => onDestinationClick("/registrar-equipo#formulario")}
+              >
                 Registrar equipo
               </Link>
             </nav>

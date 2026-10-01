@@ -3,14 +3,14 @@ import { Plus, Trash2 } from "lucide-react";
 import { C, FormInput, SecondaryButton } from "../ui";
 import type { TimeWindow, Weekday } from "../../lib/types";
 
-const DAYS: { value: Weekday; short: string; label: string }[] = [
-  { value: 1, short: "Lun", label: "Lunes" },
-  { value: 2, short: "Mar", label: "Martes" },
-  { value: 3, short: "Mié", label: "Miércoles" },
-  { value: 4, short: "Jue", label: "Jueves" },
-  { value: 5, short: "Vie", label: "Viernes" },
-  { value: 6, short: "Sáb", label: "Sábado" },
-  { value: 7, short: "Dom", label: "Domingo" },
+const DAYS: { value: Weekday; short: string; letter: string; label: string }[] = [
+  { value: 1, short: "Lun", letter: "L", label: "Lunes" },
+  { value: 2, short: "Mar", letter: "M", label: "Martes" },
+  { value: 3, short: "Mié", letter: "M", label: "Miércoles" },
+  { value: 4, short: "Jue", letter: "J", label: "Jueves" },
+  { value: 5, short: "Vie", letter: "V", label: "Viernes" },
+  { value: 6, short: "Sáb", letter: "S", label: "Sábado" },
+  { value: 7, short: "Dom", letter: "D", label: "Domingo" },
 ];
 
 const WEEKDAYS: Weekday[] = [1, 2, 3, 4, 5];
@@ -132,6 +132,7 @@ function ScheduleRow({
 
   return (
     <div
+      className="windows-editor-row"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -169,13 +170,7 @@ function ScheduleRow({
           <Trash2 size={15} />
         </button>
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: "0.25rem",
-        }}
-      >
+      <div className="windows-days">
         {DAYS.map((day) => {
           const on = group.days.includes(day.value);
           return (
@@ -195,9 +190,11 @@ function ScheduleRow({
                 fontWeight: 800,
                 cursor: "pointer",
                 minWidth: 0,
+                overflow: "hidden",
               }}
             >
-              {day.short}
+              <span className="windows-day__full">{day.short}</span>
+              <span className="windows-day__letter">{day.letter}</span>
             </button>
           );
         })}

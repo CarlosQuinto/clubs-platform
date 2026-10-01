@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Home as HomeIcon,
   Calendar,
@@ -180,24 +180,44 @@ function SectionPending() {
   );
 }
 
+type ClubTab = "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario";
+
+function tabFromSearch(params: URLSearchParams): ClubTab {
+  const value = params.get("seccion");
+  if (
+    value === "agenda" ||
+    value === "jugadores" ||
+    value === "finanzas" ||
+    value === "inventario"
+  ) {
+    return value;
+  }
+  return "inicio";
+}
+
+function visitedTabs(active: ClubTab) {
+  return {
+    inicio: true,
+    agenda: active === "agenda",
+    jugadores: active === "jugadores",
+    finanzas: active === "finanzas",
+    inventario: active === "inventario",
+  };
+}
+
 function ClubShell() {
   const { slug: routeSlug = "" } = useParams();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const section = tabFromSearch(searchParams);
   const { clubId, clubRef, storagePath } = useClub();
   const navigate = useNavigate();
   const { user, isSuperAdmin, logout } = useAuth();
   const { role } = useMembership(clubId);
-  const [activeTab, setActiveTab] = useState<
-    "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario"
-  >("inicio");
+  const [activeTab, setActiveTab] = useState<ClubTab>(section);
   const [visitState, setVisitState] = useState({
     clubId,
-    tabs: {
-      inicio: true,
-      agenda: false,
-      jugadores: false,
-      finanzas: false,
-      inventario: false,
-    },
+    tabs: visitedTabs(section),
   });
   const [zoneState, setZoneState] = useState({
     clubId,
@@ -205,31 +225,17 @@ function ClubShell() {
     albums: false,
   });
   if (visitState.clubId !== clubId) {
-    setActiveTab("inicio");
+    setActiveTab(section);
     setVisitState({
       clubId,
-      tabs: {
-        inicio: true,
-        agenda: false,
-        jugadores: false,
-        finanzas: false,
-        inventario: false,
-      },
+      tabs: visitedTabs(section),
     });
   }
   if (zoneState.clubId !== clubId) {
     setZoneState({ clubId, hall: false, albums: false });
   }
   const visited =
-    visitState.clubId === clubId
-      ? visitState.tabs
-      : {
-          inicio: true,
-          agenda: false,
-          jugadores: false,
-          finanzas: false,
-          inventario: false,
-        };
+    visitState.clubId === clubId ? visitState.tabs : visitedTabs(section);
 
   const hallSeen = zoneState.clubId === clubId && zoneState.hall;
   const albumsSeen = zoneState.clubId === clubId && zoneState.albums;
@@ -489,22 +495,53 @@ function ClubShell() {
   }, [activeIndex]);
 
   useEffect(() => {
-    if (window.location.hash !== "#disponibilidad") return;
+    setActiveTab(section);
+    setVisitState((prev) => {
+      if (prev.clubId !== clubId || prev.tabs[section]) return prev;
+      return { ...prev, tabs: { ...prev.tabs, [section]: true } };
+    });
+  }, [section, clubId]);
+
+  useEffect(() => {
+    if (location.hash !== "#disponibilidad") return;
     setActiveTab("agenda");
     setVisitState((prev) =>
       prev.tabs.agenda
         ? prev
         : { ...prev, tabs: { ...prev.tabs, agenda: true } },
     );
-  }, [clubId]);
+    if (searchParams.get("seccion") === "agenda") return;
+    const next = new URLSearchParams(searchParams);
+    next.set("seccion", "agenda");
+    navigate(
+      {
+        pathname: location.pathname,
+        search: `?${next.toString()}`,
+        hash: "#disponibilidad",
+      },
+      { replace: true },
+    );
+  }, [location.hash, location.pathname, searchParams, navigate]);
 
   useEffect(() => {
-    if (activeTab !== "agenda" || window.location.hash !== "#disponibilidad") return;
+    if (activeTab !== "agenda" || location.hash !== "#disponibilidad") return;
     const node = document.getElementById("disponibilidad");
     node?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [activeTab, clubId]);
+  }, [activeTab, clubId, location.hash]);
 
-  const handleTabChange = (tab: typeof activeTab) => {
+  const handleTabChange = (tab: ClubTab) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "inicio") next.delete("seccion");
+    else next.set("seccion", tab);
+    const search = next.toString();
+    const hash = tab === "agenda" ? location.hash : "";
+    if (search !== searchParams.toString() || hash !== location.hash) {
+      navigate({
+        pathname: location.pathname,
+        search: search ? `?${search}` : "",
+        hash,
+      });
+    }
     setActiveTab(tab);
     setVisitState((prev) =>
       prev.tabs[tab]

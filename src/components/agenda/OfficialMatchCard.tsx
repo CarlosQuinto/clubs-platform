@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import {
   MapPin,
   Clock,
@@ -13,6 +15,7 @@ import {
   Images,
 } from "lucide-react";
 import { Badge, C, RADIUS, SHADOWS, SecondaryButton } from "../ui";
+import ConfirmModal from "../ConfirmModal";
 import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
 import RoutineDisplay from "./RoutineDisplay";
 
@@ -77,6 +80,8 @@ export default function OfficialMatchCard({
   const showAttendanceButton = !isPast && (!isOfficial || canEdit);
   const showLineup = !isPast && isMatch && (canEdit || (!isOfficial && hasLineup));
 
+  const navigate = useNavigate();
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const photos =
     ev.photoUrls && ev.photoUrls.length > 0
       ? ev.photoUrls
@@ -213,20 +218,26 @@ export default function OfficialMatchCard({
               }}
             >
               {ev.tournamentName && (
-                <Link
-                  to={`/torneos/${ev.tournamentId}`}
+                <button
+                  type="button"
+                  onClick={() => setLeaveOpen(true)}
                   style={{
                     color: C.navy900,
                     textDecoration: "none",
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "0.2rem",
-                    fontWeight: 700,
                     width: "fit-content",
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    font: "inherit",
+                    fontWeight: 700,
                   }}
                 >
                   {ev.tournamentName} <ExternalLink size={10} />
-                </Link>
+                </button>
               )}
               <span>
                 {[
@@ -460,6 +471,21 @@ export default function OfficialMatchCard({
             </button>
           )
         ))}
+      {createPortal(
+        <ConfirmModal
+          open={leaveOpen}
+          title="Salir del club"
+          message={`Estás por salir de la página del club para ir a la página del torneo ${ev.tournamentName}. ¿Deseas continuar?`}
+          confirmLabel="Continuar"
+          cancelLabel="Cancelar"
+          onConfirm={() => {
+            setLeaveOpen(false);
+            navigate(`/torneos/${ev.tournamentId}`);
+          }}
+          onCancel={() => setLeaveOpen(false)}
+        />,
+        document.body,
+      )}
     </div>
   );
 }

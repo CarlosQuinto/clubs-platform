@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, type MouseEvent, type TouchEvent } from "react";
 import {
   Medal,
   Goal,
@@ -95,6 +95,8 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
   const [hofIndex, setHofIndex] = useState(0);
   const [shown, setShown] = useState<Record<string, number>>({});
   const hallRef = useRef<HTMLDivElement>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const suppressClick = useRef(false);
   const rankedRef = useRef<{ source: any[]; lists: Partial<Record<HallKey, any[]>> }>({
     source: stats,
     lists: {},
@@ -183,13 +185,50 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
     });
   };
 
+  const stepHof = (direction: 1 | -1) => {
+    setHofIndex(
+      (prev) => (prev + direction + categories.length) % categories.length,
+    );
+  };
   const nextHof = () => {
-    setHofIndex((prev) => (prev + 1) % categories.length);
+    stepHof(1);
     scrollToHall();
   };
   const prevHof = () => {
-    setHofIndex((prev) => (prev - 1 + categories.length) % categories.length);
+    stepHof(-1);
     scrollToHall();
+  };
+
+  const SWIPE_THRESHOLD = 50;
+
+  const onHallTouchStart = (e: TouchEvent) => {
+    suppressClick.current = false;
+    const t = e.changedTouches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const onHallTouchEnd = (e: TouchEvent) => {
+    if (!touchStart.current || categories.length < 2) {
+      touchStart.current = null;
+      return;
+    }
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) <= Math.abs(dy)) return;
+    suppressClick.current = true;
+    window.setTimeout(() => {
+      suppressClick.current = false;
+    }, 400);
+    stepHof(dx < 0 ? 1 : -1);
+  };
+
+  const onHallClickCapture = (e: MouseEvent) => {
+    if (!suppressClick.current) return;
+    suppressClick.current = false;
+    e.preventDefault();
+    e.stopPropagation();
   };
   const goToSlide = (idx: number) => {
     setHofIndex(idx);
@@ -396,11 +435,15 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
 
       {/* CONTENEDOR DEL CARRUSEL ANIMADO */}
       <div
+        onTouchStart={onHallTouchStart}
+        onTouchEnd={onHallTouchEnd}
+        onClickCapture={onHallClickCapture}
         style={{
           width: "100%",
           overflow: "hidden",
           position: "relative",
           borderRadius: RADIUS.lg,
+          touchAction: "pan-y",
         }}
       >
         <div>

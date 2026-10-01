@@ -33,7 +33,7 @@ export default function RegisterTeam() {
     const email = captainEmail.trim().toLowerCase();
     const phone = captainPhone.trim();
     const team = teamName.trim();
-    if (name.length < 2) return setError("Escribe el nombre del capitán.");
+    if (name.length < 2) return setError("Escribe el nombre completo.");
     if (!EMAIL_RE.test(email)) return setError("El correo no es válido.");
     if (phone.replace(/\D/g, "").length < 7) {
       return setError("El teléfono no es válido.");
@@ -65,8 +65,7 @@ export default function RegisterTeam() {
       <PublicFormBand>
         <h1>Registrar equipo</h1>
         <p>
-          La solicitud queda pendiente de aprobación. Te avisamos cuando el
-          equipo quede registrado.
+          Completa el formulario para solicitar la inscripción de tu equipo. Te notificaremos una vez que sea aprobada.
         </p>
         {sent ? (
           <p className="public-form-ok">
@@ -74,32 +73,35 @@ export default function RegisterTeam() {
           </p>
         ) : (
           <form className="public-stack-form" onSubmit={handleSubmit}>
-            <input
-              value={captainName}
-              onChange={(e) => setCaptainName(e.target.value)}
-              placeholder="Nombre completo del capitán"
-              required
-              maxLength={119}
-              autoComplete="name"
-            />
-            <input
-              type="email"
-              value={captainEmail}
-              onChange={(e) => setCaptainEmail(e.target.value)}
-              placeholder="Email del capitán"
-              required
-              maxLength={119}
-              autoComplete="email"
-            />
-            <input
-              type="tel"
-              value={captainPhone}
-              onChange={(e) => setCaptainPhone(e.target.value)}
-              placeholder="Teléfono celular del capitán"
-              required
-              maxLength={29}
-              autoComplete="tel"
-            />
+            <div className="public-form-group">
+              <h2>Datos del representante del equipo</h2>
+              <input
+                value={captainName}
+                onChange={(e) => setCaptainName(e.target.value)}
+                placeholder="Nombre completo"
+                required
+                maxLength={119}
+                autoComplete="name"
+              />
+              <input
+                type="email"
+                value={captainEmail}
+                onChange={(e) => setCaptainEmail(e.target.value)}
+                placeholder="Correo electrónico"
+                required
+                maxLength={119}
+                autoComplete="email"
+              />
+              <input
+                type="tel"
+                value={captainPhone}
+                onChange={(e) => setCaptainPhone(e.target.value)}
+                placeholder="Teléfono celular"
+                required
+                maxLength={29}
+                autoComplete="tel"
+              />
+            </div>
             <input
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}

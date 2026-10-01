@@ -5,7 +5,8 @@ import PageHeroBanner from "../components/platform/PageHeroBanner";
 import PublicFormBand from "../components/platform/PublicFormBand";
 import { useAuth } from "../context/AuthContext";
 import { inquiriesCol } from "../lib/paths";
-import { EMAIL_RE, whatsappUrl } from "../lib/social";
+import { EMAIL_RE } from "../lib/social";
+import WhatsAppCard from "../components/platform/WhatsAppCard";
 
 const TOPICS = [
   { value: "torneos", label: "Torneos y ligas" },
@@ -153,14 +154,7 @@ export default function Contact() {
             </button>
           </form>
         )}
-        {whatsapp ? (
-          <p className="public-form-whatsapp">
-            O escríbenos al WhatsApp{" "}
-            <a href={whatsappUrl(whatsapp)} target="_blank" rel="noreferrer">
-              {whatsapp}
-            </a>
-          </p>
-        ) : null}
+        {whatsapp ? <WhatsAppCard phone={whatsapp} /> : null}
       </PublicFormBand>
     </PlatformLayout>
   );

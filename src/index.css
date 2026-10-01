@@ -159,6 +159,7 @@
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
+  container-type: inline-size;
 }
 
 .public-form-card h1 {
@@ -181,6 +182,22 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+}
+
+.public-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 0.45rem;
+}
+
+.public-form-group h2 {
+  margin: 0.15rem 0 0.1rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--navy-900);
 }
 
 .public-stack-form input,
@@ -253,22 +270,94 @@
   font-weight: 700;
 }
 
-.public-form-card > .public-form-whatsapp {
+.whatsapp-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   margin: 1.15rem 0 0;
-  text-align: center;
-  font-size: 0.88rem;
-  color: var(--gray-600);
-  line-height: 1.45;
-}
-
-.public-form-whatsapp a {
-  color: var(--navy-900);
-  font-weight: 800;
+  padding: 0.8rem 0.75rem;
+  background: #e7f6ec;
+  border: 1px solid #c7e8d4;
+  border-radius: 14px;
   text-decoration: none;
+  color: inherit;
 }
 
-.public-form-whatsapp a:hover {
-  color: var(--amber);
+.whatsapp-card:hover {
+  border-color: #9ed4b4;
+}
+
+.whatsapp-card__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: #fff;
+  color: #25d366;
+}
+
+.whatsapp-card__copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 8.5rem;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.whatsapp-card__kicker {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a9b4a;
+}
+
+.whatsapp-card__title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--navy-900);
+}
+
+.whatsapp-card__phone {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-top: 0.12rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #1a9b4a;
+}
+
+.whatsapp-card__action {
+  margin-left: auto;
+  flex: none;
+  border: 1px solid #d5eadc;
+  background: #f6fbf8;
+  color: var(--navy-900);
+  border-radius: 999px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.whatsapp-card:hover .whatsapp-card__action {
+  background: #fff;
+}
+
+@container (max-width: 27rem) {
+  .whatsapp-card {
+    flex-wrap: wrap;
+  }
+
+  .whatsapp-card__action {
+    flex: 1 1 100%;
+    margin-left: 0;
+    text-align: center;
+  }
 }
 
 .public-clubs-band {
@@ -1306,21 +1395,78 @@ input[type="time"] {
   max-width: 100%;
 }
 
+.windows-editor-row {
+  container-type: inline-size;
+}
+
 .windows-time {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 0.4rem;
+  column-gap: 0.4rem;
   align-items: center;
 }
 
+.windows-time > button {
+  margin-left: 0.45rem;
+}
+
 .windows-time input[type="time"] {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   font-size: 0.8rem !important;
   padding: 0.45rem 0.35rem !important;
+}
+
+.windows-time input[type="time"]::-webkit-datetime-edit,
+.windows-time input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+.windows-time input[type="time"]::-webkit-date-and-time-value {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .windows-time input[type="time"]::-webkit-calendar-picker-indicator {
   margin: 0;
   padding: 0;
+}
+
+@container (max-width: 24rem) {
+  .windows-time {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.45rem;
+  }
+
+  .windows-time input[type="time"] {
+    grid-column: 1;
+  }
+
+  .windows-time > button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+.windows-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.windows-day__letter {
+  display: none;
+}
+
+@container (max-width: 16.5rem) {
+  .windows-day__full {
+    display: none;
+  }
+
+  .windows-day__letter {
+    display: inline;
+  }
 }
 
 .match-edit-when {
