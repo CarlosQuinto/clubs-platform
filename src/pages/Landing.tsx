@@ -182,14 +182,14 @@ export default function Landing() {
             <p>{tagline}</p>
             <div className="landing-hero__actions">
               <Link to="/contacto#formulario" className="landing-hero__btn">
-                Apúntate a una liga
+                Inscríbete a una liga
               </Link>
               <Link to="/registrar-equipo#formulario" className="landing-hero__btn">
-                Registrar equipo
+                Registra tu equipo
               </Link>
               {platformConfig?.courtsEnabled === true && (
                 <Link to="/canchas" className="landing-hero__btn landing-hero__btn--rent">
-                  Renta tu cancha
+                  Renta una cancha
                 </Link>
               )}
             </div>

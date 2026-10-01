@@ -81,7 +81,7 @@ export default function PlatformLayout({
     scrollWindowTop();
   }, [pathname]);
 
-  /** Footer, Secciones y Administración: al tope, salvo Contacto y Registrar equipo. */
+  /** Footer, Secciones y Administración: al tope, salvo Contacto y Registra tu equipo. */
   const onDestinationClick = (to: string) => {
     closeMenu();
     const hash = to.includes("#") ? to.slice(to.indexOf("#")) : "";
@@ -145,7 +145,7 @@ export default function PlatformLayout({
       onClick={() => (scrollToDest ? onDestinationClick(to) : closeMenu())}
       className={active ? "platform-nav__link is-on" : "platform-nav__link"}
     >
-      {icon}
+      <span className="platform-nav__icon">{icon}</span>
       {label}
     </Link>
   );
@@ -199,11 +199,18 @@ export default function PlatformLayout({
         {platformConfig?.courtsEnabled &&
           navLink(
             "/canchas",
-            "Canchas",
+            "Renta una cancha",
             <MapPin size={16} />,
             pathname === "/canchas",
             true,
           )}
+        {navLink(
+          "/registrar-equipo#formulario",
+          "Registra tu equipo",
+          <UserPlus size={16} />,
+          pathname === "/registrar-equipo",
+          true,
+        )}
         {navLink(
           "/contacto#formulario",
           "Contacto",
@@ -211,66 +218,68 @@ export default function PlatformLayout({
           pathname === "/contacto",
           true,
         )}
-        {navLink(
-          "/registrar-equipo#formulario",
-          "Registrar equipo",
-          <UserPlus size={16} />,
-          pathname === "/registrar-equipo",
-          true,
-        )}
 
         {isSuperAdmin && (
           <div className="platform-sidebar__group">
             <div className="platform-sidebar__label">Administración</div>
-            {navLink(
-              "/admin",
-              "Clubes",
-              <Shield size={16} />,
-              pathname === "/admin" && adminTab === "clubs",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=competition",
-              "Competición",
-              <Trophy size={16} />,
-              pathname === "/admin" && adminTab === "competition",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=cover",
-              "Portada",
-              <ImageIcon size={16} />,
-              pathname === "/admin" && adminTab === "cover",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=ads",
-              "Publicidad",
-              <Megaphone size={16} />,
-              pathname === "/admin" && adminTab === "ads",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=inbox",
-              "Solicitudes",
-              <Inbox size={16} />,
-              pathname === "/admin" && adminTab === "inbox",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=courts",
-              "Canchas",
-              <MapPin size={16} />,
-              pathname === "/admin" && adminTab === "courts",
-              true,
-            )}
-            {navLink(
-              "/admin?tab=admins",
-              "Administradores",
-              <Crown size={16} />,
-              pathname === "/admin" && adminTab === "admins",
-              true,
-            )}
+            <div className="platform-sidebar__section">
+              <div className="platform-sidebar__section-label">Operación</div>
+              {navLink(
+                "/admin",
+                "Equipos",
+                <Shield size={16} />,
+                pathname === "/admin" && adminTab === "clubs",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=competition",
+                "Competición",
+                <Trophy size={16} />,
+                pathname === "/admin" && adminTab === "competition",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=courts",
+                "Canchas",
+                <MapPin size={16} />,
+                pathname === "/admin" && adminTab === "courts",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=inbox",
+                "Solicitudes",
+                <Inbox size={16} />,
+                pathname === "/admin" && adminTab === "inbox",
+                true,
+              )}
+            </div>
+            <div className="platform-sidebar__section">
+              <div className="platform-sidebar__section-label">Contenido</div>
+              {navLink(
+                "/admin?tab=ads",
+                "Publicidad",
+                <Megaphone size={16} />,
+                pathname === "/admin" && adminTab === "ads",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=cover",
+                "Portada",
+                <ImageIcon size={16} />,
+                pathname === "/admin" && adminTab === "cover",
+                true,
+              )}
+            </div>
+            <div className="platform-sidebar__section">
+              <div className="platform-sidebar__section-label">Configuración</div>
+              {navLink(
+                "/admin?tab=admins",
+                "Administradores",
+                <Crown size={16} />,
+                pathname === "/admin" && adminTab === "admins",
+                true,
+              )}
+            </div>
           </div>
         )}
       </nav>
@@ -359,7 +368,7 @@ export default function PlatformLayout({
                 to="/registrar-equipo#formulario"
                 onClick={() => onDestinationClick("/registrar-equipo#formulario")}
               >
-                Registrar equipo
+                Registra tu equipo
               </Link>
             </nav>
             {hasAnySocial(platformConfig?.social) && (

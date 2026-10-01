@@ -63,7 +63,7 @@ export default function RegisterTeam() {
     <PlatformLayout flush>
       <PageHeroBanner size="short" />
       <PublicFormBand>
-        <h1>Registrar equipo</h1>
+        <h1>Registra tu equipo</h1>
         <p>
           Completa el formulario para solicitar la inscripción de tu equipo. Te notificaremos una vez que sea aprobada.
         </p>

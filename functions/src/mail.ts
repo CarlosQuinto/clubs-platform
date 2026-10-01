@@ -308,7 +308,7 @@ export function teamRejectedEmailHtml(opts: {
       <p>${hello}</p>
       <p>Revisamos la solicitud de <strong>${teamName}</strong> en <strong>${platformName}</strong> y por ahora no quedó registrada.</p>
       <p>Si quieres, puedes enviar una nueva solicitud ${contact}</p>
-      <p style="margin:24px 0">${mailButton(opts.actionUrl, "Registrar equipo")}</p>
+      <p style="margin:24px 0">${mailButton(opts.actionUrl, "Registra tu equipo")}</p>
       <p>Gracias,</p>
       <p>El equipo de ${platformName}</p>
     </div>
@@ -333,7 +333,7 @@ export function teamRejectedEmailText(opts: {
     "",
     `Si quieres, puedes enviar una nueva solicitud ${contact}`,
     "",
-    "Registrar equipo:",
+    "Registra tu equipo:",
     opts.actionUrl,
     "",
     "Gracias,",

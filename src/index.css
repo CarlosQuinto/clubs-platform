@@ -224,6 +224,99 @@
   color: var(--gray-700) !important;
 }
 
+.contact-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-bottom: 1.15rem;
+}
+
+.contact-intro__mark {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  background: #f3ead6;
+  color: var(--navy-900);
+}
+
+.contact-intro__spark {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.2rem;
+  color: var(--amber);
+}
+
+.contact-intro h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.contact-intro p {
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+  color: var(--gray-600);
+  line-height: 1.4;
+}
+
+.contact-intro__link {
+  color: var(--navy-900);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.contact-intro__link:hover {
+  color: var(--amber);
+}
+
+.contact-intro__rule {
+  display: block;
+  width: 2.35rem;
+  height: 3px;
+  margin-top: 0.55rem;
+  border-radius: 999px;
+  background: var(--amber);
+}
+
+.contact-field {
+  position: relative;
+  display: block;
+}
+
+.contact-field__icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 0.95rem;
+  z-index: 1;
+  display: flex;
+  color: #8d877c;
+  pointer-events: none;
+}
+
+.contact-form .contact-field input,
+.contact-form .contact-field select,
+.contact-form .contact-field textarea {
+  width: 100%;
+  background: #fff !important;
+  border: 1px solid #e3dccf !important;
+  padding-left: 2.55rem !important;
+}
+
+.contact-form .contact-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.4rem !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238d877c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.9rem center !important;
+  background-size: 1rem !important;
+}
+
 .public-consent {
   display: flex;
   align-items: flex-start;
@@ -700,13 +793,23 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  min-height: 2.15rem;
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.8rem;
   font-weight: 800;
   text-decoration: none;
-  padding: 0.52rem 0.65rem;
+  padding: 0.4rem 0.65rem;
   border-radius: 8px;
   line-height: 1.2;
+}
+
+.platform-nav__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: inherit;
 }
 
 .platform-nav__link:hover {
@@ -742,6 +845,25 @@
 
 .platform-sidebar__label--sections {
   display: none;
+}
+
+.platform-sidebar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.platform-sidebar__section + .platform-sidebar__section {
+  margin-top: 0.85rem;
+}
+
+.platform-sidebar__section-label {
+  padding: 0.15rem 0.65rem 0.2rem;
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
 }
 
 .platform-sidebar__foot {

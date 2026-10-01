@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { addDoc, serverTimestamp } from "firebase/firestore";
+import { Mail, MessageCircle, Phone, Sparkles, User } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import PageHeroBanner from "../components/platform/PageHeroBanner";
 import PublicFormBand from "../components/platform/PublicFormBand";
@@ -15,11 +17,18 @@ const TOPICS = [
   { value: "otro", label: "Otro" },
 ];
 
+function FieldIcon({ children }: { children: ReactNode }) {
+  return (
+    <span className="contact-field__icon" aria-hidden="true">
+      {children}
+    </span>
+  );
+}
+
 export default function Contact() {
   const { platformConfig } = useAuth();
   const whatsapp = platformConfig?.social?.whatsapp?.trim() || "";
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [topic, setTopic] = useState("");
@@ -32,15 +41,12 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const cleanFirst = firstName.trim();
-    const cleanLast = lastName.trim();
-    const cleanName = `${cleanFirst} ${cleanLast}`.trim();
+    const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
     const cleanTopic = TOPICS.find((t) => t.value === topic)?.label || "";
     const cleanMessage = message.trim();
-    if (cleanFirst.length < 2) return setError("Escribe tu nombre.");
-    if (cleanLast.length < 2) return setError("Escribe tu apellido.");
+    if (cleanName.length < 2) return setError("Escribe tu nombre.");
     if (cleanPhone.replace(/\D/g, "").length < 7) {
       return setError("El teléfono no es válido.");
     }
@@ -72,70 +78,107 @@ export default function Contact() {
     <PlatformLayout flush>
       <PageHeroBanner size="short" />
       <PublicFormBand>
-        <h1>
-          Pide información sobre los torneos, renta una cancha o consulta
-          disponibilidad.
-        </h1>
+        <div className="contact-intro">
+          <span className="contact-intro__mark" aria-hidden="true">
+            <MessageCircle size={22} strokeWidth={2.25} />
+            <Sparkles className="contact-intro__spark" size={14} />
+          </span>
+          <div>
+            <h1>¿Tienes alguna duda?</h1>
+            <p>
+              Solicita información sobre los torneos,{" "}
+              <Link
+                to="/canchas"
+                className="contact-intro__link"
+                onClick={() => window.scrollTo(0, 0)}
+              >
+                renta de canchas
+              </Link>{" "}
+              y disponibilidad.
+            </p>
+            <span className="contact-intro__rule" />
+          </div>
+        </div>
         {sent ? (
           <p className="public-form-ok">
             Mensaje enviado. Te contactamos pronto.
           </p>
         ) : (
-          <form className="public-stack-form" onSubmit={handleSubmit}>
-            <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Nombre"
-              required
-              maxLength={59}
-              autoComplete="given-name"
-            />
-            <input
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="Apellido"
-              required
-              maxLength={59}
-              autoComplete="family-name"
-            />
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Teléfono"
-              required
-              maxLength={29}
-              autoComplete="tel"
-            />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              required
-              maxLength={119}
-              autoComplete="email"
-            />
-            <select
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              required
-            >
-              <option value="">Tema de la consulta</option>
-              {TOPICS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-            <textarea
-              rows={5}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Mensaje"
-              required
-              maxLength={1999}
-            />
+          <form
+            className="public-stack-form contact-form"
+            onSubmit={handleSubmit}
+          >
+            <label className="contact-field">
+              <FieldIcon>
+                <User size={16} />
+              </FieldIcon>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nombre"
+                required
+                maxLength={119}
+                autoComplete="name"
+              />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <Phone size={16} />
+              </FieldIcon>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Teléfono"
+                required
+                maxLength={29}
+                autoComplete="tel"
+              />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <Mail size={16} />
+              </FieldIcon>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                required
+                maxLength={119}
+                autoComplete="email"
+              />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <MessageCircle size={16} />
+              </FieldIcon>
+              <select
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                required
+              >
+                <option value="">Tema</option>
+                {TOPICS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <MessageCircle size={16} />
+              </FieldIcon>
+              <textarea
+                rows={5}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Mensaje"
+                required
+                maxLength={1999}
+              />
+            </label>
             <label className="public-consent">
               <input
                 type="checkbox"
@@ -150,7 +193,7 @@ export default function Contact() {
             </label>
             {error && <p className="public-form-error">{error}</p>}
             <button type="submit" className="public-submit" disabled={busy}>
-              {busy ? "Enviando..." : "Envía"}
+              {busy ? "Enviando..." : "Enviar"}
             </button>
           </form>
         )}

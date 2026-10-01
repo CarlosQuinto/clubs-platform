@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 
-/** Banda gris para formularios públicos (contacto / registrar equipo). */
+/** Banda gris para formularios públicos (contacto / Registra tu equipo). */
 export default function PublicFormBand({ children }: { children: ReactNode }) {
   const { hash } = useLocation();
 
