@@ -1331,7 +1331,7 @@ function ClubShell() {
                     (sectionReady("agenda") ? (
                     <>
                     {perms.canEditAgenda && (
-                      <div style={{ padding: "1rem 1rem 0" }}>
+                      <div style={{ marginBottom: "1.5rem" }}>
                         <AvailabilityPanel clubId={clubId} />
                       </div>
                     )}

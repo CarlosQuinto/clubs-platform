@@ -162,26 +162,29 @@ export default function MatchScheduleForm({
   return (
     <div className="match-schedule">
       {suggestions.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-          {suggestions.map((slot) => (
-            <button
-              key={`${slot.date}-${slot.time}-${slot.courtId}`}
-              type="button"
-              onClick={() => applySuggestion(slot)}
-              style={{
-                border: `1px solid ${C.gray200}`,
-                background: C.gray50,
-                color: C.navy900,
-                borderRadius: 8,
-                padding: "0.3rem 0.5rem",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {shortSlotLabel(slot.date, slot.time)} · {slot.courtName}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
+          <span style={matchFieldLabel}>Fechas sugeridas</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.28rem" }}>
+            {suggestions.map((slot) => (
+              <button
+                key={`${slot.date}-${slot.time}-${slot.courtId}`}
+                type="button"
+                onClick={() => applySuggestion(slot)}
+                style={{
+                  border: "1px solid rgba(229, 223, 211, 0.7)",
+                  background: "rgba(252, 250, 248, 0.55)",
+                  color: C.navy900,
+                  borderRadius: 7,
+                  padding: "0.16rem 0.38rem",
+                  fontSize: "0.62rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {shortSlotLabel(slot.date, slot.time)} · {slot.courtName}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <div className="match-edit-when">
