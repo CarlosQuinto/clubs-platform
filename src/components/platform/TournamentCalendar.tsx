@@ -101,12 +101,6 @@ export default function TournamentCalendar({
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-          {isAdmin && (
-            <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray500 }}>
-              Toca Editar para fecha, hora y sede. Marcador abre goles,
-              asistencias y tarjetas.
-            </p>
-          )}
           {visibleRounds.map((group) => (
             <RoundBlock
               key={group.round}

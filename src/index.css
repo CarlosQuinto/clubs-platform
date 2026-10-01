@@ -1823,6 +1823,7 @@ input[type="time"] {
 .match-stats-body {
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 0.9rem 1rem 0.35rem;
   min-height: 0;
 }

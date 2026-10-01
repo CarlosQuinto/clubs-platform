@@ -171,9 +171,9 @@ export default function MatchStatsEditor({
         zIndex: 10000,
         backgroundColor: "rgba(20, 18, 15, 0.55)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
-        padding: "0.75rem",
+        padding: "4vh 0.75rem 0.75rem",
       }}
     >
       <div
@@ -181,7 +181,7 @@ export default function MatchStatsEditor({
         className="match-stats-panel"
         style={{
           width: "min(800px, 100%)",
-          maxHeight: "92vh",
+          maxHeight: "calc(100dvh - 4vh - 1.5rem)",
           backgroundColor: C.white,
           borderRadius: RADIUS.xl,
           boxShadow: SHADOWS.lg,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Shield, Users } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import AdSlot from "../components/platform/AdSlot";
@@ -22,6 +22,23 @@ import {
   rankingClubIds,
 } from "../lib/stats";
 import type { ClubSummary, StatsScope } from "../lib/types";
+
+const DESKTOP_QUERY = "(min-width: 800px)";
+const DESKTOP_PAGE_SIZE = 15;
+
+function useDirectoryPageSize() {
+  const [wide, setWide] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(DESKTOP_QUERY).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(DESKTOP_QUERY);
+    const onChange = () => setWide(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return wide ? DESKTOP_PAGE_SIZE : CLUB_PAGE_SIZE;
+}
 
 function fold(value: string) {
   return value
@@ -70,12 +87,24 @@ export default function Teams() {
     return computeStandings(scopedMatches, ids);
   }, [scopedTournaments, scopedMatches]);
 
-  const [dirLimit, setDirLimit] = useState(CLUB_PAGE_SIZE);
+  const pageSize = useDirectoryPageSize();
   const [query, setQuery] = useState("");
+  const [dirLimit, setDirLimit] = useState(pageSize);
+  const prevQuery = useRef(query);
+  const prevPageSize = useRef(pageSize);
 
   useEffect(() => {
-    setDirLimit(CLUB_PAGE_SIZE);
-  }, [query]);
+    if (prevQuery.current !== query) {
+      prevQuery.current = query;
+      prevPageSize.current = pageSize;
+      setDirLimit(pageSize);
+      return;
+    }
+    if (prevPageSize.current !== pageSize) {
+      prevPageSize.current = pageSize;
+      setDirLimit((count) => Math.max(count, pageSize));
+    }
+  }, [query, pageSize]);
 
   const directory = useMemo(() => {
     const q = fold(query);
@@ -123,7 +152,7 @@ export default function Teams() {
                   : undefined
               }
               hasMore={directory.length > dirLimit}
-              onMore={() => setDirLimit((n) => n + CLUB_PAGE_SIZE)}
+              onMore={() => setDirLimit((n) => n + pageSize)}
             />
           </SectionCard>
 
