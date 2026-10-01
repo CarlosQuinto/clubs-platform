@@ -510,7 +510,7 @@
 }
 
 .landing-hero__copy.is-short {
-  padding: 1.4rem 1.1rem 2.6rem;
+  padding: 1.1rem 1.1rem 1.3rem;
 }
 
 .landing-hero__copy.is-short h1 {
@@ -524,9 +524,14 @@
   max-width: 32rem;
 }
 
+.landing-hero__copy.is-legend h1 {
+  max-width: 18em;
+  font-size: clamp(1.25rem, 3.6vw, 2.15rem);
+}
+
 .landing-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content max-content;
   gap: 0.7rem;
   justify-content: center;
   margin-top: 1.5rem;
@@ -536,6 +541,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   padding: 0.72rem 1.4rem;
   border-radius: 999px;
   border: 2px solid #fff;
@@ -549,6 +555,10 @@
 .landing-hero__btn:hover {
   background: #fff;
   color: #121212;
+}
+
+.landing-hero__btn--rent {
+  grid-column: 1 / -1;
 }
 
 .landing-hero__edit {

@@ -11,30 +11,45 @@ import {
 export default function PageHeroBanner({
   children,
   size = "full",
+  images: imagesOverride,
+  headline: headlineOverride,
+  tagline: taglineOverride,
 }: {
   children?: ReactNode;
   size?: "full" | "short";
+  images?: string[];
+  headline?: string;
+  tagline?: string | null;
 }) {
   const { platformConfig } = useAuth();
   const images =
-    platformConfig?.heroImages && platformConfig.heroImages.length > 0
-      ? platformConfig.heroImages
-      : DEFAULT_PLATFORM_HERO_IMAGES;
-  const headline = platformConfig?.headline?.trim() || PLATFORM_HEADLINE;
-  const tagline = platformConfig?.tagline?.trim() || PLATFORM_DESCRIPTION;
+    imagesOverride && imagesOverride.length > 0
+      ? imagesOverride
+      : platformConfig?.heroImages && platformConfig.heroImages.length > 0
+        ? platformConfig.heroImages
+        : DEFAULT_PLATFORM_HERO_IMAGES;
+  const headline = headlineOverride?.trim() || platformConfig?.headline?.trim() || PLATFORM_HEADLINE;
+  const tagline =
+    taglineOverride === null
+      ? ""
+      : taglineOverride?.trim() || platformConfig?.tagline?.trim() || PLATFORM_DESCRIPTION;
 
   return (
     <div className="landing-hero">
       <HeroCarousel images={images} variant="full" size={size} arrows={false}>
         <div
           className={
-            size === "short"
-              ? "landing-hero__copy is-short"
-              : "landing-hero__copy"
+            [
+              "landing-hero__copy",
+              size === "short" ? "is-short" : "",
+              headlineOverride ? "is-legend" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
           }
         >
           <h1>{headline}</h1>
-          <p>{tagline}</p>
+          {tagline ? <p>{tagline}</p> : null}
           {children}
         </div>
       </HeroCarousel>

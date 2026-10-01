@@ -184,6 +184,11 @@ export default function Landing() {
               <Link to="/registrar-equipo#formulario" className="landing-hero__btn">
                 Registrar equipo
               </Link>
+              {platformConfig?.courtsEnabled === true && (
+                <Link to="/canchas" className="landing-hero__btn landing-hero__btn--rent">
+                  Renta tu cancha
+                </Link>
+              )}
             </div>
           </div>
         </HeroCarousel>

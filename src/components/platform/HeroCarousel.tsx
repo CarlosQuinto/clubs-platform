@@ -21,10 +21,10 @@ export default function HeroCarousel({
   const short = full && size === "short";
   const height = full
     ? short
-      ? "min(42vh, 420px)"
+      ? "min(30vh, 300px)"
       : "min(78vh, 760px)"
     : "min(420px, 56vw)";
-  const minHeight = full ? (short ? 240 : 420) : undefined;
+  const minHeight = full ? (short ? 190 : 420) : undefined;
 
   useEffect(() => {
     if (total < 2) return;
@@ -75,59 +75,24 @@ export default function HeroCarousel({
         }}
       />
       {children}
-      {total > 1 && (
+      {total > 1 && arrows && (
         <>
-          {arrows && (
-            <>
-              <button
-                type="button"
-                aria-label="Anterior"
-                onClick={() => setIndex((i) => (i - 1 + total) % total)}
-                style={navBtn("left")}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                type="button"
-                aria-label="Siguiente"
-                onClick={() => setIndex((i) => (i + 1) % total)}
-                style={navBtn("right")}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </>
-          )}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 14,
-              left: 0,
-              right: 0,
-              display: "flex",
-              justifyContent: "center",
-              gap: 6,
-              zIndex: 3,
-            }}
+          <button
+            type="button"
+            aria-label="Anterior"
+            onClick={() => setIndex((i) => (i - 1 + total) % total)}
+            style={navBtn("left")}
           >
-            {images.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setIndex(i)}
-                aria-label={`Imagen ${i + 1}`}
-                style={{
-                  width: i === index ? 18 : 8,
-                  height: 8,
-                  borderRadius: 99,
-                  border: "none",
-                  background: i === index ? C.amber : "rgba(255,255,255,0.45)",
-                  cursor: "pointer",
-                  padding: 0,
-                  transition: "width 0.2s ease",
-                }}
-              />
-            ))}
-          </div>
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Siguiente"
+            onClick={() => setIndex((i) => (i + 1) % total)}
+            style={navBtn("right")}
+          >
+            <ChevronRight size={18} />
+          </button>
         </>
       )}
     </section>

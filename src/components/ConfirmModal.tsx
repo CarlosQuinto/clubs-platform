@@ -12,6 +12,7 @@ export default function ConfirmModal({
   danger = false,
   busy = false,
   confirmDisabled = false,
+  dangerAction,
   onConfirm,
   onCancel,
 }: {
@@ -24,6 +25,7 @@ export default function ConfirmModal({
   danger?: boolean;
   busy?: boolean;
   confirmDisabled?: boolean;
+  dangerAction?: { label: string; onClick: () => void };
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -92,6 +94,17 @@ export default function ConfirmModal({
             marginTop: "1.15rem",
           }}
         >
+          {dangerAction && (
+            <PrimaryButton
+              type="button"
+              variant="red"
+              disabled={busy}
+              onClick={dangerAction.onClick}
+              style={{ marginRight: "auto" }}
+            >
+              {dangerAction.label}
+            </PrimaryButton>
+          )}
           <SecondaryButton type="button" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </SecondaryButton>
