@@ -458,12 +458,93 @@
   background: var(--gray-50);
 }
 
-.public-clubs-band h2 {
+.public-clubs-band__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
   margin: 0 auto 1rem;
   max-width: min(86rem, 100%);
+}
+
+.public-clubs-band h2 {
+  margin: 0;
   font-size: 1.15rem;
   font-weight: 900;
   color: var(--navy-900);
+}
+
+.public-clubs-band__all {
+  flex-shrink: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--navy-600);
+  text-decoration: none;
+}
+
+.public-clubs-band__all:hover {
+  color: var(--navy-900);
+  text-decoration: underline;
+}
+
+.public-clubs-band .club-dir-marquee {
+  overflow: hidden;
+  padding-bottom: 0.15rem;
+}
+
+.public-clubs-band .club-dir-grid.is-marquee {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: max-content;
+  overflow: visible;
+  animation: club-dir-marquee 40s linear infinite;
+}
+
+.public-clubs-band .club-dir-marquee:hover .club-dir-grid.is-marquee,
+.public-clubs-band .club-dir-grid.is-marquee:focus-within {
+  animation-play-state: paused;
+}
+
+.public-clubs-band .club-dir-marquee__set {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.public-clubs-band .club-dir-grid.is-marquee .club-dir-card {
+  flex: 0 0 min(17.5rem, 82vw);
+  margin-right: 0.65rem;
+}
+
+@keyframes club-dir-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 899px) {
+  .public-clubs-band .club-dir-marquee {
+    margin-right: -1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-clubs-band .club-dir-grid.is-marquee {
+    animation: none;
+  }
+
+  .public-clubs-band .club-dir-marquee {
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .public-clubs-band .club-dir-marquee::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .club-dir-grid {
@@ -1133,8 +1214,8 @@
     padding: 2.25rem 1.75rem 2.8rem;
   }
 
-  .public-clubs-band h2,
-  .public-clubs-band .club-dir-grid,
+  .public-clubs-band__head,
+  .public-clubs-band .club-dir-marquee,
   .public-clubs-band .club-dir-empty {
     max-width: min(86rem, calc(100% - 3.5rem));
     margin-left: auto;

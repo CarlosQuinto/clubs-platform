@@ -49,6 +49,48 @@ export function LoadMoreButton({
   );
 }
 
+function DirectoryCard({
+  club,
+  localityName,
+  clone,
+}: {
+  club: ClubSummary;
+  localityName: (club: ClubSummary) => string;
+  clone?: boolean;
+}) {
+  const phone = club.presidentPhone?.trim() || "";
+  return (
+    <article className="club-dir-card">
+      <Link
+        to={`/${club.slug || club.id}`}
+        className="club-dir-card__main"
+        tabIndex={clone ? -1 : undefined}
+      >
+        <div className="club-dir-card__logo">
+          <img src={club.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
+        </div>
+        <div className="club-dir-card__copy">
+          <div className="club-dir-card__name">{club.name}</div>
+          <div className="club-dir-card__meta">
+            {localityName(club) || `/${club.slug}`}
+          </div>
+        </div>
+        <ChevronRight size={16} color={C.gray400} />
+      </Link>
+      {phone ? (
+        <a
+          className="club-dir-card__phone"
+          href={`tel:${phone.replace(/\s+/g, "")}`}
+          tabIndex={clone ? -1 : undefined}
+        >
+          <Phone size={13} />
+          Presidente: {phone}
+        </a>
+      ) : null}
+    </article>
+  );
+}
+
 export default function ClubDirectoryList({
   clubs,
   localityName,
@@ -56,6 +98,7 @@ export default function ClubDirectoryList({
   onMore,
   moreTo,
   emptyLabel,
+  marquee,
 }: {
   clubs: ClubSummary[];
   localityName: (club: ClubSummary) => string;
@@ -63,6 +106,7 @@ export default function ClubDirectoryList({
   onMore?: () => void;
   moreTo?: string;
   emptyLabel?: string;
+  marquee?: boolean;
 }) {
   if (clubs.length === 0) {
     return (
@@ -73,38 +117,32 @@ export default function ClubDirectoryList({
     );
   }
 
+  const cards = (clone: boolean) =>
+    clubs.map((club) => (
+      <DirectoryCard
+        key={`${club.id}-${clone ? "b" : "a"}`}
+        club={club}
+        localityName={localityName}
+        clone={clone}
+      />
+    ));
+
+  if (marquee) {
+    return (
+      <div className="club-dir-marquee">
+        <div className="club-dir-grid is-marquee">
+          <div className="club-dir-marquee__set">{cards(false)}</div>
+          <div className="club-dir-marquee__set" aria-hidden="true">
+            {cards(true)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="club-dir-grid">
-        {clubs.map((club) => {
-          const phone = club.presidentPhone?.trim() || "";
-          return (
-            <article key={club.id} className="club-dir-card">
-              <Link to={`/${club.slug || club.id}`} className="club-dir-card__main">
-                <div className="club-dir-card__logo">
-                  <img src={club.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
-                </div>
-                <div className="club-dir-card__copy">
-                  <div className="club-dir-card__name">{club.name}</div>
-                  <div className="club-dir-card__meta">
-                    {localityName(club) || `/${club.slug}`}
-                  </div>
-                </div>
-                <ChevronRight size={16} color={C.gray400} />
-              </Link>
-              {phone ? (
-                <a
-                  className="club-dir-card__phone"
-                  href={`tel:${phone.replace(/\s+/g, "")}`}
-                >
-                  <Phone size={13} />
-                  Presidente: {phone}
-                </a>
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
+      <div className="club-dir-grid">{cards(false)}</div>
       {hasMore && (moreTo || onMore) ? (
         <LoadMoreButton onClick={onMore} to={moreTo} />
       ) : null}

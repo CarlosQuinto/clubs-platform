@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import PageHeroBanner from "../components/platform/PageHeroBanner";
 import PublicFormBand from "../components/platform/PublicFormBand";
-import ClubDirectoryList, {
-  CLUB_PAGE_SIZE,
-} from "../components/platform/ClubDirectoryList";
+import ClubDirectoryList from "../components/platform/ClubDirectoryList";
 import { usePlatformCatalog } from "../hooks/usePlatformCatalog";
 import { teamApplicationsCol } from "../lib/paths";
 import { EMAIL_RE } from "../lib/social";
@@ -127,19 +126,25 @@ export default function RegisterTeam() {
           </form>
         )}
       </PublicFormBand>
-      <section className="public-clubs-band">
-        <h2>Únete a un equipo</h2>
-        <ClubDirectoryList
-          clubs={visibleClubs.slice(0, CLUB_PAGE_SIZE)}
-          localityName={(club) =>
-            localities.find((l) => l.id === club.localityId)?.name ||
-            club.location ||
-            ""
-          }
-          hasMore={visibleClubs.length > CLUB_PAGE_SIZE}
-          moreTo="/equipos"
-        />
-      </section>
+      {visibleClubs.length > 0 && (
+        <section className="public-clubs-band">
+          <div className="public-clubs-band__head">
+            <h2>Únete a un equipo</h2>
+            <Link to="/equipos" className="public-clubs-band__all">
+              Ver todos →
+            </Link>
+          </div>
+          <ClubDirectoryList
+            marquee
+            clubs={visibleClubs.slice(0, 10)}
+            localityName={(club) =>
+              localities.find((l) => l.id === club.localityId)?.name ||
+              club.location ||
+              ""
+            }
+          />
+        </section>
+      )}
     </PlatformLayout>
   );
 }
