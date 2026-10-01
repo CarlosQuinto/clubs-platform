@@ -206,21 +206,131 @@ async function commitInChunks(
   }
 }
 
+export type LateEntryChoice = "walkover" | "play";
+
+/** Jornadas en las que todos los partidos, sin contar a los clubes nuevos, ya se jugaron. */
+export function completedRounds(matches: Match[], newClubIds: Iterable<string>) {
+  const fresh = new Set(newClubIds);
+  const map = new Map<string, Match[]>();
+  for (const m of matches) {
+    if (fresh.has(m.homeClubId) || fresh.has(m.awayClubId)) continue;
+    const key = m.round?.trim() || "—";
+    const list = map.get(key) || [];
+    list.push(m);
+    map.set(key, list);
+  }
+  const done = new Set<string>();
+  for (const [round, list] of map) {
+    if (list.length > 0 && list.every(isPlayed)) done.add(round);
+  }
+  return done;
+}
+
+/** El cruce cae en una jornada ya completa y solo uno de los dos acaba de entrar. */
+export function isLateWalkoverFixture(
+  fixture: PlannedFixture,
+  newClubIds: Set<string>,
+  doneRounds: Set<string>,
+) {
+  if (!doneRounds.has(fixture.round)) return false;
+  const homeNew = newClubIds.has(fixture.homeClubId);
+  const awayNew = newClubIds.has(fixture.awayClubId);
+  return homeNew !== awayNew;
+}
+
+function walkoverScores(
+  homeClubId: string,
+  awayClubId: string,
+  newClubIds: Set<string>,
+) {
+  const newIsHome = newClubIds.has(homeClubId);
+  return { homeScore: newIsHome ? 0 : 3, awayScore: newIsHome ? 3 : 0 };
+}
+
+function coversFixture(m: Match, fixture: PlannedFixture, singleLeg: boolean) {
+  if (singleLeg) {
+    return unorderedKey(m.homeClubId, m.awayClubId) === unorderedKey(fixture.homeClubId, fixture.awayClubId);
+  }
+  return samePair(m, fixture);
+}
+
+/**
+ * Cruces contra un equipo que ya estaba, en jornadas ya completas.
+ * Si los dos acaban de entrar, no entra: ese partido se juega.
+ */
+export function lateWalkoverFixtures(
+  tournament: Tournament,
+  matches: Match[],
+  newClubIds: string[],
+): PlannedFixture[] {
+  if (newClubIds.length === 0 || tournament.clubIds.length < 2) return [];
+  const ofTournament = matches.filter((m) => m.tournamentId === tournament.id);
+  const fresh = new Set(newClubIds);
+  const done = completedRounds(ofTournament, fresh);
+  if (done.size === 0) return [];
+  const single = tournamentLegs(tournament) === 1;
+  const plan = generateRoundRobin(tournament.clubIds, tournamentLegs(tournament));
+  return plan.filter((fixture) => {
+    if (!isLateWalkoverFixture(fixture, fresh, done)) return false;
+    const existing = ofTournament.find((m) => coversFixture(m, fixture, single));
+    return !existing || !isPlayed(existing);
+  });
+}
+
 /**
  * Crea los partidos que faltan y borra los que ya no aplican
  * (club dado de baja, paso a 1 partido, duplicados).
+ * `walkover` otorga 3-0 al equipo que ya estaba en las jornadas completas.
  */
 export async function syncTournamentFixtures(
   tournament: Tournament,
   matches: Match[],
+  options?: { lateEntry?: LateEntryChoice; newClubIds?: string[] },
 ) {
+  const ofTournament = matches.filter((m) => m.tournamentId === tournament.id);
   const { toCreate, toDelete } = diffFixtures(tournament, matches);
-  if (toCreate.length === 0 && toDelete.length === 0) return;
+  const fresh = new Set(options?.newClubIds ?? []);
+  const award = options?.lateEntry === "walkover" && fresh.size > 0;
+  const done = award ? completedRounds(ofTournament, fresh) : new Set<string>();
+  const single = tournamentLegs(tournament) === 1;
+  const plan = award
+    ? generateRoundRobin(tournament.clubIds, tournamentLegs(tournament))
+    : [];
+  const qualifies = (fixture: PlannedFixture) =>
+    isLateWalkoverFixture(fixture, fresh, done);
+  const deleting = new Set(toDelete.map((m) => m.id));
 
   const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
 
+  if (award) {
+    for (const match of ofTournament) {
+      if (isPlayed(match) || deleting.has(match.id)) continue;
+      const fixture = plan.find((item) => qualifies(item) && coversFixture(match, item, single));
+      if (!fixture) continue;
+      const scores = walkoverScores(match.homeClubId, match.awayClubId, fresh);
+      ops.push((batch) =>
+        batch.update(matchRef(match.id), {
+          round: fixture.round,
+          status: "played",
+          homeScore: scores.homeScore,
+          awayScore: scores.awayScore,
+          walkover: true,
+          date: "",
+          time: "",
+          venue: "",
+          courtId: "",
+          sides: {},
+        }),
+      );
+    }
+  }
+
   for (const fixture of toCreate) {
     const ref = doc(matchesCol());
+    const awarded = award && qualifies(fixture);
+    const scores = awarded
+      ? walkoverScores(fixture.homeClubId, fixture.awayClubId, fresh)
+      : null;
     ops.push((batch) =>
       batch.set(ref, {
         tournamentId: tournament.id,
@@ -233,7 +343,10 @@ export async function syncTournamentFixtures(
         date: "",
         time: "",
         venue: "",
-        status: "unscheduled",
+        status: awarded ? "played" : "unscheduled",
+        ...(scores
+          ? { homeScore: scores.homeScore, awayScore: scores.awayScore, walkover: true }
+          : {}),
         sides: {},
         createdAt: serverTimestamp(),
       }),

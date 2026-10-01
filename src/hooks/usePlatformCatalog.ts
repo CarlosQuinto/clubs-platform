@@ -27,6 +27,7 @@ import type {
   StatsScope,
   Tournament,
 } from "../lib/types";
+import { isPlayed } from "../lib/stats";
 import { isoDate } from "../utils/helpers";
 
 interface Locality {
@@ -544,6 +545,44 @@ export const useScheduledMatches = () =>
 
 /** Todos los partidos oficiales. */
 export const useAllMatches = () => useMatchesQuery(() => query(matchesCol()), []);
+
+/** Ids de torneos con al menos un partido jugado. `null` mientras carga o si está apagado. */
+export function usePlayedTournamentIds(enabled: boolean) {
+  const [ids, setIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setIds(null);
+      return;
+    }
+    setIds(null);
+    const unsub = onSnapshot(
+      query(matchesCol(), where("status", "==", "played")),
+      (snap) => {
+        const next = new Set<string>();
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const match = {
+            id: d.id,
+            status: "played",
+            homeScore: data.homeScore,
+            awayScore: data.awayScore,
+            tournamentId: typeof data.tournamentId === "string" ? data.tournamentId : "",
+          } as Match;
+          if (isPlayed(match) && match.tournamentId) next.add(match.tournamentId);
+        });
+        setIds(next);
+      },
+      (err) => {
+        console.error("Error cargando partidos jugados:", err);
+        setIds(new Set());
+      },
+    );
+    return () => unsub();
+  }, [enabled]);
+
+  return ids;
+}
 
 /** Partidos con fecha de hoy en adelante, sin historial jugado. */
 export const useFutureMatches = () =>

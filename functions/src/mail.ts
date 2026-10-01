@@ -63,6 +63,72 @@ export function inviteEmailHtml(opts: {
   `;
 }
 
+export function platformAdminInviteEmailHtml(opts: {
+  kind: "signup" | "accept";
+  platformName: string;
+  actionUrl: string;
+}) {
+  const platformName = escapeHtml(opts.platformName);
+  const body =
+    opts.kind === "signup"
+      ? `
+      <p>Hola:</p>
+      <p>Te invitaron a administrar <strong>${platformName}</strong>.</p>
+      <p>Todavía no tienes cuenta. Créala con este mismo correo para recibir acceso de administrador.</p>
+      <p style="margin:24px 0">${mailButton(opts.actionUrl, "Crear cuenta")}</p>
+    `
+      : `
+      <p>Hola:</p>
+      <p>Te invitaron a administrar <strong>${platformName}</strong>.</p>
+      <p>Entra con este mismo correo para aceptar el acceso.</p>
+      <p style="margin:24px 0">${mailButton(opts.actionUrl, "Entrar")}</p>
+    `;
+
+  return `
+    <div style="font-family:Inter,system-ui,sans-serif;color:#292621;line-height:1.5;max-width:520px">
+      ${body}
+      ${mailClose(platformName)}
+    </div>
+  `;
+}
+
+export function platformAdminInviteEmailText(opts: {
+  kind: "signup" | "accept";
+  platformName: string;
+  actionUrl: string;
+}) {
+  const intro =
+    opts.kind === "signup"
+      ? [
+          `Te invitaron a administrar ${opts.platformName}.`,
+          "",
+          "Todavía no tienes cuenta. Créala con este mismo correo para recibir acceso de administrador.",
+          "",
+          "Crear cuenta:",
+          opts.actionUrl,
+        ]
+      : [
+          `Te invitaron a administrar ${opts.platformName}.`,
+          "",
+          "Entra con este mismo correo para aceptar el acceso.",
+          "",
+          "Entrar:",
+          opts.actionUrl,
+        ];
+
+  return [
+    "Hola:",
+    "",
+    ...intro,
+    "",
+    "Si no esperabas este correo, puedes ignorarlo.",
+    "",
+    "Gracias,",
+    "",
+    `El equipo de ${opts.platformName}`,
+  ].join("\n");
+}
+
 export function inviteEmailText(opts: {
   kind: "signup" | "accept";
   platformName: string;

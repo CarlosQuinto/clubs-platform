@@ -7,6 +7,8 @@ import {
   gmailConfigured,
   inviteEmailHtml,
   inviteEmailText,
+  platformAdminInviteEmailHtml,
+  platformAdminInviteEmailText,
   passwordResetEmailHtml,
   passwordResetEmailText,
   roleLabel,
@@ -472,6 +474,77 @@ async function platformDisplayName() {
   const name = String(snap.data()?.name || "").trim();
   return name || DEFAULT_PLATFORM_NAME;
 }
+
+export const sendPlatformAdminInvite = onCall(CALLABLE, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Inicia sesión para invitar.");
+  }
+  await assertSuperAdmin(request.auth.uid);
+
+  const email = String(request.data?.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpsError("invalid-argument", "El correo no es válido.");
+  }
+
+  const config = await db.doc("platform/config").get();
+  const adminEmails = (config.data()?.superAdminEmails || {}) as Record<string, string>;
+  if (Object.values(adminEmails).some((value) => String(value).toLowerCase() === email)) {
+    throw new HttpsError("already-exists", "Ese correo ya es administrador.");
+  }
+
+  const key = emailKey(email);
+  const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
+  const actionUrl =
+    kind === "signup"
+      ? `${APP_URL}/registro?email=${encodeURIComponent(email)}`
+      : `${APP_URL}/login`;
+
+  await db.doc(`platform/config/invites/${key}`).set(
+    {
+      email,
+      invitedBy: request.auth.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  if (kind === "signup") {
+    await db.doc(`signupInvites/${key}`).set(
+      {
+        email,
+        platform: true,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
+  const platformName = await platformDisplayName();
+  const content = { kind, platformName, actionUrl };
+  const subject =
+    kind === "signup"
+      ? `Te invitaron a administrar ${platformName}`
+      : `Acepta administrar ${platformName}`;
+  const html = platformAdminInviteEmailHtml(content);
+  const text = platformAdminInviteEmailText(content);
+
+  await db.collection("mail").add({
+    to: [email],
+    message: { subject, html },
+    createdAt: FieldValue.serverTimestamp(),
+    meta: { kind, platform: true },
+  });
+
+  const mailed = await sendGmail({
+    to: email,
+    subject,
+    html,
+    text,
+    fromName: platformName,
+  });
+
+  return { kind, mailed, url: actionUrl };
+});
 
 async function sendCustomPasswordReset(email: string) {
   const platformName = await platformDisplayName();

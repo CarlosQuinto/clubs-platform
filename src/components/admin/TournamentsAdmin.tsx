@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trophy } from "lucide-react";
 import { addDoc, serverTimestamp } from "firebase/firestore";
+import { clampIsoDate, todayIso } from "../../lib/courts";
 import { categoriesCol, tournamentsCol } from "../../lib/paths";
 import {
   FOOTBALL_TYPES,
+  MATCH_DURATIONS,
   asFootballType,
+  asMatchDuration,
   type Category,
   type FootballType,
+  type MatchDurationMinutes,
   type Season,
 } from "../../lib/types";
 import Field from "./Field";
@@ -35,7 +39,8 @@ export default function TournamentsAdmin({
   const [seasonId, setSeasonId] = useState("");
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [footballType, setFootballType] = useState<FootballType>(7);
-  const [startDate, setStartDate] = useState("");
+  const [duration, setDuration] = useState<MatchDurationMinutes>(60);
+  const [startDate, setStartDate] = useState(todayIso);
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
@@ -44,11 +49,22 @@ export default function TournamentsAdmin({
     [seasons],
   );
 
+  const selectedSeason = activeSeasons.find((s) => s.id === seasonId);
+  const startMin = selectedSeason?.startDate || undefined;
+  const startMax = selectedSeason?.endDate || undefined;
+
   useEffect(() => {
     if (seasonId && !activeSeasons.some((s) => s.id === seasonId)) {
       setSeasonId("");
     }
   }, [seasonId, activeSeasons]);
+
+  useEffect(() => {
+    if (!selectedSeason) return;
+    setStartDate((current) =>
+      clampIsoDate(current || todayIso(), selectedSeason.startDate, selectedSeason.endDate),
+    );
+  }, [selectedSeason]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +75,10 @@ export default function TournamentsAdmin({
     }
     if (!startDate) {
       alert("Elige la fecha de inicio del torneo.");
+      return;
+    }
+    if ((startMin && startDate < startMin) || (startMax && startDate > startMax)) {
+      alert("La fecha de inicio tiene que estar dentro de la temporada.");
       return;
     }
     if (!activeSeasons.some((s) => s.id === seasonId)) {
@@ -79,7 +99,7 @@ export default function TournamentsAdmin({
           groupId,
           legs: 2,
           footballType,
-          durationMinutes: 90,
+          durationMinutes: duration,
           startDate,
           createdAt: serverTimestamp(),
         });
@@ -87,7 +107,10 @@ export default function TournamentsAdmin({
       setName("");
       setDescription("");
       setSelectedCats([]);
-      setStartDate("");
+      setStartDate(
+        clampIsoDate(todayIso(), selectedSeason?.startDate, selectedSeason?.endDate),
+      );
+      setDuration(60);
       setFootballType(7);
       navigate("/torneos");
     } catch (err) {
@@ -121,14 +144,7 @@ export default function TournamentsAdmin({
           <Field label="Temporada">
             <FormSelect
               value={seasonId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setSeasonId(next);
-                const season = activeSeasons.find((s) => s.id === next);
-                if (season?.startDate && !startDate) {
-                  setStartDate(season.startDate);
-                }
-              }}
+              onChange={(e) => setSeasonId(e.target.value)}
               required
             >
               <option value="">Selecciona...</option>
@@ -153,10 +169,24 @@ export default function TournamentsAdmin({
               />
             </div>
           </Field>
+          <Field label="Duración del partido" hint="Minutos que ocupa la cancha.">
+            <div style={{ maxWidth: 420 }}>
+              <SegmentedControl
+                value={String(duration)}
+                onChange={(v) => setDuration(asMatchDuration(Number(v)))}
+                options={MATCH_DURATIONS.map((minutes) => ({
+                  label: `${minutes} min`,
+                  value: String(minutes),
+                }))}
+              />
+            </div>
+          </Field>
           <Field label="Fecha de inicio" hint="Cuando arranca este torneo.">
             <FormInput
               type="date"
               value={startDate}
+              min={startMin}
+              max={startMax}
               onChange={(e) => setStartDate(e.target.value)}
               required
             />

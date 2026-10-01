@@ -65,7 +65,7 @@ export function rangeFitsOpen(
 }
 
 export function asDuration(value: unknown): 30 | 60 | 90 | 120 {
-  return value === 30 || value === 60 || value === 90 || value === 120 ? value : 90;
+  return value === 30 || value === 60 || value === 90 || value === 120 ? value : 60;
 }
 
 export function asSlot(value: unknown): 30 | 60 {

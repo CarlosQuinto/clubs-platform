@@ -393,7 +393,11 @@ function MatchRow({
   return (
     <div className="cal-match">
       <div className="cal-match__main">
-        {when ? (
+        {match.walkover ? (
+          <span className="match-card__date">
+            <span className="cal-match__tbd">3-0</span>
+          </span>
+        ) : when ? (
           <time
             className="match-card__date"
             dateTime={match.date}
@@ -420,21 +424,27 @@ function MatchRow({
               {awayName}
             </span>
           </div>
-          {(kickoff || place) && (
+          {match.walkover ? (
             <div className="cal-match__meta">
-              {kickoff && (
-                <span>
-                  <Clock size={13} />
-                  {kickoff}
-                </span>
-              )}
-              {place && (
-                <span>
-                  <MapPin size={13} />
-                  {place}
-                </span>
-              )}
+              <span>3-0 por ingreso tardío</span>
             </div>
+          ) : (
+            (kickoff || place) && (
+              <div className="cal-match__meta">
+                {kickoff && (
+                  <span>
+                    <Clock size={13} />
+                    {kickoff}
+                  </span>
+                )}
+                {place && (
+                  <span>
+                    <MapPin size={13} />
+                    {place}
+                  </span>
+                )}
+              </div>
+            )
           )}
         </div>
         {isAdmin && (
@@ -541,7 +551,12 @@ function MatchSummary({
           />
         </span>
       </button>
-      {open && (
+      {open && match.walkover ? (
+        <p style={{ margin: "0.35rem 0 0", fontSize: "0.75rem", color: C.gray500 }}>
+          3-0 por ingreso tardío
+        </p>
+      ) : null}
+      {open && !match.walkover ? (
         <div className="cal-match__summary-grid">
           <SummarySide
             name={homeName}
@@ -558,7 +573,7 @@ function MatchSummary({
             red={cardNames(away, "redCards")}
           />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

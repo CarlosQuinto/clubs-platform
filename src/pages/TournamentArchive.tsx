@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import {
@@ -7,9 +8,13 @@ import {
   TournamentCard,
   TournamentGrid,
 } from "../components/platform/ArchiveUI";
-import { usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import { C } from "../components/ui";
+import { useAuth } from "../context/AuthContext";
+import { usePlatformCatalog, usePlayedTournamentIds } from "../hooks/usePlatformCatalog";
 
 export default function TournamentArchive() {
+  const { isSuperAdmin } = useAuth();
+  const playedTournamentIds = usePlayedTournamentIds(isSuperAdmin);
   const { tournaments, seasons, seasonName, categoryName, categories, loading } =
     usePlatformCatalog({ clubs: false, localities: false });
 
@@ -52,6 +57,7 @@ export default function TournamentArchive() {
         categories.find((c) => c.id === t.categoryId)?.order ?? 1
       }
       startDate={seasons.find((s) => s.id === t.seasonId)?.startDate}
+      canDelete={playedTournamentIds != null && !playedTournamentIds.has(t.id)}
     />
   );
 
@@ -59,7 +65,17 @@ export default function TournamentArchive() {
     <PlatformLayout>
       <PageTitle
         icon={<Trophy size={22} color="#cd9a40" />}
-        subtitle="Histórico de copas y ligas. Primero lo que se está jugando."
+        subtitle={
+          <>
+            Mira los torneos en curso y los que vienen.{" "}
+            <Link
+              to="/contacto"
+              style={{ color: C.navy900, fontWeight: 700, textDecoration: "underline" }}
+            >
+              Solicita información
+            </Link>
+          </>
+        }
       >
         Torneos
       </PageTitle>

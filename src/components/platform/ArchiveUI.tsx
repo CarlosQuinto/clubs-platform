@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { C, RADIUS, SHADOWS } from "../ui";
 import type { Tournament } from "../../lib/types";
 import { footballTypeLabel } from "../../lib/types";
 import { formatShortDate } from "../../utils/helpers";
+import { deleteTournament, previewTournamentDelete } from "../../lib/deleteTournament";
 import { useAuth } from "../../context/AuthContext";
 import { useTournamentEdit } from "../admin/TournamentEditModal";
+import ConfirmModal from "../ConfirmModal";
 
 const DIVISION_TONE = [
   { bg: C.amberLight, text: C.navy900, border: C.amber },
@@ -21,18 +23,65 @@ export function TournamentCard({
   categoryName,
   categoryOrder = 1,
   startDate,
+  canDelete = false,
 }: {
   tournament: Tournament;
   seasonName?: string;
   categoryName?: string;
   categoryOrder?: number;
   startDate?: string;
+  /** Superadmin y sin partidos jugados. Mientras carga la lista, queda en falso. */
+  canDelete?: boolean;
 }) {
   const tone = DIVISION_TONE[(Math.max(1, categoryOrder) - 1) % DIVISION_TONE.length];
   const begins = tournament.startDate || startDate || "";
   const showStart = tournament.status === "upcoming" && Boolean(begins);
   const { isSuperAdmin } = useAuth();
   const { openEdit } = useTournamentEdit();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingMatches, setPendingMatches] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  const askDelete = async () => {
+    try {
+      const preview = await previewTournamentDelete(tournament.id);
+      if (preview.blocked) {
+        window.alert("No se puede eliminar: ya tiene partidos jugados.");
+        return;
+      }
+      setPendingMatches(preview.pending);
+      setConfirmOpen(true);
+    } catch (err) {
+      console.error(err);
+      window.alert("No se pudo revisar el torneo.");
+    }
+  };
+
+  const confirmDelete = async () => {
+    try {
+      setBusy(true);
+      await deleteTournament(tournament.id);
+      setConfirmOpen(false);
+    } catch (err) {
+      console.error(err);
+      const played = err instanceof Error && err.message === "played";
+      window.alert(
+        played
+          ? "No se puede eliminar: ya tiene partidos jugados."
+          : "No se pudo eliminar el torneo.",
+      );
+      setConfirmOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pendingLabel =
+    pendingMatches === 0
+      ? "No tiene partidos."
+      : pendingMatches === 1
+        ? "También se eliminará 1 partido que aún no se juega."
+        : `También se eliminarán ${pendingMatches} partidos que aún no se juegan.`;
 
   return (
     <article
@@ -96,31 +145,62 @@ export function TournamentCard({
       )}
       </Link>
       {isSuperAdmin ? (
-        <button
-          type="button"
-          onClick={() => openEdit(tournament.id)}
+        <div
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.3rem",
-            width: "100%",
-            padding: "0.45rem 0.75rem",
-            border: "none",
             borderTop: `1px solid ${C.gray200}`,
             backgroundColor: C.gray50,
-            color: C.navy900,
-            fontWeight: 800,
-            fontSize: "0.72rem",
-            cursor: "pointer",
           }}
         >
-          <Pencil size={13} /> Editar
-        </button>
+          <button
+            type="button"
+            onClick={() => openEdit(tournament.id)}
+            style={cardAction(canDelete)}
+          >
+            <Pencil size={13} /> Editar
+          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={() => void askDelete()}
+              style={{ ...cardAction(false), color: C.red }}
+            >
+              <Trash2 size={13} /> Eliminar
+            </button>
+          ) : null}
+        </div>
       ) : null}
+      <ConfirmModal
+        open={confirmOpen}
+        title={`Eliminar ${tournament.name}`}
+        message={`Se eliminará ${tournament.name}. ${pendingLabel} Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        danger
+        busy={busy}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => {
+          if (!busy) setConfirmOpen(false);
+        }}
+      />
     </article>
   );
 }
+
+const cardAction = (split: boolean): CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.3rem",
+  flex: 1,
+  padding: "0.45rem 0.75rem",
+  border: "none",
+  borderRight: split ? `1px solid ${C.gray200}` : "none",
+  backgroundColor: "transparent",
+  color: C.navy900,
+  fontWeight: 800,
+  fontSize: "0.72rem",
+  cursor: "pointer",
+});
 
 export function TournamentGrid({ children }: { children: React.ReactNode }) {
   return (
@@ -241,7 +321,7 @@ export function PageTitle({
 }: {
   icon: React.ReactNode;
   children: React.ReactNode;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
 }) {
   return (
     <header style={{ margin: "0 0 1.5rem" }}>

@@ -14,9 +14,11 @@ import { updateDoc } from "firebase/firestore";
 import { tournamentRef } from "../../lib/paths";
 import {
   expectedMatchCount,
+  lateWalkoverFixtures,
   playedReturnsIfSingleLeg,
   syncTournamentFixtures,
   tournamentLegs,
+  type LateEntryChoice,
 } from "../../lib/fixtures";
 import { useAuth } from "../../context/AuthContext";
 import { usePlatformCatalog, useTournamentMatches } from "../../hooks/usePlatformCatalog";
@@ -64,13 +66,26 @@ export function TournamentEditHost({ children }: { children: ReactNode }) {
     [isSuperAdmin],
   );
   const close = useCallback(() => setId(null), []);
+  const [savedNotice, setSavedNotice] = useState(false);
+  const handleSaved = useCallback(() => {
+    setId(null);
+    setSavedNotice(true);
+  }, []);
 
   return (
     <EditCtx.Provider value={{ openEdit }}>
       {children}
       {isSuperAdmin && id ? (
-        <TournamentEditModal tournamentId={id} onClose={close} />
+        <TournamentEditModal tournamentId={id} onClose={close} onSaved={handleSaved} />
       ) : null}
+      <ConfirmModal
+        open={savedNotice}
+        title="Cambios guardados."
+        confirmLabel="Entendido"
+        cancelLabel="Cerrar"
+        onConfirm={() => setSavedNotice(false)}
+        onCancel={() => setSavedNotice(false)}
+      />
     </EditCtx.Provider>
   );
 }
@@ -78,24 +93,32 @@ export function TournamentEditHost({ children }: { children: ReactNode }) {
 export default function TournamentEditModal({
   tournamentId,
   onClose,
+  onSaved,
 }: {
   tournamentId: string;
   onClose: () => void;
+  onSaved: () => void;
 }) {
-  const { tournamentsById, clubs, categoryName } = usePlatformCatalog();
+  const { tournamentsById, clubs, categoryName, seasons } = usePlatformCatalog();
   const tournament = tournamentsById[tournamentId];
+  const season = seasons.find((item) => item.id === tournament?.seasonId);
+  const seasonStart = season?.startDate || undefined;
+  const seasonEnd = season?.endDate || undefined;
   const { matches, loading: matchesLoading } = useTournamentMatches(tournamentId);
   const [draftClubIds, setDraftClubIds] = useState<string[]>([]);
   const [draftLegs, setDraftLegs] = useState<1 | 2>(2);
   const [draftFootballType, setDraftFootballType] = useState<FootballType>(7);
   const [draftStartDate, setDraftStartDate] = useState("");
-  const [draftDuration, setDraftDuration] = useState<MatchDurationMinutes>(90);
+  const [draftDuration, setDraftDuration] = useState<MatchDurationMinutes>(60);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [lateEntry, setLateEntry] = useState<LateEntryChoice | null>(null);
+  const [lateEntryHint, setLateEntryHint] = useState(false);
+  const [errorOpen, setErrorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const hasTournament = Boolean(tournament);
 
-  useModalLock(saveOpen ? null : onClose);
+  useModalLock(saveOpen || errorOpen ? null : onClose);
 
   useEffect(() => {
     if (!tournament) return;
@@ -149,6 +172,17 @@ export default function TournamentEditModal({
           matches,
         )
       : [];
+  const nextClubIds = [
+    ...draftClubIds.filter((id) => !lockedClubIds.has(id) || tournament.clubIds.includes(id)),
+    ...tournament.clubIds.filter((id) => lockedClubIds.has(id) && !draftClubIds.includes(id)),
+  ];
+  const addedClubIds = nextClubIds.filter((id) => !tournament.clubIds.includes(id));
+  const walkovers = lateWalkoverFixtures(
+    { ...tournament, clubIds: nextClubIds, legs: draftLegs },
+    matches,
+    addedClubIds,
+  );
+  const needsLateChoice = walkovers.length > 0;
 
   const addClub = (clubId: string) => {
     if (draftClubIds.includes(clubId)) return;
@@ -173,10 +207,6 @@ export default function TournamentEditModal({
   const confirmSave = async () => {
     try {
       setBusy(true);
-      const nextClubIds = [
-        ...draftClubIds.filter((id) => !lockedClubIds.has(id) || tournament.clubIds.includes(id)),
-        ...tournament.clubIds.filter((id) => lockedClubIds.has(id) && !draftClubIds.includes(id)),
-      ];
       await updateDoc(tournamentRef(tournament.id), {
         clubIds: nextClubIds,
         legs: draftLegs,
@@ -184,12 +214,28 @@ export default function TournamentEditModal({
         startDate: draftStartDate || null,
         durationMinutes: draftDuration,
       });
+      await syncTournamentFixtures(
+        {
+          ...tournament,
+          clubIds: nextClubIds,
+          legs: draftLegs,
+          footballType: draftFootballType,
+          startDate: draftStartDate || undefined,
+          durationMinutes: draftDuration,
+        },
+        matches,
+        needsLateChoice && lateEntry
+          ? { lateEntry, newClubIds: addedClubIds }
+          : undefined,
+      );
+      setBusy(false);
       setSaveOpen(false);
+      onSaved();
     } catch (err) {
       console.error(err);
-      alert("No se pudieron guardar los cambios.");
-    } finally {
       setBusy(false);
+      setSaveOpen(false);
+      setErrorOpen(true);
     }
   };
 
@@ -198,7 +244,7 @@ export default function TournamentEditModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="tournament-edit-title"
-      onClick={saveOpen ? undefined : onClose}
+      onClick={saveOpen || errorOpen ? undefined : onClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -333,6 +379,8 @@ export default function TournamentEditModal({
             <FormInput
               type="date"
               value={draftStartDate}
+              min={seasonStart}
+              max={seasonEnd}
               onChange={(e) => setDraftStartDate(e.target.value)}
             />
           </Field>
@@ -384,7 +432,11 @@ export default function TournamentEditModal({
           <PrimaryButton
             type="button"
             disabled={!dirty || busy || matchesLoading}
-            onClick={() => setSaveOpen(true)}
+            onClick={() => {
+              setLateEntry(null);
+              setLateEntryHint(false);
+              setSaveOpen(true);
+            }}
           >
             Guardar
           </PrimaryButton>
@@ -410,8 +462,40 @@ export default function TournamentEditModal({
           confirmLabel="Guardar cambios"
           danger={playedReturns.length > 0}
           busy={busy}
-          onCancel={() => setSaveOpen(false)}
-          onConfirm={() => void confirmSave()}
+          confirmHint={
+            lateEntryHint && needsLateChoice && !lateEntry
+              ? "Selecciona una opción."
+              : undefined
+          }
+          onCancel={() => {
+            setLateEntryHint(false);
+            setSaveOpen(false);
+          }}
+          onConfirm={() => {
+            if (needsLateChoice && !lateEntry) {
+              setLateEntryHint(true);
+              return;
+            }
+            void confirmSave();
+          }}
+        >
+          {needsLateChoice ? (
+            <LateEntryPicker
+              value={lateEntry}
+              onChange={(choice) => {
+                setLateEntry(choice);
+                setLateEntryHint(false);
+              }}
+            />
+          ) : null}
+        </ConfirmModal>
+        <ConfirmModal
+          open={errorOpen}
+          title="Los cambios no se pudieron guardar."
+          confirmLabel="Entendido"
+          cancelLabel="Cerrar"
+          onConfirm={() => setErrorOpen(false)}
+          onCancel={() => setErrorOpen(false)}
         />
       </div>
     </div>,
@@ -461,14 +545,20 @@ function ClubEnrollPicker({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState({ maxHeight: 200, above: false });
   const boxRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    const onDoc = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target)) return;
+      if (toggleRef.current?.contains(target)) return;
+      setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("pointerdown", onDoc, true);
+    return () => document.removeEventListener("pointerdown", onDoc, true);
   }, [open]);
 
   useEffect(() => {
@@ -544,6 +634,7 @@ function ClubEnrollPicker({
       })}
       <div>
         <button
+          ref={toggleRef}
           type="button"
           aria-label="Añadir equipo"
           title="Añadir equipo"
@@ -565,6 +656,7 @@ function ClubEnrollPicker({
         </button>
         {open && (
           <div
+            ref={panelRef}
             style={{
               position: "absolute",
               zIndex: 5,
@@ -628,6 +720,69 @@ function ClubEnrollPicker({
         )}
       </div>
     </div>
+  );
+}
+
+function LateEntryPicker({
+  value,
+  onChange,
+}: {
+  value: LateEntryChoice | null;
+  onChange: (choice: LateEntryChoice) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: 700, color: C.navy900 }}>
+        Hay jornadas ya jugadas. ¿Qué pasa con los partidos del equipo nuevo en esas jornadas?
+      </p>
+      <LateEntryOption
+        selected={value === "walkover"}
+        title="Dar por perdidas"
+        note="El equipo nuevo no tendrá puntos en esas jornadas. El rival que le tocaba se lleva la victoria 3-0."
+        onSelect={() => onChange("walkover")}
+      />
+      <LateEntryOption
+        selected={value === "play"}
+        title="Jugarlas"
+        note="Esto prolongará la duración del torneo, porque todavía hay que programarlos y jugarlos."
+        onSelect={() => onChange("play")}
+      />
+    </div>
+  );
+}
+
+function LateEntryOption({
+  selected,
+  title,
+  note,
+  onSelect,
+}: {
+  selected: boolean;
+  title: string;
+  note: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      style={{
+        textAlign: "left",
+        border: `1px solid ${selected ? C.navy900 : C.gray300}`,
+        backgroundColor: selected ? C.gray50 : C.white,
+        borderRadius: RADIUS.lg,
+        padding: "0.65rem 0.75rem",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ display: "block", fontSize: "0.82rem", fontWeight: 800, color: C.navy900 }}>
+        {title}
+      </span>
+      <span style={{ display: "block", marginTop: "0.2rem", fontSize: "0.75rem", color: C.gray600, lineHeight: 1.4 }}>
+        {note}
+      </span>
+    </button>
   );
 }
 

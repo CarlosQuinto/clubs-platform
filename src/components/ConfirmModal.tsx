@@ -12,6 +12,7 @@ export default function ConfirmModal({
   danger = false,
   busy = false,
   confirmDisabled = false,
+  confirmHint,
   dangerAction,
   onConfirm,
   onCancel,
@@ -25,6 +26,8 @@ export default function ConfirmModal({
   danger?: boolean;
   busy?: boolean;
   confirmDisabled?: boolean;
+  /** Aviso junto al botón de confirmar. El botón sigue recibiendo el clic. */
+  confirmHint?: string;
   dangerAction?: { label: string; onClick: () => void };
   onConfirm: () => void;
   onCancel: () => void;
@@ -108,14 +111,49 @@ export default function ConfirmModal({
           <SecondaryButton type="button" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </SecondaryButton>
-          <PrimaryButton
-            type="button"
-            variant={danger ? "red" : "navy"}
-            disabled={busy || confirmDisabled}
-            onClick={onConfirm}
-          >
-            {busy ? "…" : confirmLabel}
-          </PrimaryButton>
+          <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
+            <PrimaryButton
+              type="button"
+              variant={danger ? "red" : "navy"}
+              disabled={busy || (confirmDisabled && !confirmHint)}
+              onClick={onConfirm}
+            >
+              {busy ? "…" : confirmLabel}
+            </PrimaryButton>
+            {confirmHint ? (
+              <span
+                role="tooltip"
+                style={{
+                  position: "relative",
+                  marginTop: "0.55rem",
+                  width: "max-content",
+                  maxWidth: 220,
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: RADIUS.md,
+                  backgroundColor: C.navy900,
+                  color: C.white,
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  lineHeight: 1.35,
+                  boxShadow: SHADOWS.lg,
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    right: 18,
+                    top: -4,
+                    width: 8,
+                    height: 8,
+                    backgroundColor: C.navy900,
+                    transform: "rotate(45deg)",
+                  }}
+                />
+                {confirmHint}
+              </span>
+            ) : null}
+          </span>
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ import Field from "./Field";
 import InviteSignupLink, {
   CopySignupUrlButton,
 } from "../platform/InviteSignupLink";
+import { sendPlatformAdminInvite } from "../../lib/platformAdminInvite";
 import { clearSignupInvite, markSignupInvite } from "../../lib/signupInvite";
 import {
   Badge,
@@ -99,9 +100,20 @@ export default function SuperAdminsAdmin() {
         createdAt: serverTimestamp(),
       });
       await markSignupInvite(clean, { platform: true });
+      let mailed = false;
+      try {
+        const result = await sendPlatformAdminInvite(clean);
+        mailed = result.mailed;
+      } catch (mailErr) {
+        console.error(mailErr);
+      }
       setEmail("");
       setLastInvite(clean);
-      setNotice("Invitación creada. Envíale la URL para que cree su cuenta.");
+      setNotice(
+        mailed
+          ? "Invitación enviada por correo."
+          : "Invitación creada, pero el correo no se pudo enviar. Envíale la URL.",
+      );
     } catch (err) {
       console.error(err);
       setError("No se pudo crear la invitación.");
@@ -150,8 +162,8 @@ export default function SuperAdminsAdmin() {
         icon={<Crown size={14} color={C.amber} />}
       >
         <p style={{ margin: "0 0 0.85rem", fontSize: "0.78rem", color: C.gray500 }}>
-          Invita por correo y envíale la URL para crear su cuenta. Al registrarse,
-          recibe acceso total a la plataforma.
+          Invita por correo. Le enviamos un enlace para crear su cuenta o para entrar
+          si ya la tiene. Al aceptarla, recibe acceso total a la plataforma.
         </p>
         {uids.length === 0 ? (
           <p style={{ margin: 0, color: C.gray400, fontSize: "0.85rem" }}>

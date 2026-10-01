@@ -127,6 +127,8 @@ export interface Match {
   status: MatchStatus;
   homeScore?: number | null;
   awayScore?: number | null;
+  /** Victoria 3-0 otorgada: el rival entró con esa jornada ya jugada. */
+  walkover?: boolean;
   penaltiesHome?: number | null;
   penaltiesAway?: number | null;
   sides?: Record<string, MatchSide>;
@@ -184,7 +186,7 @@ export const MATCH_DURATIONS: MatchDurationMinutes[] = [30, 60, 90, 120];
 export function asMatchDuration(value: unknown): MatchDurationMinutes {
   return value === 30 || value === 60 || value === 90 || value === 120
     ? value
-    : 90;
+    : 60;
 }
 
 export function asCourtSlot(value: unknown): CourtSlotMinutes {

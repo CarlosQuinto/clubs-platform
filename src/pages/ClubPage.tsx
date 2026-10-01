@@ -285,7 +285,7 @@ function ClubShell() {
   const officialEvents = useMemo(
     () =>
       matches
-        .filter((m) => calendarStatus(m) !== "unscheduled")
+        .filter((m) => calendarStatus(m) !== "unscheduled" && !m.walkover)
         .map((m) =>
           matchToClubEvent(m, clubId, clubNames, tournamentsById[m.tournamentId]?.name),
         ),

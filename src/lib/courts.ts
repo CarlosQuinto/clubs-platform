@@ -38,6 +38,14 @@ export function todayIso(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+/** Acota una fecha YYYY-MM-DD. Un extremo vacío no limita. */
+export function clampIsoDate(value: string, min?: string, max?: string): string {
+  let next = value;
+  if (min && next < min) next = min;
+  if (max && next > max) next = max;
+  return next;
+}
+
 export function addDays(isoDate: string, days: number): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   const date = new Date(year, month - 1, day);

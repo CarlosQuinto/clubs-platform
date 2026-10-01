@@ -16,6 +16,7 @@ import MatchList from "../components/platform/MatchList";
 import { useAuth } from "../context/AuthContext";
 import {
   usePlatformCatalog,
+  usePlayedTournamentIds,
   useUpcomingMatches,
 } from "../hooks/usePlatformCatalog";
 import {
@@ -76,6 +77,7 @@ export default function Landing() {
     localities: false,
   });
   const { matches, loading: matchesLoading } = useUpcomingMatches(matchesOn);
+  const playedTournamentIds = usePlayedTournamentIds(isSuperAdmin && tournamentsOn);
   const [claiming, setClaiming] = useState(false);
   const heroImages =
     platformConfig?.heroImages && platformConfig.heroImages.length > 0
@@ -109,6 +111,7 @@ export default function Landing() {
       categoryName={categoryName[t.categoryId]}
       categoryOrder={categories.find((c) => c.id === t.categoryId)?.order ?? 1}
       startDate={seasons.find((s) => s.id === t.seasonId)?.startDate}
+      canDelete={playedTournamentIds != null && !playedTournamentIds.has(t.id)}
     />
   );
 
