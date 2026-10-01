@@ -1332,7 +1332,7 @@ function ClubShell() {
                     <>
                     {perms.canEditAgenda && (
                       <div style={{ padding: "1rem 1rem 0" }}>
-                        <AvailabilityPanel clubId={clubId} tournaments={tournaments} />
+                        <AvailabilityPanel clubId={clubId} />
                       </div>
                     )}
                     <Agenda

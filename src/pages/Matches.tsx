@@ -3,7 +3,12 @@ import { Calendar, Search } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import { PageTitle } from "../components/platform/ArchiveUI";
 import MatchList, { upcomingOfficialMatches } from "../components/platform/MatchList";
+import { scheduleResources } from "../components/platform/MatchScheduleForm";
 import { useFutureMatches, usePlatformCatalog } from "../hooks/usePlatformCatalog";
+import { useCourtHolds, useCourts } from "../hooks/useCourts";
+import { useAuth } from "../context/AuthContext";
+import { useMigrateClubAvailability } from "../lib/migrateClubAvailability";
+import { addDays, todayIso } from "../lib/courts";
 import { C, FormInput, FormSelect, RADIUS } from "../components/ui";
 
 const BATCH_QUERY = "(min-width: 800px)";
@@ -42,6 +47,10 @@ export default function MatchesPage() {
     loading: catalogLoading,
   } = usePlatformCatalog({ seasons: false, localities: false });
   const { matches, loading: matchesLoading } = useFutureMatches();
+  const { isSuperAdmin, platformConfig } = useAuth();
+  useMigrateClubAvailability(isSuperAdmin);
+  const courtsEnabled = isSuperAdmin && platformConfig?.courtsEnabled === true;
+  const { courts } = useCourts(courtsEnabled);
   const [tournamentId, setTournamentId] = useState("");
   const [query, setQuery] = useState("");
   const batch = useMatchBatchSize();
@@ -67,6 +76,45 @@ export default function MatchesPage() {
   const liveTournamentIds = useMemo(
     () => new Set(liveTournaments.map((t) => t.id)),
     [liveTournaments],
+  );
+  const horizonEnd = useMemo(() => {
+    const today = todayIso();
+    let end = addDays(today, 21);
+    for (const tournament of liveTournaments) {
+      const start =
+        tournament.startDate && tournament.startDate > today
+          ? tournament.startDate
+          : today;
+      const candidate = addDays(start, 21);
+      if (candidate > end) end = candidate;
+    }
+    return end;
+  }, [liveTournaments]);
+  const { holds, loading: holdsLoading } = useCourtHolds(
+    courtsEnabled ? todayIso() : null,
+    courtsEnabled ? horizonEnd : null,
+  );
+  const schedule = useMemo(
+    () =>
+      isSuperAdmin
+        ? scheduleResources({
+            courtsEnabled,
+            courtSlotMinutes: platformConfig?.courtSlotMinutes,
+            courtOpenWindows: platformConfig?.courtOpenWindows,
+            courts,
+            holds,
+            holdsLoading,
+          })
+        : undefined,
+    [
+      isSuperAdmin,
+      courtsEnabled,
+      platformConfig?.courtSlotMinutes,
+      platformConfig?.courtOpenWindows,
+      courts,
+      holds,
+      holdsLoading,
+    ],
   );
 
   const upcoming = useMemo(
@@ -137,6 +185,11 @@ export default function MatchesPage() {
         <p style={{ color: C.gray400, fontSize: "0.9rem" }}>Cargando partidos…</p>
       ) : (
         <>
+          {isSuperAdmin && (
+            <p style={{ margin: "0 0 0.65rem", fontSize: "0.75rem", color: C.gray500 }}>
+              Toca Editar para fecha, hora y sede.
+            </p>
+          )}
           <div className="matches-filter-bar">
             <FormSelect
               value={tournamentId}
@@ -185,6 +238,8 @@ export default function MatchesPage() {
                 matches={visible}
                 clubNames={clubNames}
                 clubsById={clubsById}
+                schedule={schedule}
+                tournamentOf={(m) => tournamentsById[m.tournamentId]}
                 subtitleOf={(m) => {
                   const tournament = tournamentsById[m.tournamentId];
                   const category =

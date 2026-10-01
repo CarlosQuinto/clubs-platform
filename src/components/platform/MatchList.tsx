@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Pencil } from "lucide-react";
 import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
 import { sortByDate } from "../../lib/stats";
-import type { ClubSummary, Match } from "../../lib/types";
+import type { ClubSummary, Match, MatchDurationMinutes } from "../../lib/types";
 import { formatFriendlyDate, formatFriendlyTime, isoDate } from "../../utils/helpers";
+import MatchScheduleForm, { type MatchScheduleResources } from "./MatchScheduleForm";
 
 const MONTHS = [
   "ENE",
@@ -46,11 +49,16 @@ export default function MatchList({
   clubNames,
   clubsById,
   subtitleOf,
+  schedule,
+  tournamentOf,
 }: {
   matches: Match[];
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   subtitleOf: (match: Match) => string;
+  /** Si llega, el superadmin puede editar fecha, hora y cancha. */
+  schedule?: MatchScheduleResources;
+  tournamentOf?: (match: Match) => { startDate?: string; durationMinutes?: MatchDurationMinutes } | undefined;
 }) {
   if (matches.length === 0) return null;
 
@@ -72,6 +80,8 @@ export default function MatchList({
             homeLogo={clubsById[m.homeClubId]?.logoUrl}
             awayLogo={clubsById[m.awayClubId]?.logoUrl}
             subtitle={subtitleOf(m)}
+            schedule={schedule}
+            tournament={tournamentOf?.(m)}
           />
         ))}
       </div>
@@ -86,6 +96,8 @@ function UpcomingMatchCard({
   homeLogo,
   awayLogo,
   subtitle,
+  schedule,
+  tournament,
 }: {
   match: Match;
   homeName: string;
@@ -93,13 +105,15 @@ function UpcomingMatchCard({
   homeLogo?: string;
   awayLogo?: string;
   subtitle: string;
+  schedule?: MatchScheduleResources;
+  tournament?: { startDate?: string; durationMinutes?: MatchDurationMinutes };
 }) {
+  const [editing, setEditing] = useState(false);
   const date = dateParts(match.date);
   const when = match.time ? formatFriendlyTime(match.time) : "";
   const venue = match.venue?.trim() || "";
-
-  return (
-    <Link to={`/torneos/${match.tournamentId}`} className="match-card">
+  const body = (
+    <>
       {date && (
         <time
           className="match-card__date"
@@ -137,7 +151,42 @@ function UpcomingMatchCard({
           </div>
         )}
       </div>
-    </Link>
+    </>
+  );
+
+  if (!schedule) {
+    return (
+      <Link to={`/torneos/${match.tournamentId}`} className="match-card">
+        {body}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="match-card match-card--admin">
+      <Link to={`/torneos/${match.tournamentId}`} className="match-card__main">
+        {body}
+      </Link>
+      <div className="match-card__toolbar">
+        <button
+          type="button"
+          className="cal-match__action"
+          onClick={() => setEditing((open) => !open)}
+        >
+          {editing ? "Cerrar" : "Editar"}
+          {!editing && <Pencil size={13} />}
+        </button>
+      </div>
+      {editing && (
+        <MatchScheduleForm
+          match={match}
+          schedule={schedule}
+          startDate={tournament?.startDate}
+          durationMinutes={tournament?.durationMinutes}
+          onSaved={() => setEditing(false)}
+        />
+      )}
+    </div>
   );
 }
 

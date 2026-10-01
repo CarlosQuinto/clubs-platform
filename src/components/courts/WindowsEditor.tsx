@@ -141,7 +141,7 @@ function ScheduleRow({
         padding: "0.65rem",
       }}
     >
-      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+      <div className="windows-time">
         <FormInput
           type="time"
           aria-label="Desde"
@@ -169,7 +169,13 @@ function ScheduleRow({
           <Trash2 size={15} />
         </button>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+          gap: "0.25rem",
+        }}
+      >
         {DAYS.map((day) => {
           const on = group.days.includes(day.value);
           return (
@@ -177,16 +183,18 @@ function ScheduleRow({
               key={day.value}
               type="button"
               aria-pressed={on}
+              aria-label={day.label}
               onClick={() => toggle(day.value)}
               style={{
                 border: `1px solid ${on ? C.navy900 : C.gray300}`,
                 background: on ? C.navy900 : C.white,
                 color: on ? C.white : C.gray600,
                 borderRadius: 8,
-                padding: "0.3rem 0.45rem",
-                fontSize: "0.72rem",
+                padding: "0.35rem 0",
+                fontSize: "0.68rem",
                 fontWeight: 800,
                 cursor: "pointer",
+                minWidth: 0,
               }}
             >
               {day.short}
@@ -195,27 +203,27 @@ function ScheduleRow({
         })}
       </div>
       <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-        <TextButton label="Entre semana" onClick={() => setDays(WEEKDAYS)} />
-        <TextButton label="Toda la semana" onClick={() => setDays(ALL_DAYS)} />
+        <Chip label="Entre semana" onClick={() => setDays(WEEKDAYS)} />
+        <Chip label="Toda la semana" onClick={() => setDays(ALL_DAYS)} />
       </div>
     </div>
   );
 }
 
-function TextButton({ label, onClick }: { label: string; onClick: () => void }) {
+function Chip({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
-        border: "none",
-        background: "transparent",
+        border: `1px solid ${C.gray300}`,
+        background: C.gray50,
         color: C.navy900,
         fontSize: "0.72rem",
-        fontWeight: 800,
+        fontWeight: 700,
         cursor: "pointer",
-        padding: 0,
-        textDecoration: "underline",
+        borderRadius: 999,
+        padding: "0.28rem 0.6rem",
       }}
     >
       {label}

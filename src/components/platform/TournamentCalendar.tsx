@@ -4,38 +4,24 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import { Calendar, ChevronDown, ChevronRight, Clock, MapPin, Pencil } from "lucide-react";
-import { onSnapshot } from "firebase/firestore";
-import { availabilityCol } from "../../lib/paths";
 import {
   groupMatchesByRound,
   isPlayed,
 } from "../../lib/stats";
 import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
-import type { ClubSummary, Court, CourtHold, Match, MatchSide, TimeWindow, Tournament } from "../../lib/types";
-import { asCourtSlot, asMatchDuration } from "../../lib/types";
+import type { ClubSummary, Match, MatchSide, Tournament } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
+import { useMigrateClubAvailability } from "../../lib/migrateClubAvailability";
 import { useCourtHolds, useCourts } from "../../hooks/useCourts";
-import {
-  addDays,
-  courtsFreeAt,
-  readWindows,
-  shortSlotLabel,
-  suggestSlots,
-  todayIso,
-  type SlotSuggestion,
-} from "../../lib/courts";
-import { scheduleMatch } from "../../lib/scheduleMatch";
+import { addDays, todayIso } from "../../lib/courts";
 import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
-import {
-  C,
-  FormInput,
-  FormSelect,
-  PrimaryButton,
-  SectionCard,
-} from "../ui";
+import { C, SectionCard } from "../ui";
+import MatchScheduleForm, {
+  scheduleResources,
+  type MatchScheduleResources,
+} from "./MatchScheduleForm";
 import MatchStatsEditor from "./MatchStatsEditor";
 
 export default function TournamentCalendar({
@@ -82,6 +68,7 @@ export default function TournamentCalendar({
 
   const visibleRounds = rounds.slice(0, shownCount);
   const { platformConfig } = useAuth();
+  useMigrateClubAvailability(isAdmin);
   const courtsEnabled = isAdmin && platformConfig?.courtsEnabled === true;
   const { courts } = useCourts(courtsEnabled);
   const horizonStart = useMemo(() => {
@@ -93,37 +80,14 @@ export default function TournamentCalendar({
     courtsEnabled ? horizonStart : null,
     courtsEnabled ? addDays(horizonStart, 20) : null,
   );
-  const [availability, setAvailability] = useState<Record<string, TimeWindow[]>>({});
-  const [availabilityReady, setAvailabilityReady] = useState(false);
-  useEffect(() => {
-    if (!isAdmin) {
-      setAvailability({});
-      setAvailabilityReady(false);
-      return;
-    }
-    const unsub = onSnapshot(
-      availabilityCol(tournament.id),
-      (snap) => {
-        const next: Record<string, TimeWindow[]> = {};
-        snap.docs.forEach((docSnap) => {
-          next[docSnap.id] = readWindows(docSnap.data().windows);
-        });
-        setAvailability(next);
-        setAvailabilityReady(true);
-      },
-      () => setAvailabilityReady(true),
-    );
-    return () => unsub();
-  }, [isAdmin, tournament.id]);
-  const schedule: ScheduleBundle = {
+  const schedule = scheduleResources({
     courtsEnabled,
-    slotMinutes: asCourtSlot(platformConfig?.courtSlotMinutes),
-    openWindows: readWindows(platformConfig?.courtOpenWindows),
+    courtSlotMinutes: platformConfig?.courtSlotMinutes,
+    courtOpenWindows: platformConfig?.courtOpenWindows,
     courts,
     holds,
-    availability,
-    ready: !courtsEnabled || (!holdsLoading && availabilityReady),
-  };
+    holdsLoading,
+  });
 
   return (
     <SectionCard title="Calendario" icon={<Calendar size={16} />}>
@@ -263,16 +227,6 @@ function useRevealNextRound(
   return sentinelRef;
 }
 
-type ScheduleBundle = {
-  courtsEnabled: boolean;
-  slotMinutes: 30 | 60;
-  openWindows: TimeWindow[];
-  courts: Court[];
-  holds: CourtHold[];
-  availability: Record<string, TimeWindow[]>;
-  ready: boolean;
-};
-
 function roundTitle(round: string) {
   return /^\d+$/.test(round) ? `Jornada ${round}` : round;
 }
@@ -293,7 +247,7 @@ function RoundBlock({
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
-  schedule: ScheduleBundle;
+  schedule: MatchScheduleResources;
   collapsed: boolean;
 }) {
   const [open, setOpen] = useState(!collapsed);
@@ -422,14 +376,9 @@ function MatchRow({
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
   isAdmin: boolean;
-  schedule: ScheduleBundle;
+  schedule: MatchScheduleResources;
 }) {
   const played = isPlayed(match);
-  const [date, setDate] = useState(match.date || "");
-  const [time, setTime] = useState(match.time || "");
-  const [venue, setVenue] = useState(match.venue || "");
-  const [courtId, setCourtId] = useState(match.courtId || "");
-  const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -440,95 +389,6 @@ function MatchRow({
   const awayLogo = clubsById[match.awayClubId]?.logoUrl;
   const kickoff = match.time ? formatFriendlyTime(match.time) : "";
   const place = match.venue?.trim() || "";
-
-  useEffect(() => {
-    setDate(match.date || "");
-    setTime(match.time || "");
-    setVenue(match.venue || "");
-    setCourtId(match.courtId || "");
-  }, [match.date, match.time, match.venue, match.courtId]);
-
-  const duration = asMatchDuration(tournament.durationMinutes);
-  const freeCourts = useMemo(() => {
-    if (!schedule.courtsEnabled || !date || !time) return [];
-    return courtsFreeAt({
-      courts: schedule.courts,
-      holds: schedule.holds,
-      openWindows: schedule.openWindows,
-      date,
-      time,
-      slotMinutes: schedule.slotMinutes,
-      duration,
-      ignoreMatchId: match.id,
-    });
-  }, [schedule, date, time, duration, match.id]);
-
-  useEffect(() => {
-    if (!schedule.courtsEnabled || !schedule.ready || !courtId || !date || !time) return;
-    if (!freeCourts.some((court) => court.id === courtId)) setCourtId("");
-  }, [schedule.courtsEnabled, schedule.ready, courtId, date, time, freeCourts]);
-
-  const homeWindows = schedule.availability[match.homeClubId] || [];
-  const awayWindows = schedule.availability[match.awayClubId] || [];
-  const missingAvailability = [
-    homeWindows.length ? "" : clubNames[match.homeClubId] || "Local",
-    awayWindows.length ? "" : clubNames[match.awayClubId] || "Visitante",
-  ].filter(Boolean);
-  const suggestions = useMemo(() => {
-    if (!schedule.courtsEnabled || !schedule.ready || missingAvailability.length) return [];
-    const today = todayIso();
-    const start = tournament.startDate && tournament.startDate > today
-      ? tournament.startDate
-      : today;
-    return suggestSlots({
-      fromDate: start,
-      days: 21,
-      slotMinutes: schedule.slotMinutes,
-      duration,
-      openWindows: schedule.openWindows,
-      homeWindows,
-      awayWindows,
-      courts: schedule.courts,
-      holds: schedule.holds,
-      ignoreMatchId: match.id,
-    });
-  }, [
-    schedule,
-    missingAvailability.length,
-    tournament.startDate,
-    duration,
-    homeWindows,
-    awayWindows,
-    match.id,
-  ]);
-
-  const applySuggestion = (slot: SlotSuggestion) => {
-    setDate(slot.date);
-    setTime(slot.time);
-    setCourtId(slot.courtId);
-    setVenue(slot.courtName);
-  };
-
-  const saveSchedule = async () => {
-    try {
-      setBusy(true);
-      const chosen = freeCourts.find((court) => court.id === courtId);
-      await scheduleMatch({
-        matchId: match.id,
-        date,
-        time,
-        venue: schedule.courtsEnabled ? chosen?.name || "" : venue.trim(),
-        courtId: schedule.courtsEnabled ? (chosen ? courtId : "") : "",
-      });
-      setEditing(false);
-    } catch (err) {
-      console.error(err);
-      const message = err instanceof Error ? err.message : "";
-      alert(message || "No se pudo guardar la programación.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="cal-match">
@@ -614,117 +474,13 @@ function MatchRow({
       ) : null}
 
       {isAdmin && editing && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.35rem",
-            paddingTop: "0.15rem",
-          }}
-        >
-          {schedule.courtsEnabled && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-              {missingAvailability.length > 0 ? (
-                <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray500 }}>
-                  Falta la disponibilidad de {missingAvailability.join(" y ")}.
-                </p>
-              ) : suggestions.length > 0 ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                  {suggestions.map((slot) => (
-                    <button
-                      key={`${slot.date}-${slot.time}-${slot.courtId}`}
-                      type="button"
-                      onClick={() => applySuggestion(slot)}
-                      style={{
-                        border: `1px solid ${C.gray200}`,
-                        background: C.gray50,
-                        color: C.navy900,
-                        borderRadius: 8,
-                        padding: "0.3rem 0.5rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {shortSlotLabel(slot.date, slot.time)} · {slot.courtName}
-                    </button>
-                  ))}
-                </div>
-              ) : schedule.ready ? (
-                <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray500 }}>
-                  No hay un horario en que ambos equipos y una cancha coincidan.
-                </p>
-              ) : null}
-            </div>
-          )}
-          <div className="match-edit-when">
-            <label style={matchField}>
-              <span style={matchFieldLabel}>Fecha</span>
-              <FormInput
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                aria-label="Fecha"
-                style={compactInput}
-              />
-            </label>
-            <div style={matchField}>
-              <span style={matchFieldLabel}>Hora</span>
-              <TimeField value={time} onChange={setTime} />
-            </div>
-          </div>
-          {schedule.courtsEnabled ? (
-            <label style={matchField}>
-              <span style={matchFieldLabel}>Cancha</span>
-              <FormSelect
-                aria-label="Cancha"
-                value={freeCourts.some((court) => court.id === courtId) ? courtId : ""}
-                disabled={!date || !time}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setCourtId(next);
-                  const court = freeCourts.find((item) => item.id === next);
-                  setVenue(court?.name || "");
-                }}
-                style={compactInput}
-              >
-                <option value="">
-                  {!date || !time
-                    ? "Elige fecha y hora"
-                    : freeCourts.length
-                      ? "Sin cancha"
-                      : "Ninguna cancha libre en ese horario"}
-                </option>
-                {freeCourts.map((court) => (
-                  <option key={court.id} value={court.id}>
-                    {court.name}
-                  </option>
-                ))}
-              </FormSelect>
-            </label>
-          ) : (
-            <label style={matchField}>
-              <span style={matchFieldLabel}>Sede</span>
-              <FormInput
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-                placeholder="Sede"
-                aria-label="Sede"
-                style={compactInput}
-              />
-            </label>
-          )}
-          <div className="match-edit-actions">
-            <PrimaryButton
-              type="button"
-              disabled={busy}
-              onClick={() => void saveSchedule()}
-              style={compactBtn}
-            >
-              {busy ? "…" : "Guardar"}
-            </PrimaryButton>
-          </div>
-        </div>
+        <MatchScheduleForm
+          match={match}
+          schedule={schedule}
+          startDate={tournament.startDate}
+          durationMinutes={tournament.durationMinutes}
+          onSaved={() => setEditing(false)}
+        />
       )}
       {statsOpen && (
         <MatchStatsEditor
@@ -884,144 +640,3 @@ function cardNames(side: MatchSide | undefined, key: "yellowCards" | "redCards")
   const names = side.playerNames || {};
   return side[key]!.map((id) => shortName(names[id] || id));
 }
-
-function TimeField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const parsed = parseClock(value);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointer);
-    return () => document.removeEventListener("mousedown", onPointer);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !rootRef.current) return;
-    rootRef.current.querySelectorAll(".time-pick__opt.is-on").forEach((node) => {
-      const el = node as HTMLElement;
-      const col = el.parentElement;
-      if (!col) return;
-      col.scrollTop = el.offsetTop - col.clientHeight / 2 + el.clientHeight / 2;
-    });
-  }, [open, value]);
-
-  const pick = (part: Partial<{ h12: number; minute: number; pm: boolean }>) => {
-    const base = parsed ?? { h12: 12, minute: 0, pm: false };
-    onChange(toClock({ ...base, ...part }));
-  };
-
-  return (
-    <div className="time-pick" ref={rootRef}>
-      <button
-        type="button"
-        className="time-pick__btn"
-        aria-label="Hora"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={value ? undefined : "time-pick__placeholder"}>
-          {value ? formatFriendlyTime(value) : "Hora"}
-        </span>
-        <Clock size={14} />
-      </button>
-      {open && (
-        <div className="time-pick__pop" role="listbox" aria-label="Elegir hora">
-          <div className="time-pick__col">
-            {HOURS.map((hour) => (
-              <button
-                key={hour}
-                type="button"
-                className={`time-pick__opt${parsed?.h12 === hour ? " is-on" : ""}`}
-                onClick={() => pick({ h12: hour })}
-              >
-                {String(hour).padStart(2, "0")}
-              </button>
-            ))}
-          </div>
-          <div className="time-pick__col">
-            {MINUTES.map((minute) => (
-              <button
-                key={minute}
-                type="button"
-                className={`time-pick__opt${parsed?.minute === minute ? " is-on" : ""}`}
-                onClick={() => pick({ minute })}
-              >
-                {String(minute).padStart(2, "0")}
-              </button>
-            ))}
-          </div>
-          <div className="time-pick__col time-pick__col--period">
-            {(["AM", "PM"] as const).map((period) => {
-              const pm = period === "PM";
-              return (
-                <button
-                  key={period}
-                  type="button"
-                  className={`time-pick__opt${parsed && parsed.pm === pm ? " is-on" : ""}`}
-                  onClick={() => pick({ pm })}
-                >
-                  {period}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
-const MINUTES = Array.from({ length: 60 }, (_, i) => i);
-
-function parseClock(value: string) {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  if (!match) return null;
-  const hour24 = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour24 > 23 || minute > 59) return null;
-  const pm = hour24 >= 12;
-  const h12 = hour24 % 12 || 12;
-  return { h12, minute, pm };
-}
-
-function toClock(parts: { h12: number; minute: number; pm: boolean }) {
-  let hour = parts.h12 % 12;
-  if (parts.pm) hour += 12;
-  return `${String(hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
-}
-
-const compactInput: CSSProperties = {
-  padding: "0.35rem 0.5rem",
-  fontSize: "0.78rem",
-};
-
-const compactBtn: CSSProperties = {
-  padding: "0.35rem 0.6rem",
-  fontSize: "0.72rem",
-};
-
-const matchField: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 3,
-  minWidth: 0,
-};
-
-const matchFieldLabel: CSSProperties = {
-  fontSize: "0.62rem",
-  fontWeight: 700,
-  color: C.gray500,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};

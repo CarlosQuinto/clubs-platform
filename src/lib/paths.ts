@@ -81,10 +81,9 @@ export const courtsCol = () => collection(db, "courts");
 export const courtRef = (id: string) => doc(db, "courts", id);
 export const courtHoldsCol = () => collection(db, "courtHolds");
 export const courtHoldRef = (id: string) => doc(db, "courtHolds", id);
-export const availabilityCol = (tournamentId: string) =>
-  collection(db, "tournaments", tournamentId, "availability");
-export const availabilityRef = (tournamentId: string, clubId: string) =>
-  doc(db, "tournaments", tournamentId, "availability", clubId);
+/** Días y horas en que el equipo puede jugar. Uno por club. */
+export const availabilityRef = (clubId: string) =>
+  doc(db, "clubs", clubId, "availability", "windows");
 
 /** Ruta de Storage para recursos de la plataforma (carrusel de la landing). */
 export const platformStoragePath = (folder: string, filename: string) =>

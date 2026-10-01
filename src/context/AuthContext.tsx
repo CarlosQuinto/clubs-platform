@@ -38,6 +38,8 @@ export interface PlatformConfig {
   courtSlotMinutes?: CourtSlotMinutes;
   /** Días y horas en que las canchas abren. */
   courtOpenWindows?: TimeWindow[];
+  /** La disponibilidad ya se copió de cada torneo al club. */
+  availabilityMigrated?: boolean;
 }
 
 interface AuthContextValue {

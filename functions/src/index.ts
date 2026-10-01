@@ -527,6 +527,8 @@ export {
 
 export { notifyTournamentEnrollment, scheduleMatch } from "./scheduling";
 
+export { migrateClubAvailability } from "./availability";
+
 /** Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios. */
 export const requestPasswordReset = onCall(CALLABLE, async (request) => {
   const email = String(request.data?.email || "").trim().toLowerCase();

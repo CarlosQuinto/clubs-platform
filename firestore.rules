@@ -114,14 +114,6 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSuperAdmin();
 
-      match /availability/{clubId} {
-        allow read: if isSuperAdmin() || hasRole(clubId, ['admin', 'dt']);
-        allow write: if (isSuperAdmin() || hasRole(clubId, ['admin', 'dt']))
-          && request.resource.data.keys().hasOnly(['windows', 'updatedAt', 'updatedBy'])
-          && request.resource.data.windows is list
-          && request.resource.data.windows.size() <= 21;
-      }
-
       match /notices/{clubId} {
         allow read, write: if false;
       }
@@ -413,6 +405,15 @@ service cloud.firestore {
       match /gallery/{id} {
         allow read: if true;
         allow write: if hasRole(clubId, ['admin', 'prensa']);
+      }
+
+      match /availability/{id} {
+        allow read: if isSuperAdmin() || hasRole(clubId, ['admin', 'dt']);
+        allow write: if id == 'windows'
+          && (isSuperAdmin() || hasRole(clubId, ['admin', 'dt']))
+          && request.resource.data.keys().hasOnly(['windows', 'updatedAt', 'updatedBy'])
+          && request.resource.data.windows is list
+          && request.resource.data.windows.size() <= 21;
       }
     }
   }

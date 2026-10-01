@@ -95,8 +95,8 @@ export default function CourtsPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: "0.65rem",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "0.5rem",
                 }}
               >
                 {active.map((court) => {
@@ -111,8 +111,9 @@ export default function CourtsPage() {
                         border: `1px solid ${on ? C.navy900 : C.gray200}`,
                         background: on ? C.gray50 : C.white,
                         borderRadius: 12,
-                        padding: "0.85rem",
+                        padding: "0.65rem 0.7rem",
                         cursor: "pointer",
+                        minWidth: 0,
                       }}
                     >
                       <strong style={{ color: C.navy900, display: "block" }}>{court.name}</strong>
