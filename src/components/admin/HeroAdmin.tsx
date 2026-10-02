@@ -33,20 +33,40 @@ interface Props {
   config?: PlatformConfig | null;
 }
 
+const LIMIT = {
+  name: 20,
+  motto: 30,
+  headline: 35,
+  tagline: 120,
+  instagram: 150,
+  facebook: 150,
+  whatsapp: 20,
+} as const;
+
+function clip(value: string, max: number) {
+  return value.slice(0, max);
+}
+
 export default function HeroAdmin({ config }: Props) {
   const savedImages = config?.heroImages || [];
-  const [name, setName] = useState(config?.name || PLATFORM_NAME);
-  const [motto, setMotto] = useState(config?.motto || "");
+  const [name, setName] = useState(clip(config?.name || PLATFORM_NAME, LIMIT.name));
+  const [motto, setMotto] = useState(clip(config?.motto || "", LIMIT.motto));
   const [logoUrl, setLogoUrl] = useState(config?.logoUrl || "");
   const [headline, setHeadline] = useState(
-    config?.headline || PLATFORM_HEADLINE,
+    clip(config?.headline || PLATFORM_HEADLINE, LIMIT.headline),
   );
   const [tagline, setTagline] = useState(
-    config?.tagline || PLATFORM_DESCRIPTION,
+    clip(config?.tagline || PLATFORM_DESCRIPTION, LIMIT.tagline),
   );
-  const [instagram, setInstagram] = useState(config?.social?.instagram || "");
-  const [facebook, setFacebook] = useState(config?.social?.facebook || "");
-  const [whatsapp, setWhatsapp] = useState(config?.social?.whatsapp || "");
+  const [instagram, setInstagram] = useState(
+    clip(config?.social?.instagram || "", LIMIT.instagram),
+  );
+  const [facebook, setFacebook] = useState(
+    clip(config?.social?.facebook || "", LIMIT.facebook),
+  );
+  const [whatsapp, setWhatsapp] = useState(
+    clip(config?.social?.whatsapp || "", LIMIT.whatsapp),
+  );
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{
@@ -55,14 +75,14 @@ export default function HeroAdmin({ config }: Props) {
   } | null>(null);
 
   useEffect(() => {
-    setName(config?.name || PLATFORM_NAME);
-    setMotto(config?.motto || "");
+    setName(clip(config?.name || PLATFORM_NAME, LIMIT.name));
+    setMotto(clip(config?.motto || "", LIMIT.motto));
     setLogoUrl(config?.logoUrl || "");
-    setHeadline(config?.headline || PLATFORM_HEADLINE);
-    setTagline(config?.tagline || PLATFORM_DESCRIPTION);
-    setInstagram(config?.social?.instagram || "");
-    setFacebook(config?.social?.facebook || "");
-    setWhatsapp(config?.social?.whatsapp || "");
+    setHeadline(clip(config?.headline || PLATFORM_HEADLINE, LIMIT.headline));
+    setTagline(clip(config?.tagline || PLATFORM_DESCRIPTION, LIMIT.tagline));
+    setInstagram(clip(config?.social?.instagram || "", LIMIT.instagram));
+    setFacebook(clip(config?.social?.facebook || "", LIMIT.facebook));
+    setWhatsapp(clip(config?.social?.whatsapp || "", LIMIT.whatsapp));
   }, [
     config?.name,
     config?.motto,
@@ -88,8 +108,8 @@ export default function HeroAdmin({ config }: Props) {
     await setDoc(
       platformConfigRef(),
       {
-        name: name.trim() || PLATFORM_NAME,
-        motto: motto.trim(),
+        name: clip(name.trim() || PLATFORM_NAME, LIMIT.name),
+        motto: clip(motto.trim(), LIMIT.motto),
         logoUrl: logoUrl.trim(),
       },
       { merge: true },
@@ -102,8 +122,8 @@ export default function HeroAdmin({ config }: Props) {
     await setDoc(
       platformConfigRef(),
       {
-        headline: headline.trim() || PLATFORM_HEADLINE,
-        tagline: tagline.trim() || PLATFORM_DESCRIPTION,
+        headline: clip(headline.trim() || PLATFORM_HEADLINE, LIMIT.headline),
+        tagline: clip(tagline.trim() || PLATFORM_DESCRIPTION, LIMIT.tagline),
       },
       { merge: true },
     );
@@ -241,16 +261,17 @@ export default function HeroAdmin({ config }: Props) {
           <Field label="Nombre">
             <FormInput
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              maxLength={LIMIT.name}
+              onChange={(e) => setName(clip(e.target.value, LIMIT.name))}
               placeholder={PLATFORM_NAME}
             />
           </Field>
           <Field label="Lema">
             <FormInput
               value={motto}
-              onChange={(e) => setMotto(e.target.value)}
+              maxLength={LIMIT.motto}
+              onChange={(e) => setMotto(clip(e.target.value, LIMIT.motto))}
               placeholder="Pasión por el fútbol, comunidad en cada partido."
-              maxLength={120}
             />
           </Field>
           {notice?.area === "header" && (
@@ -275,7 +296,8 @@ export default function HeroAdmin({ config }: Props) {
           <Field label="Título">
             <FormInput
               value={headline}
-              onChange={(e) => setHeadline(e.target.value)}
+              maxLength={LIMIT.headline}
+              onChange={(e) => setHeadline(clip(e.target.value, LIMIT.headline))}
               placeholder={PLATFORM_HEADLINE}
             />
           </Field>
@@ -283,7 +305,8 @@ export default function HeroAdmin({ config }: Props) {
             <FormTextarea
               rows={3}
               value={tagline}
-              onChange={(e) => setTagline(e.target.value)}
+              maxLength={LIMIT.tagline}
+              onChange={(e) => setTagline(clip(e.target.value, LIMIT.tagline))}
               placeholder={PLATFORM_DESCRIPTION}
             />
           </Field>
@@ -440,9 +463,9 @@ export default function HeroAdmin({ config }: Props) {
               platformConfigRef(),
               {
                 social: {
-                  instagram: instagram.trim(),
-                  facebook: facebook.trim(),
-                  whatsapp: whatsapp.trim(),
+                  instagram: clip(instagram.trim(), LIMIT.instagram),
+                  facebook: clip(facebook.trim(), LIMIT.facebook),
+                  whatsapp: clip(whatsapp.trim(), LIMIT.whatsapp),
                 },
               },
               { merge: true },
@@ -454,21 +477,24 @@ export default function HeroAdmin({ config }: Props) {
           <Field label="Instagram" hint="Usuario o URL. Ej. @orinco o https://instagram.com/orinco">
             <FormInput
               value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
+              maxLength={LIMIT.instagram}
+              onChange={(e) => setInstagram(clip(e.target.value, LIMIT.instagram))}
               placeholder="@usuario"
             />
           </Field>
           <Field label="Facebook" hint="Página o URL.">
             <FormInput
               value={facebook}
-              onChange={(e) => setFacebook(e.target.value)}
+              maxLength={LIMIT.facebook}
+              onChange={(e) => setFacebook(clip(e.target.value, LIMIT.facebook))}
               placeholder="https://facebook.com/..."
             />
           </Field>
           <Field label="WhatsApp" hint="Número de la empresa. Ej. 622 123 4567">
             <FormInput
               value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
+              maxLength={LIMIT.whatsapp}
+              onChange={(e) => setWhatsapp(clip(e.target.value, LIMIT.whatsapp))}
               placeholder="622 123 4567"
             />
           </Field>

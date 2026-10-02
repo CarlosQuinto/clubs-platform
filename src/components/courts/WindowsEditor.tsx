@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { C, FormInput, SecondaryButton } from "../ui";
+import { Calendar, Clock, Plus, Trash2 } from "lucide-react";
 import type { TimeWindow, Weekday } from "../../lib/types";
 
 const DAYS: { value: Weekday; short: string; letter: string; label: string }[] = [
@@ -87,11 +86,9 @@ export default function WindowsEditor({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+    <div className="windows-editor">
       {rows.length === 0 && (
-        <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray500 }}>
-          Sin horarios. Agrega un rango y enciende los días.
-        </p>
+        <p className="windows-editor__empty">Sin horarios. Agrega un rango y enciende los días.</p>
       )}
       {rows.map((group, index) => (
         <ScheduleRow
@@ -101,13 +98,14 @@ export default function WindowsEditor({
           onRemove={() => removeRow(index)}
         />
       ))}
-      <SecondaryButton
+      <button
         type="button"
+        className="windows-add"
         onClick={() => setDrafts([...drafts, { start: "10:00", end: "22:00", days: [] }])}
-        style={{ alignSelf: "flex-start", display: "inline-flex", gap: "0.3rem" }}
       >
-        <Plus size={14} /> Agregar horario
-      </SecondaryButton>
+        <Plus size={15} />
+        Agregar horario
+      </button>
     </div>
   );
 }
@@ -131,44 +129,27 @@ function ScheduleRow({
   const setDays = (days: Weekday[]) => onChange({ ...group, days });
 
   return (
-    <div
-      className="windows-editor-row"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.45rem",
-        border: `1px solid ${C.gray200}`,
-        borderRadius: 10,
-        padding: "0.65rem",
-      }}
-    >
+    <div className="windows-card">
+      <header className="windows-card__head">
+        <Clock size={16} />
+        <strong>Días y horario de apertura</strong>
+        <button type="button" aria-label="Quitar horario" onClick={onRemove}>
+          <Trash2 size={15} />
+        </button>
+      </header>
       <div className="windows-time">
-        <FormInput
+        <input
           type="time"
           aria-label="Desde"
           value={group.start}
           onChange={(e) => onChange({ ...group, start: e.target.value })}
         />
-        <FormInput
+        <input
           type="time"
           aria-label="Hasta"
           value={group.end}
           onChange={(e) => onChange({ ...group, end: e.target.value })}
         />
-        <button
-          type="button"
-          aria-label="Quitar horario"
-          onClick={onRemove}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: C.gray500,
-            cursor: "pointer",
-            padding: "0.35rem",
-          }}
-        >
-          <Trash2 size={15} />
-        </button>
       </div>
       <div className="windows-days">
         {DAYS.map((day) => {
@@ -179,19 +160,8 @@ function ScheduleRow({
               type="button"
               aria-pressed={on}
               aria-label={day.label}
+              className={on ? "is-on" : ""}
               onClick={() => toggle(day.value)}
-              style={{
-                border: `1px solid ${on ? C.navy900 : C.gray300}`,
-                background: on ? C.navy900 : C.white,
-                color: on ? C.white : C.gray600,
-                borderRadius: 8,
-                padding: "0.35rem 0",
-                fontSize: "0.68rem",
-                fontWeight: 800,
-                cursor: "pointer",
-                minWidth: 0,
-                overflow: "hidden",
-              }}
             >
               <span className="windows-day__full">{day.short}</span>
               <span className="windows-day__letter">{day.letter}</span>
@@ -199,31 +169,16 @@ function ScheduleRow({
           );
         })}
       </div>
-      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-        <Chip label="Entre semana" onClick={() => setDays(WEEKDAYS)} />
-        <Chip label="Toda la semana" onClick={() => setDays(ALL_DAYS)} />
+      <div className="windows-shortcuts">
+        <button type="button" onClick={() => setDays(WEEKDAYS)}>
+          <Plus size={14} />
+          Entre semana
+        </button>
+        <button type="button" onClick={() => setDays(ALL_DAYS)}>
+          <Calendar size={14} />
+          Toda la semana
+        </button>
       </div>
     </div>
-  );
-}
-
-function Chip({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        border: `1px solid ${C.gray300}`,
-        background: C.gray50,
-        color: C.navy900,
-        fontSize: "0.72rem",
-        fontWeight: 700,
-        cursor: "pointer",
-        borderRadius: 999,
-        padding: "0.28rem 0.6rem",
-      }}
-    >
-      {label}
-    </button>
   );
 }

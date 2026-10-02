@@ -11,6 +11,8 @@ function mapCourt(id: string, data: Record<string, unknown>): Court {
     hourlyRate: typeof data.hourlyRate === "number" ? data.hourlyRate : 0,
     active: data.active !== false,
     order: typeof data.order === "number" ? data.order : 0,
+    imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
+    football: data.football !== false,
   };
 }
 

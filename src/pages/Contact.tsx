@@ -55,7 +55,7 @@ export default function Contact() {
     if (!EMAIL_RE.test(cleanEmail)) return setError("El correo no es válido.");
     if (!cleanTopic) return setError("Selecciona un tema.");
     if (cleanMessage.length < 3) return setError("Escribe un mensaje.");
-    if (!consent) return setError("Debes aceptar el aviso de privacidad.");
+    if (!consent) return setError("Debes aceptar los términos y la política de privacidad.");
     try {
       setBusy(true);
       await addDoc(inquiriesCol(), {
@@ -189,7 +189,17 @@ export default function Contact() {
                 required
               />
               <span>
-                He leído y acepto el{" "}
+                He leído y acepto los{" "}
+                <Link
+                  to="/terminos"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markScrollTopAfterNav();
+                  }}
+                >
+                  términos, condiciones
+                </Link>{" "}
+                y la{" "}
                 <Link
                   to="/aviso-de-privacidad"
                   onClick={(e) => {
@@ -197,10 +207,9 @@ export default function Contact() {
                     markScrollTopAfterNav();
                   }}
                 >
-                  aviso de privacidad
+                  política de privacidad
                 </Link>{" "}
-                y el
-                uso de mis datos para dar seguimiento a esta solicitud.
+                para el tratamiento de mis datos personales.
               </span>
             </label>
             {error && <p className="public-form-error">{error}</p>}

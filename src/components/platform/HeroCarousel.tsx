@@ -22,9 +22,9 @@ export default function HeroCarousel({
   const height = full
     ? short
       ? "min(30vh, 300px)"
-      : "min(78vh, 760px)"
+      : "min(56vh, 520px)"
     : "min(420px, 56vw)";
-  const minHeight = full ? (short ? 190 : 420) : undefined;
+  const minHeight = full ? (short ? 190 : 340) : undefined;
 
   useEffect(() => {
     if (total < 2) return;

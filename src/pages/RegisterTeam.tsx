@@ -49,7 +49,7 @@ export default function RegisterTeam() {
       return setError("El teléfono no es válido.");
     }
     if (team.length < 2) return setError("Escribe el nombre del equipo.");
-    if (!consent) return setError("Debes aceptar el aviso de privacidad.");
+    if (!consent) return setError("Debes aceptar los términos y la política de privacidad.");
     try {
       setBusy(true);
       await addDoc(teamApplicationsCol(), {
@@ -157,7 +157,17 @@ export default function RegisterTeam() {
                 required
               />
               <span>
-                He leído y acepto el{" "}
+                He leído y acepto los{" "}
+                <Link
+                  to="/terminos"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markScrollTopAfterNav();
+                  }}
+                >
+                  términos, condiciones
+                </Link>{" "}
+                y la{" "}
                 <Link
                   to="/aviso-de-privacidad"
                   onClick={(e) => {
@@ -165,10 +175,9 @@ export default function RegisterTeam() {
                     markScrollTopAfterNav();
                   }}
                 >
-                  aviso de privacidad
+                  política de privacidad
                 </Link>{" "}
-                y el
-                uso de mis datos para registrar al equipo.
+                para el tratamiento de mis datos personales.
               </span>
             </label>
             {error && <p className="public-form-error">{error}</p>}

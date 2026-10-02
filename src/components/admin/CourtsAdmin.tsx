@@ -1,8 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { addDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
-import { MapPin, Pencil, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { addDoc, deleteDoc, getDoc, getDocs, query, updateDoc, where, writeBatch } from "firebase/firestore";
+import {
+  Calendar,
+  CircleDollarSign,
+  Clock,
+  FileText,
+  Image as ImageIcon,
+  Info,
+  MapPin,
+  Menu,
+  Pencil,
+  Plus,
+  Save,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useCourtHolds, useCourts } from "../../hooks/useCourts";
+import { useModalLock } from "../../hooks/useModalLock";
 import {
   courtsFreeAt,
   daySlotStarts,
@@ -21,10 +37,14 @@ import {
   courtRef,
   courtsCol,
   matchRef,
+  matchesCol,
   platformConfigRef,
+  platformStoragePath,
   tournamentRef,
 } from "../../lib/paths";
+import { db } from "../../lib/firebase";
 import { scheduleMatch } from "../../lib/scheduleMatch";
+import { uploadImageFile } from "../../lib/uploadImage";
 import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type CourtSlotMinutes, type TimeWindow } from "../../lib/types";
 import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
 import WindowsEditor, { dayLabel } from "../courts/WindowsEditor";
@@ -34,11 +54,50 @@ import {
   C,
   FormInput,
   FormSelect,
+  FormTextarea,
   PrimaryButton,
-  SecondaryButton,
   SectionCard,
-  SegmentedControl,
 } from "../ui";
+
+const COURT_TEXT_LIMIT = 15;
+
+function clipCourtText(value: string) {
+  return value.slice(0, COURT_TEXT_LIMIT);
+}
+
+function deleteCourtMessage(name: string, matches: number, rentals: number, linked: boolean) {
+  if (!linked) {
+    return `¿Seguro que deseas eliminar ${name}? Esta acción no se puede deshacer.`;
+  }
+  const parts: string[] = [];
+  if (matches === 1) parts.push("1 partido");
+  else if (matches > 1) parts.push(`${matches} partidos`);
+  if (rentals === 1) parts.push("1 renta");
+  else if (rentals > 1) parts.push(`${rentals} rentas`);
+  const has = parts.length ? `Tiene ${parts.join(" y ")}. ` : "";
+  return `¿Seguro que deseas eliminar ${name}? ${has}Se quitarán esos apartados y los partidos quedarán sin esta cancha. El marcador y la fecha se conservan.`;
+}
+
+async function deleteCourtAndLinks(court: Court) {
+  const [holdSnap, matchSnap] = await Promise.all([
+    getDocs(query(courtHoldsCol(), where("courtId", "==", court.id))),
+    getDocs(query(matchesCol(), where("courtId", "==", court.id))),
+  ]);
+  const rentals = holdSnap.docs.filter((docSnap) => docSnap.data().source !== "match").length;
+  const linked = holdSnap.size > 0 || matchSnap.size > 0;
+  if (!window.confirm(deleteCourtMessage(court.name, matchSnap.size, rentals, linked))) return false;
+
+  const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+  for (const docSnap of holdSnap.docs) ops.push((batch) => batch.delete(docSnap.ref));
+  for (const docSnap of matchSnap.docs) ops.push((batch) => batch.update(docSnap.ref, { courtId: "" }));
+  for (let index = 0; index < ops.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const op of ops.slice(index, index + 450)) op(batch);
+    await batch.commit();
+  }
+  await deleteDoc(courtRef(court.id));
+  return true;
+}
 
 export default function CourtsAdmin() {
   const { platformConfig } = useAuth();
@@ -63,6 +122,10 @@ export default function CourtsAdmin() {
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [draftRate, setDraftRate] = useState("");
+  const [draftFootball, setDraftFootball] = useState(true);
+  const [draftImageUrl, setDraftImageUrl] = useState("");
+  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [draftPreview, setDraftPreview] = useState("");
   const [draftBusy, setDraftBusy] = useState(false);
 
   const saveConfig = async () => {
@@ -83,22 +146,49 @@ export default function CourtsAdmin() {
     }
   };
 
+  const clearPhoto = () => {
+    setDraftPreview((current) => {
+      if (current.startsWith("blob:")) URL.revokeObjectURL(current);
+      return "";
+    });
+    setDraftFile(null);
+    setDraftImageUrl("");
+  };
+
   const openAddCourt = () => {
     setDraftName("");
     setDraftDescription("");
     setDraftRate("");
+    setDraftFootball(true);
+    clearPhoto();
     setCourtModal("add");
   };
 
   const openEditCourt = (court: Court) => {
-    setDraftName(court.name);
-    setDraftDescription(court.description);
+    setDraftName(clipCourtText(court.name));
+    setDraftDescription(clipCourtText(court.description));
     setDraftRate(String(court.hourlyRate));
+    setDraftFootball(court.football !== false);
+    setDraftPreview((current) => {
+      if (current.startsWith("blob:")) URL.revokeObjectURL(current);
+      return court.imageUrl?.trim() || "";
+    });
+    setDraftFile(null);
+    setDraftImageUrl(court.imageUrl?.trim() || "");
     setCourtModal(court);
   };
 
+  const pickPhoto = (file: File) => {
+    setDraftPreview((current) => {
+      if (current.startsWith("blob:")) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+    setDraftFile(file);
+  };
+
   const saveCourtModal = async () => {
-    const cleanName = draftName.trim();
+    const cleanName = clipCourtText(draftName.trim());
+    const cleanDescription = clipCourtText(draftDescription.trim());
     const hourlyRate = Number(draftRate);
     if (!cleanName || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
       alert("Escribe el nombre y un costo por hora válido.");
@@ -106,22 +196,35 @@ export default function CourtsAdmin() {
     }
     setDraftBusy(true);
     try {
+      let imageUrl = draftImageUrl.trim();
+      if (draftFile) {
+        imageUrl = await uploadImageFile(
+          platformStoragePath("courts", `${Date.now()}.jpg`),
+          draftFile,
+          { maxSizeMB: 0.6, maxWidthOrHeight: 1200 },
+        );
+      }
       if (courtModal === "add") {
         const order = courts.reduce((max, court) => Math.max(max, court.order), 0) + 1;
         await addDoc(courtsCol(), {
           name: cleanName,
-          description: draftDescription.trim(),
+          description: cleanDescription,
           hourlyRate,
+          imageUrl,
+          football: draftFootball,
           active: true,
           order,
         });
       } else if (courtModal) {
         await updateDoc(courtRef(courtModal.id), {
           name: cleanName,
-          description: draftDescription.trim(),
+          description: cleanDescription,
           hourlyRate,
+          imageUrl,
+          football: draftFootball,
         });
       }
+      clearPhoto();
       setCourtModal(null);
     } catch (err) {
       console.error(err);
@@ -134,35 +237,64 @@ export default function CourtsAdmin() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       <SectionCard title="Horario de canchas" icon={<MapPin size={16} />}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", fontWeight: 700, color: C.navy900 }}>
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            Módulo de canchas visible para el público
-          </label>
-          <Field label="Paso del apartado" hint="Los inicios caen en esta rejilla.">
-            <SegmentedControl
-              value={String(slot)}
-              onChange={(value) => setSlot(value === "30" ? 30 : 60)}
-              options={[
-                { label: "Cada hora", value: "60" },
-                { label: "Cada 30 min", value: "30" },
-              ]}
-            />
-          </Field>
-          <Field label="Días y horario de apertura" hint="Fuera de estos rangos no se puede apartar.">
-            <WindowsEditor windows={windows} onChange={setWindows} />
-          </Field>
+        <div className="hours-form">
+          <p className="hours-form__lead">
+            Configura los horarios en que estará disponible el módulo de canchas para el público.
+          </p>
+          <div className={`hours-form__module${enabled ? " is-on" : ""}`}>
+            <span>
+              <strong>Módulo de canchas visible para el público</strong>
+              <small>Cuando está activado, los usuarios podrán reservar en los horarios definidos.</small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              aria-label="Módulo de canchas visible para el público"
+              className={`hours-form__switch${enabled ? " is-on" : ""}`}
+              onClick={() => setEnabled(!enabled)}
+            >
+              <span />
+            </button>
+          </div>
+          <div className="hours-form__step">
+            <span className="hours-form__kicker">
+              <Clock size={14} />
+              Paso del apartado
+            </span>
+            <div className="hours-form__choices">
+              <button
+                type="button"
+                className={slot === 60 ? "is-on" : ""}
+                onClick={() => setSlot(60)}
+              >
+                <Clock size={15} />
+                Cada hora
+              </button>
+              <button
+                type="button"
+                className={slot === 30 ? "is-on" : ""}
+                onClick={() => setSlot(30)}
+              >
+                <Clock size={15} />
+                Cada 30 min
+              </button>
+            </div>
+            <p>Los inicios caen en esta rejilla.</p>
+          </div>
+          <WindowsEditor windows={windows} onChange={setWindows} />
+          <p className="hours-form__note">
+            <Info size={14} />
+            Fuera de estos rangos no se puede apartar.
+          </p>
           <PrimaryButton type="button" disabled={configBusy} onClick={() => void saveConfig()}>
+            <Save size={15} />
             {configBusy ? "Guardando…" : "Guardar horario"}
           </PrimaryButton>
         </div>
       </SectionCard>
 
-      <SectionCard title="Apartar canchas" icon={<MapPin size={16} />}>
+      <SectionCard className="book-panel">
         <DayGrid
           date={gridDate}
           onDate={setGridDate}
@@ -174,77 +306,278 @@ export default function CourtsAdmin() {
           onAddCourt={openAddCourt}
         />
       </SectionCard>
-      <ConfirmModal
+      <CourtFormModal
         open={courtModal !== null}
-        title={courtModal === "add" ? "Nueva cancha" : "Editar cancha"}
-        confirmLabel="Guardar"
+        editing={courtModal && courtModal !== "add" ? courtModal : null}
+        name={draftName}
+        description={draftDescription}
+        rate={draftRate}
+        football={draftFootball}
+        preview={draftPreview}
         busy={draftBusy}
-        confirmDisabled={!draftName.trim() || draftRate.trim() === ""}
-        onConfirm={() => void saveCourtModal()}
+        canSave={Boolean(draftName.trim()) && draftRate.trim() !== ""}
+        onName={setDraftName}
+        onDescription={setDraftDescription}
+        onRate={setDraftRate}
+        onFootball={setDraftFootball}
+        onPhoto={pickPhoto}
+        onClearPhoto={clearPhoto}
+        onSave={() => void saveCourtModal()}
         onCancel={() => {
           if (!draftBusy) setCourtModal(null);
         }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-          <Field label="Nombre">
-            <FormInput value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Cancha 1" autoFocus />
-          </Field>
-          <Field label="Descripción">
-            <FormInput
-              value={draftDescription}
-              onChange={(e) => setDraftDescription(e.target.value)}
-              placeholder="Pasto sintético, iluminación"
-            />
-          </Field>
-          <Field label="Costo por hora">
-            <FormInput
-              type="number"
-              min={0}
-              value={draftRate}
-              onChange={(e) => setDraftRate(e.target.value)}
-              placeholder="400"
-            />
-          </Field>
-          {courtModal && courtModal !== "add" && (
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
-              <SecondaryButton
-                type="button"
-                disabled={draftBusy}
-                onClick={() => {
-                  const next = !courtModal.active;
-                  void updateDoc(courtRef(courtModal.id), { active: next })
-                    .then(() => setCourtModal({ ...courtModal, active: next }))
-                    .catch(() => alert("No se pudo actualizar la cancha."));
+        onToggleActive={() => {
+          if (!courtModal || courtModal === "add") return;
+          const next = !courtModal.active;
+          if (
+            !next &&
+            !window.confirm(
+              `¿Ocultar ${courtModal.name}? Esta cancha ya no estará disponible para el público.`,
+            )
+          ) {
+            return;
+          }
+          void updateDoc(courtRef(courtModal.id), {
+            active: next,
+            name: clipCourtText(courtModal.name),
+            description: clipCourtText(courtModal.description),
+          })
+            .then(() => setCourtModal({ ...courtModal, active: next }))
+            .catch(() => alert("No se pudo actualizar la cancha."));
+        }}
+        onDelete={() => {
+          if (!courtModal || courtModal === "add" || draftBusy) return;
+          setDraftBusy(true);
+          void deleteCourtAndLinks(courtModal)
+            .then((removed) => {
+              if (removed) setCourtModal(null);
+            })
+            .catch(() => alert("No se pudo eliminar la cancha."))
+            .finally(() => setDraftBusy(false));
+        }}
+      />
+    </div>
+  );
+}
+
+function CourtFormModal({
+  open,
+  editing,
+  name,
+  description,
+  rate,
+  football,
+  preview,
+  busy,
+  canSave,
+  onName,
+  onDescription,
+  onRate,
+  onFootball,
+  onPhoto,
+  onClearPhoto,
+  onSave,
+  onCancel,
+  onToggleActive,
+  onDelete,
+}: {
+  open: boolean;
+  editing: Court | null;
+  name: string;
+  description: string;
+  rate: string;
+  football: boolean;
+  preview: string;
+  busy: boolean;
+  canSave: boolean;
+  onName: (value: string) => void;
+  onDescription: (value: string) => void;
+  onRate: (value: string) => void;
+  onFootball: (value: boolean) => void;
+  onPhoto: (file: File) => void;
+  onClearPhoto: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onToggleActive: () => void;
+  onDelete: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  useModalLock(open ? onCancel : null);
+  if (!open) return null;
+
+  return (
+    <div
+      className="court-form"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="court-form-title"
+      onClick={onCancel}
+    >
+      <div className="court-form__panel" onClick={(event) => event.stopPropagation()}>
+        <header className="court-form__head">
+          <span className="court-form__ball" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+              <path
+                d="M12 7.2 14.6 9l-1 3.1H10.4L9.4 9 12 7.2Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M9.4 9 6.6 8.2 5.4 11.2 8.2 13.2M14.6 9l2.8-.8 1.2 3-2.8 2M8.2 13.2 7.4 16.6 10.4 18.1 12 15.1M15.8 13.2 16.6 16.6 13.6 18.1 12 15.1"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <div>
+            <h3 id="court-form-title">{editing ? "Editar cancha" : "Nueva cancha"}</h3>
+            <p>
+              {editing
+                ? "Actualiza la información de esta cancha."
+                : "Completa la información para registrar una nueva cancha."}
+            </p>
+          </div>
+          <button type="button" className="court-form__close" aria-label="Cerrar" onClick={onCancel}>
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="court-form__body">
+          <label className="court-form__label">
+            Nombre
+            <span className="court-form__field">
+              <Menu size={16} aria-hidden="true" />
+              <FormInput
+                value={name}
+                autoFocus
+                disabled={busy}
+                maxLength={COURT_TEXT_LIMIT}
+                placeholder="Cancha 1"
+                onChange={(event) => onName(clipCourtText(event.target.value))}
+              />
+            </span>
+          </label>
+          <label className="court-form__label">
+            Descripción
+            <span className="court-form__field">
+              <FileText size={16} aria-hidden="true" />
+              <FormTextarea
+                value={description}
+                disabled={busy}
+                maxLength={COURT_TEXT_LIMIT}
+                rows={2}
+                placeholder="Pasto sintético"
+                onChange={(event) => onDescription(clipCourtText(event.target.value))}
+              />
+            </span>
+          </label>
+          <label className="court-form__label">
+            Costo por hora
+            <span className="court-form__field">
+              <CircleDollarSign size={16} aria-hidden="true" />
+              <FormInput
+                type="number"
+                min={0}
+                value={rate}
+                disabled={busy}
+                placeholder="400"
+                onChange={(event) => onRate(event.target.value)}
+              />
+            </span>
+          </label>
+
+          <div className={`court-form__football${football ? " is-on" : ""}`}>
+            <span>
+              <strong>Apta para torneos de fútbol</strong>
+              <small>
+                {football
+                  ? "Se programa en el calendario de partidos."
+                  : "Solo renta. No entra por tamaño o condiciones."}
+              </small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={football}
+              aria-label="Apta para torneos de fútbol"
+              className={`court-form__switch${football ? " is-on" : ""}`}
+              disabled={busy}
+              onClick={() => onFootball(!football)}
+            >
+              <span />
+            </button>
+          </div>
+
+          <div className="court-form__label">
+            Foto
+            <div className="court-form__photo">
+              {preview ? (
+                <img src={preview} alt="" />
+              ) : (
+                <span className="court-form__photo-empty">
+                  <ImageIcon size={22} />
+                </span>
+              )}
+              <div>
+                <button
+                  type="button"
+                  className="court-form__file"
+                  disabled={busy}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Upload size={15} />
+                  Elegir archivo
+                </button>
+                <p>Opcional. Sin foto se muestra la cancha por defecto.</p>
+                {preview ? (
+                  <button type="button" className="court-form__remove" disabled={busy} onClick={onClearPhoto}>
+                    Quitar foto
+                  </button>
+                ) : null}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) onPhoto(file);
                 }}
-              >
-                {courtModal.active ? "Ocultar" : "Mostrar"}
-              </SecondaryButton>
-              <button
-                type="button"
-                disabled={draftBusy}
-                onClick={() => {
-                  if (!window.confirm(`¿Eliminar ${courtModal.name}?`)) return;
-                  setDraftBusy(true);
-                  void deleteDoc(courtRef(courtModal.id))
-                    .then(() => setCourtModal(null))
-                    .catch(() => alert("No se pudo eliminar la cancha."))
-                    .finally(() => setDraftBusy(false));
-                }}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: C.red,
-                  fontWeight: 800,
-                  fontSize: "0.8rem",
-                  cursor: "pointer",
-                }}
-              >
+              />
+            </div>
+          </div>
+        </div>
+
+        <footer className="court-form__foot">
+          {editing ? (
+            <div className="court-form__danger">
+              <button type="button" className="court-form__ghost" disabled={busy} onClick={onToggleActive}>
+                {editing.active ? "Ocultar" : "Mostrar"}
+              </button>
+              <button type="button" className="court-form__delete" disabled={busy} onClick={onDelete}>
                 Eliminar
               </button>
             </div>
+          ) : (
+            <span />
           )}
-        </div>
-      </ConfirmModal>
+          <div className="court-form__actions">
+            <button type="button" className="court-form__ghost" disabled={busy} onClick={onCancel}>
+              Cancelar
+            </button>
+            <PrimaryButton variant="green" disabled={busy || !canSave} onClick={onSave}>
+              <Save size={15} />
+              {busy ? "Guardando…" : "Guardar"}
+            </PrimaryButton>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
@@ -335,7 +668,7 @@ function DayGrid({
   const summary = ranges
     .map((range) => {
       const court = courts.find((item) => item.id === range.courtId);
-      return `${court?.name || "Cancha"} · ${formatFriendlyTime(fromMinutes(range.start))}–${formatFriendlyTime(fromMinutes(range.end))}`;
+      return `${court?.name || "Cancha"} · ${formatFriendlyTime(fromMinutes(range.start))} - ${formatFriendlyTime(fromMinutes(range.end))}`;
     })
     .join("\n");
 
@@ -357,7 +690,16 @@ function DayGrid({
     : null;
   const matchStarts = slotStartsFor(windows, matchDate, slot);
   const matchCourt = matchHold
-    ? pickCourt(courts, holds, windows, slot, matchDate, matchStart, matchDuration, matchHold)
+    ? pickCourt(
+        courts.filter((court) => court.football !== false),
+        holds,
+        windows,
+        slot,
+        matchDate,
+        matchStart,
+        matchDuration,
+        matchHold,
+      )
     : null;
   const matchNames = matchHold?.matchId ? matchLabels[matchHold.matchId] : undefined;
   const matchTitle = matchNames ? `${matchNames.home} vs ${matchNames.away}` : "Partido";
@@ -447,57 +789,59 @@ function DayGrid({
     }
   };
 
+  const barLabel = ranges.length === 1 ? `Apartar · ${summary}` : `Apartar ${ranges.length} tramos`;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-      <Field label="Fecha">
-        <FormInput type="date" value={date} onChange={(e) => onDate(e.target.value)} />
-      </Field>
-      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.72rem", color: C.gray500 }}>
-        <span><Swatch color={C.greenLight} border={C.greenBorder} /> Libre</span>
-        <span><Swatch color={C.gray100} border={C.gray300} /> Partido</span>
-        <span><Swatch color={C.amberLight} border={C.amber} /> Apartado</span>
+    <div className="book-sheet">
+      <BookArt />
+      <header className="book-head">
+        <span className="book-pin" aria-hidden="true">
+          <MapPin size={16} />
+        </span>
+        <div>
+          <h2>Apartar canchas</h2>
+          <p>Selecciona la fecha y el horario disponible para reservar tu cancha.</p>
+        </div>
+      </header>
+      <div className="book-tools">
+        <label className="book-date">
+          <span>Fecha</span>
+          <FormInput type="date" value={date} onChange={(e) => onDate(e.target.value)} />
+        </label>
+        <div className="book-legend">
+          <span><i className="is-free" /> Libre</span>
+          <span><i className="is-match" /> Partido</span>
+          <span><i className="is-hold" /> Apartado</span>
+        </div>
       </div>
       {ranges.length > 0 && (
-        <PrimaryButton type="button" onClick={() => setOpen(true)} style={{ alignSelf: "flex-start" }}>
-          {ranges.length === 1 ? `Apartar · ${summary}` : `Apartar ${ranges.length} tramos`}
-        </PrimaryButton>
-      )}
-      {courts.length === 0 ? (
-        <button
-          type="button"
-          onClick={onAddCourt}
-          style={{
-            alignSelf: "flex-start",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            border: `1px dashed ${C.gray300}`,
-            background: C.white,
-            color: C.navy900,
-            borderRadius: 8,
-            padding: "0.4rem 0.7rem",
-            fontWeight: 800,
-            fontSize: "0.8rem",
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={16} /> Agregar cancha
-        </button>
-      ) : starts.length === 0 ? (
-        <p style={{ margin: 0, color: C.gray500, fontSize: "0.85rem" }}>Este día las canchas están cerradas.</p>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <div
-            style={{
-              display: "grid",
-              width: "100%",
-              gridTemplateColumns: `max-content repeat(${starts.length}, minmax(44px, 1fr))`,
-              gap: 4,
-            }}
+        <div className="book-bar">
+          <button type="button" className="book-bar__go" onClick={() => setOpen(true)}>
+            <Calendar size={15} />
+            {barLabel}
+          </button>
+          <button
+            type="button"
+            className="book-bar__clear"
+            aria-label="Quitar selección"
+            onClick={() => setPicked([])}
           >
-            <span />
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {courts.length > 0 && starts.length === 0 && (
+        <p className="book-closed">Este día las canchas están cerradas.</p>
+      )}
+      {courts.length > 0 && starts.length > 0 && (
+        <div className="book-grid-wrap">
+          <div
+            className="book-grid"
+            style={{ gridTemplateColumns: `minmax(148px, max-content) repeat(${starts.length}, minmax(52px, 1fr))` }}
+          >
+            <span className="book-time book-time--name">Cancha</span>
             {starts.map((start) => (
-              <span key={start} style={{ fontSize: "0.65rem", fontWeight: 700, color: C.gray500, textAlign: "center" }}>
+              <span key={start} className="book-time">
                 {formatFriendlyTime(fromMinutes(start))}
               </span>
             ))}
@@ -541,30 +885,12 @@ function DayGrid({
                 />
               </div>
             ))}
-            <button
-              type="button"
-              aria-label="Agregar cancha"
-              onClick={onAddCourt}
-              style={{
-                gridColumn: 1,
-                justifySelf: "start",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: `1px dashed ${C.gray300}`,
-                background: C.white,
-                color: C.navy900,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Plus size={16} />
-            </button>
           </div>
         </div>
       )}
+      <button type="button" className="book-add" onClick={onAddCourt}>
+        <Plus size={16} /> Agregar cancha
+      </button>
       <ConfirmModal
         open={open}
         title="Apartar cancha"
@@ -716,36 +1042,14 @@ function CourtGridRow({
   matchLabels: Record<string, { home: string; away: string }>;
 }) {
   const cells = rowCells(holds, court.id, date, starts, slot);
+  const chosen = picked.some((item) => item.courtId === court.id);
   return (
     <>
-      <span style={{ display: "flex", alignItems: "center", gap: "0.15rem", width: "max-content", alignSelf: "center", paddingRight: 8 }}>
-        <span
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: 800,
-            color: court.active ? C.navy900 : C.gray400,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {court.name}
-        </span>
-        {!court.active && (
-          <span style={{ fontSize: "0.62rem", fontWeight: 800, color: C.gray400 }}>Oculta</span>
-        )}
-        <button
-          type="button"
-          aria-label={`Editar ${court.name}`}
-          onClick={onEdit}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: C.gray500,
-            cursor: "pointer",
-            padding: "0.15rem",
-            display: "inline-flex",
-            flexShrink: 0,
-          }}
-        >
+      <span className={`book-court${chosen ? " is-on" : ""}${court.active ? "" : " is-hidden"}`}>
+        <CourtMark football={court.football !== false} />
+        <span className="book-court__name">{court.name}</span>
+        {!court.active && <span className="book-court__hidden">Oculta</span>}
+        <button type="button" className="book-court__edit" aria-label={`Editar ${court.name}`} onClick={onEdit}>
           <Pencil size={13} />
         </button>
       </span>
@@ -756,20 +1060,10 @@ function CourtGridRow({
             <button
               key={cell.start}
               type="button"
+              className={`book-cell book-cell--free${selected ? " is-on" : ""}`}
               aria-pressed={selected}
               title="Libre"
               onClick={() => onToggle(court.id, cell.start)}
-              style={{
-                height: 28,
-                width: "100%",
-                minWidth: 0,
-                boxSizing: "border-box",
-                borderRadius: 6,
-                padding: 0,
-                background: selected ? C.navy900 : C.greenLight,
-                border: `1px solid ${selected ? C.navy900 : C.greenBorder}`,
-                cursor: "pointer",
-              }}
             />
           );
         }
@@ -779,33 +1073,45 @@ function CourtGridRow({
           <button
             key={cell.hold.id + cell.start}
             type="button"
-            title={manual ? cell.hold.note || "Apartado" : matchSigla(cell.hold, matchLabels)}
+            className={`book-cell ${manual ? "book-cell--hold" : "book-cell--match"}`}
+            style={{ gridColumn: `span ${cell.span}` }}
+            title={manual ? cell.hold.note || "Apartado" : label}
             onClick={() => onOpenHold(cell.hold)}
-            style={{
-              gridColumn: `span ${cell.span}`,
-              height: 28,
-              width: "100%",
-              minWidth: 0,
-              boxSizing: "border-box",
-              borderRadius: 6,
-              padding: "0 0.4rem",
-              background: manual ? C.amberLight : C.gray100,
-              border: `1px solid ${manual ? C.amber : C.gray300}`,
-              color: C.navy900,
-              display: "block",
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-            }}
           >
-            {label}
+            {manual && <User size={13} />}
+            <span>{label}</span>
           </button>
         );
       })}
     </>
+  );
+}
+
+function CourtMark({ football }: { football: boolean }) {
+  if (football) {
+    return (
+      <svg className="book-court__mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M12 4.2c1.8 2.2 2.7 4.7 2.7 7.8s-.9 5.6-2.7 7.8c-1.8-2.2-2.7-4.7-2.7-7.8s.9-5.6 2.7-7.8zM5 9.2h14M5 14.8h14" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="book-court__mark" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9" cy="9" r="5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12.5 12.5 19 19" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BookArt() {
+  return (
+    <svg className="book-art" viewBox="0 0 120 88" aria-hidden="true">
+      <circle cx="28" cy="34" r="14" fill="none" stroke="currentColor" strokeWidth="3" />
+      <path d="M38 44c10 10 22 16 36 16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <ellipse cx="86" cy="58" rx="22" ry="8" fill="none" stroke="currentColor" strokeWidth="3" />
+      <circle cx="96" cy="22" r="8" fill="currentColor" opacity="0.35" />
+    </svg>
   );
 }
 
@@ -1061,18 +1367,3 @@ function slotKind(
   return hit.source === "match" ? "match" : "manual";
 }
 
-function Swatch({ color, border }: { color: string; border: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        width: 10,
-        height: 10,
-        borderRadius: 3,
-        background: color,
-        border: `1px solid ${border}`,
-        marginRight: 4,
-      }}
-    />
-  );
-}

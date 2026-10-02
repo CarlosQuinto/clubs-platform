@@ -200,6 +200,10 @@ export interface Court {
   hourlyRate: number;
   active: boolean;
   order: number;
+  /** Vacío: la página pública usa la foto por defecto. */
+  imageUrl?: string;
+  /** Ausente: se trata como cancha de fútbol. */
+  football?: boolean;
 }
 
 export type CourtHoldSource = "match" | "manual";

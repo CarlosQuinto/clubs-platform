@@ -38,7 +38,7 @@ export function scheduleResources(input: {
     courtsEnabled: input.courtsEnabled,
     slotMinutes: asCourtSlot(input.courtSlotMinutes),
     openWindows: readWindows(input.courtOpenWindows),
-    courts: input.courts,
+    courts: input.courts.filter((court) => court.football !== false),
     holds: input.holds,
     ready: !input.courtsEnabled || !input.holdsLoading,
   };
