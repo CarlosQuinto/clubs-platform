@@ -62,6 +62,7 @@ export const userDocRef = (uid: string) => doc(db, "users", uid);
 //   seasons/{id}      → temporadas
 //   tournaments/{id}  → torneos (seasonId + categoryId + clubIds; la categoría es del torneo)
 //   matches/{id}      → partidos oficiales (tournamentId, home/away, sides por club)
+//   matchListings/{id} → ficha pública del partido calendarizado (campos de la tarjeta)
 export const categoriesCol = () => collection(db, "categories");
 export const categoryRef = (id: string) => doc(db, "categories", id);
 export const seasonsCol = () => collection(db, "seasons");
@@ -70,6 +71,7 @@ export const tournamentsCol = () => collection(db, "tournaments");
 export const tournamentRef = (id: string) => doc(db, "tournaments", id);
 export const matchesCol = () => collection(db, "matches");
 export const matchRef = (id: string) => doc(db, "matches", id);
+export const matchListingsCol = () => collection(db, "matchListings");
 export const inquiriesCol = () => collection(db, "inquiries");
 export const inquiryRef = (id: string) => doc(db, "inquiries", id);
 export const teamApplicationsCol = () => collection(db, "teamApplications");

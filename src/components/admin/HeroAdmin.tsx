@@ -40,6 +40,8 @@ const LIMIT = {
   tagline: 120,
   instagram: 150,
   facebook: 150,
+  x: 150,
+  youtube: 150,
   whatsapp: 20,
 } as const;
 
@@ -64,6 +66,10 @@ export default function HeroAdmin({ config }: Props) {
   const [facebook, setFacebook] = useState(
     clip(config?.social?.facebook || "", LIMIT.facebook),
   );
+  const [x, setX] = useState(clip(config?.social?.x || "", LIMIT.x));
+  const [youtube, setYoutube] = useState(
+    clip(config?.social?.youtube || "", LIMIT.youtube),
+  );
   const [whatsapp, setWhatsapp] = useState(
     clip(config?.social?.whatsapp || "", LIMIT.whatsapp),
   );
@@ -82,6 +88,8 @@ export default function HeroAdmin({ config }: Props) {
     setTagline(clip(config?.tagline || PLATFORM_DESCRIPTION, LIMIT.tagline));
     setInstagram(clip(config?.social?.instagram || "", LIMIT.instagram));
     setFacebook(clip(config?.social?.facebook || "", LIMIT.facebook));
+    setX(clip(config?.social?.x || "", LIMIT.x));
+    setYoutube(clip(config?.social?.youtube || "", LIMIT.youtube));
     setWhatsapp(clip(config?.social?.whatsapp || "", LIMIT.whatsapp));
   }, [
     config?.name,
@@ -91,6 +99,8 @@ export default function HeroAdmin({ config }: Props) {
     config?.tagline,
     config?.social?.instagram,
     config?.social?.facebook,
+    config?.social?.x,
+    config?.social?.youtube,
     config?.social?.whatsapp,
   ]);
 
@@ -465,6 +475,8 @@ export default function HeroAdmin({ config }: Props) {
                 social: {
                   instagram: clip(instagram.trim(), LIMIT.instagram),
                   facebook: clip(facebook.trim(), LIMIT.facebook),
+                  x: clip(x.trim(), LIMIT.x),
+                  youtube: clip(youtube.trim(), LIMIT.youtube),
                   whatsapp: clip(whatsapp.trim(), LIMIT.whatsapp),
                 },
               },
@@ -488,6 +500,22 @@ export default function HeroAdmin({ config }: Props) {
               maxLength={LIMIT.facebook}
               onChange={(e) => setFacebook(clip(e.target.value, LIMIT.facebook))}
               placeholder="https://facebook.com/..."
+            />
+          </Field>
+          <Field label="X" hint="Usuario o URL. Ej. @orinco o https://x.com/orinco">
+            <FormInput
+              value={x}
+              maxLength={LIMIT.x}
+              onChange={(e) => setX(clip(e.target.value, LIMIT.x))}
+              placeholder="https://x.com/..."
+            />
+          </Field>
+          <Field label="YouTube" hint="Canal o URL. Ej. @orinco o https://youtube.com/@orinco">
+            <FormInput
+              value={youtube}
+              maxLength={LIMIT.youtube}
+              onChange={(e) => setYoutube(clip(e.target.value, LIMIT.youtube))}
+              placeholder="https://youtube.com/@..."
             />
           </Field>
           <Field label="WhatsApp" hint="Número de la empresa. Ej. 622 123 4567">

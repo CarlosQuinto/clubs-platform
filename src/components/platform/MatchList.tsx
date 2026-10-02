@@ -44,7 +44,17 @@ function dateParts(iso?: string) {
   return { day, month: MONTHS[month - 1] || "", year };
 }
 
-export default function MatchList({
+type CardMatch = {
+  id: string;
+  tournamentId: string;
+  homeClubId: string;
+  awayClubId: string;
+  date?: string;
+  time?: string;
+  venue?: string;
+};
+
+export default function MatchList<T extends CardMatch>({
   matches,
   clubNames,
   clubsById,
@@ -52,13 +62,13 @@ export default function MatchList({
   schedule,
   tournamentOf,
 }: {
-  matches: Match[];
+  matches: T[];
   clubNames: Record<string, string>;
   clubsById: Record<string, Pick<ClubSummary, "name" | "logoUrl">>;
-  subtitleOf: (match: Match) => string;
+  subtitleOf: (match: T) => string;
   /** Si llega, el superadmin puede editar fecha, hora y cancha. */
   schedule?: MatchScheduleResources;
-  tournamentOf?: (match: Match) => { startDate?: string; durationMinutes?: MatchDurationMinutes } | undefined;
+  tournamentOf?: (match: T) => { startDate?: string; durationMinutes?: MatchDurationMinutes } | undefined;
 }) {
   if (matches.length === 0) return null;
 
@@ -89,7 +99,7 @@ export default function MatchList({
   );
 }
 
-function UpcomingMatchCard({
+function UpcomingMatchCard<T extends CardMatch>({
   match,
   homeName,
   awayName,
@@ -99,7 +109,7 @@ function UpcomingMatchCard({
   schedule,
   tournament,
 }: {
-  match: Match;
+  match: T;
   homeName: string;
   awayName: string;
   homeLogo?: string;
@@ -177,9 +187,9 @@ function UpcomingMatchCard({
           {!editing && <Pencil size={13} />}
         </button>
       </div>
-      {editing && (
+      {editing && "status" in match && (
         <MatchScheduleForm
-          match={match}
+          match={match as unknown as Match}
           schedule={schedule}
           startDate={tournament?.startDate}
           durationMinutes={tournament?.durationMinutes}

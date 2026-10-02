@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { ChevronRight, Facebook, Instagram, MessageCircle } from "lucide-react";
+import { ChevronRight, Facebook, Instagram, MessageCircle, Youtube } from "lucide-react";
 import type { PlatformSocial } from "../../lib/types";
 import {
   facebookUrl,
   hasAnySocial,
   instagramUrl,
   whatsappUrl,
+  xUrl,
+  youtubeUrl,
 } from "../../lib/social";
 
 export default function SocialLinks({
@@ -34,6 +36,22 @@ export default function SocialLinks({
           href: facebookUrl(social.facebook || ""),
           label: "Facebook",
           icon: <Facebook size={compact ? 16 : 18} />,
+        }
+      : null,
+    social?.x?.trim()
+      ? {
+          key: "x",
+          href: xUrl(social.x || ""),
+          label: "X",
+          icon: <XMark size={compact ? 16 : 18} />,
+        }
+      : null,
+    social?.youtube?.trim()
+      ? {
+          key: "youtube",
+          href: youtubeUrl(social.youtube || ""),
+          label: "YouTube",
+          icon: <Youtube size={compact ? 16 : 18} />,
         }
       : null,
     social?.whatsapp?.trim()
@@ -68,6 +86,8 @@ export default function SocialLinks({
           target="_blank"
           rel="noreferrer"
           className="social-links__item"
+          data-network={item.key}
+          aria-label={item.label}
         >
           {item.icon}
           <span>{item.label}</span>
@@ -75,5 +95,19 @@ export default function SocialLinks({
         </a>
       ))}
     </div>
+  );
+}
+
+function XMark({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="currentColor"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
   );
 }

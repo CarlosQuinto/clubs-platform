@@ -134,6 +134,20 @@ export interface Match {
   sides?: Record<string, MatchSide>;
 }
 
+/** Ficha pública para la portada. No incluye marcador ni alineaciones. */
+export interface MatchListing {
+  id: string;
+  date: string;
+  time: string;
+  categoryId: string;
+  tournamentId: string;
+  venue: string;
+  homeClubId: string;
+  awayClubId: string;
+  /** YYYY-MM-DDTHH:mm. Sirve para ordenar y para ocultar el partido cuando pasa su hora. */
+  startsAt: string;
+}
+
 export interface StandingRow {
   clubId: string;
   pj: number;
@@ -163,6 +177,8 @@ export interface StatsScope {
 export interface PlatformSocial {
   instagram?: string;
   facebook?: string;
+  x?: string;
+  youtube?: string;
   whatsapp?: string;
 }
 

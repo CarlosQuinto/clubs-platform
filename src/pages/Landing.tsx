@@ -25,8 +25,7 @@ import {
   PLATFORM_DESCRIPTION,
   PLATFORM_HEADLINE,
 } from "../lib/clubDefaults";
-import { sortByDate } from "../lib/stats";
-import type { ClubSummary, Match } from "../lib/types";
+import type { ClubSummary, MatchListing } from "../lib/types";
 import { C, PrimaryButton, RADIUS, SHADOWS } from "../components/ui";
 import {
   ArchiveSection,
@@ -53,8 +52,8 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function chunkMatches(matches: Match[], size: number) {
-  const pages: Match[][] = [];
+function chunkMatches(matches: MatchListing[], size: number) {
+  const pages: MatchListing[][] = [];
   for (let i = 0; i < matches.length; i += size) {
     pages.push(matches.slice(i, i + size));
   }
@@ -67,10 +66,10 @@ function LandingMatchRotator({
   clubsById,
   subtitleOf,
 }: {
-  matches: Match[];
+  matches: MatchListing[];
   clubNames: Record<string, string>;
   clubsById: Record<string, ClubSummary>;
-  subtitleOf: (match: Match) => string;
+  subtitleOf: (match: MatchListing) => string;
 }) {
   const pages = useMemo(
     () => chunkMatches(matches, LANDING_MATCH_LIMIT),
@@ -126,7 +125,7 @@ function LandingMatchRotator({
   const pageCount = pages.length;
   const current = pages[index % pageCount] ?? [];
   const next = pages[(index + 1) % pageCount] ?? [];
-  const list = (page: Match[]) => (
+  const list = (page: MatchListing[]) => (
     <MatchList
       matches={page}
       clubNames={clubNames}
@@ -197,7 +196,12 @@ export default function Landing() {
     clubs: matchesOn,
     localities: false,
   });
-  const { matches, loading: matchesLoading } = useUpcomingMatches(matchesOn);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const { matches, loading: matchesLoading } = useUpcomingMatches(
+    matchesOn,
+    desktop ? 12 : LANDING_MATCH_LIMIT,
+  );
   const playedTournamentIds = usePlayedTournamentIds(isSuperAdmin && tournamentsOn);
   const [claiming, setClaiming] = useState(false);
   const heroImages =
@@ -236,16 +240,8 @@ export default function Landing() {
     />
   );
 
-  const upcomingMatches = useMemo(
-    () => sortByDate(matches.filter((m) => m.status !== "played" && m.date)),
-    [matches],
-  );
-  const visibleMatches = upcomingMatches.slice(0, LANDING_MATCH_LIMIT);
-  const desktop = useMediaQuery(DESKTOP_QUERY);
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const rotateMatches =
-    desktop && !reduceMotion && upcomingMatches.length > LANDING_MATCH_LIMIT;
-  const subtitleOf = (match: Match) => {
+  const rotateMatches = desktop && !reduceMotion && matches.length > LANDING_MATCH_LIMIT;
+  const subtitleOf = (match: MatchListing) => {
     const tournament = tournamentsById[match.tournamentId];
     const category =
       categoryName[tournament?.categoryId || match.categoryId] || "";
@@ -400,18 +396,18 @@ export default function Landing() {
 
         {matchesPending ? (
           <Pending />
-        ) : visibleMatches.length === 0 ? (
+        ) : matches.length === 0 ? (
           <Empty>No hay partidos próximos en torneos vigentes.</Empty>
         ) : rotateMatches ? (
           <LandingMatchRotator
-            matches={upcomingMatches}
+            matches={matches}
             clubNames={clubNames}
             clubsById={clubsById}
             subtitleOf={subtitleOf}
           />
         ) : (
           <MatchList
-            matches={visibleMatches}
+            matches={matches}
             clubNames={clubNames}
             clubsById={clubsById}
             subtitleOf={subtitleOf}

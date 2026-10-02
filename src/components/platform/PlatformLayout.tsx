@@ -404,6 +404,7 @@ export default function PlatformLayout({
               >
                 Términos de uso
               </Link>
+              <span aria-hidden="true">|</span>
               <Link
                 to="/aviso-de-privacidad"
                 onClick={() => onDestinationClick("/aviso-de-privacidad")}

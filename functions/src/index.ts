@@ -600,6 +600,8 @@ export {
 
 export { notifyTournamentEnrollment, scheduleMatch } from "./scheduling";
 
+export { backfillMatchListings, syncMatchListing } from "./matchListings";
+
 export { migrateClubAvailability } from "./availability";
 
 /** Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios. */

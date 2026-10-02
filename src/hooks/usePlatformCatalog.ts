@@ -23,6 +23,7 @@ import type {
   Category,
   ClubSummary,
   Match,
+  MatchListing,
   Season,
   StatsScope,
   Tournament,
@@ -55,8 +56,8 @@ export type TournamentSeasonRef = {
   seasonId: string;
 };
 
-/** Ventana amplia para quedarnos con 6 próximos tras descartar jugados. */
-const UPCOMING_MATCH_WINDOW = 24;
+/** Tope de la portada: 12 en escritorio, 6 en móvil. */
+export const UPCOMING_MATCH_LIMIT = 12;
 
 function readCategories(snap: QuerySnapshot<DocumentData>): Category[] {
   const list = snap.docs.map((d) => {
@@ -591,34 +592,121 @@ export const useFutureMatches = () =>
     [],
   );
 
+const MATCH_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MATCH_TIME_RE = /^\d{2}:\d{2}$/;
+
+function localTime(d = new Date()) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function localStartsAt(d = new Date()) {
+  return `${isoDate(d)}T${localTime(d)}`;
+}
+
+function readMatchListing(id: string, data: DocumentData): MatchListing | null {
+  const date = typeof data.date === "string" ? data.date : "";
+  const time = typeof data.time === "string" ? data.time : "";
+  if (!MATCH_DATE_RE.test(date) || !MATCH_TIME_RE.test(time)) return null;
+  return {
+    id,
+    date,
+    time,
+    startsAt: `${date}T${time}`,
+    categoryId: typeof data.categoryId === "string" ? data.categoryId : "",
+    tournamentId: typeof data.tournamentId === "string" ? data.tournamentId : "",
+    venue: typeof data.venue === "string" ? data.venue : "",
+    homeClubId: typeof data.homeClubId === "string" ? data.homeClubId : "",
+    awayClubId: typeof data.awayClubId === "string" ? data.awayClubId : "",
+  };
+}
+
 /**
- * Próximos partidos por fecha. Con `enabled` en falso no abre el listener.
- * Pide una ventana corta; el llamador descarta jugados y se queda con 6.
+ * Próximos partidos de la portada. Con `enabled` en falso no abre el listener.
+ * Lee `matches` con date (YYYY-MM-DD) y time (HH:mm): los de hoy desde la hora
+ * actual, y los de días posteriores. El tope es 6 o 12.
  */
-export function useUpcomingMatches(enabled: boolean) {
-  const [matches, setMatches] = useState<Match[]>([]);
+export function useUpcomingMatches(enabled: boolean, limitCount: number) {
+  const [matches, setMatches] = useState<MatchListing[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [clock, setClock] = useState(localStartsAt);
 
   useEffect(() => {
     if (!enabled) return;
-    const unsub = onSnapshot(
-      query(
-        matchesCol(),
-        where("date", ">=", isoDate()),
-        orderBy("date"),
-        limit(UPCOMING_MATCH_WINDOW),
-      ),
-      (snap) => {
-        setMatches(snap.docs.map(mapMatchDoc));
-        setLoaded(true);
-      },
-      (err) => {
-        console.error("Error cargando partidos:", err);
-        setLoaded(true);
-      },
-    );
-    return () => unsub();
+    const tick = window.setInterval(() => setClock(localStartsAt()), 60_000);
+    return () => window.clearInterval(tick);
   }, [enabled]);
 
-  return { matches, loading: enabled && !loaded };
+  useEffect(() => {
+    if (!enabled) return;
+    setLoaded(false);
+    const cap = Math.min(UPCOMING_MATCH_LIMIT, Math.max(1, limitCount));
+    const today = isoDate();
+    const time = localTime();
+    let todayRows: MatchListing[] = [];
+    let laterRows: MatchListing[] = [];
+    let todayReady = false;
+    let laterReady = false;
+    const publish = () => {
+      if (!todayReady || !laterReady) return;
+      const merged = [...todayRows, ...laterRows]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+        .slice(0, cap);
+      setMatches(merged);
+      setLoaded(true);
+    };
+    const read = (snap: { docs: Array<{ id: string; data: () => DocumentData }> }) =>
+      snap.docs.flatMap((docSnap) => {
+        const listing = readMatchListing(docSnap.id, docSnap.data());
+        return listing ? [listing] : [];
+      });
+    const onError = (which: string) => (err: unknown) => {
+      console.error("Error cargando partidos:", err);
+      if (which === "today") todayReady = true;
+      else laterReady = true;
+      publish();
+    };
+    const unsubToday = onSnapshot(
+      query(
+        matchesCol(),
+        where("status", "==", "scheduled"),
+        where("date", "==", today),
+        where("time", ">=", time),
+        orderBy("time"),
+        limit(cap),
+      ),
+      (snap) => {
+        todayRows = read(snap);
+        todayReady = true;
+        publish();
+      },
+      onError("today"),
+    );
+    const unsubLater = onSnapshot(
+      query(
+        matchesCol(),
+        where("status", "==", "scheduled"),
+        where("date", ">", today),
+        orderBy("date"),
+        orderBy("time"),
+        limit(cap),
+      ),
+      (snap) => {
+        laterRows = read(snap);
+        laterReady = true;
+        publish();
+      },
+      onError("later"),
+    );
+    return () => {
+      unsubToday();
+      unsubLater();
+    };
+  }, [enabled, limitCount]);
+
+  const visible = useMemo(
+    () => matches.filter((match) => match.startsAt >= clock),
+    [matches, clock],
+  );
+
+  return { matches: visible, loading: enabled && !loaded };
 }

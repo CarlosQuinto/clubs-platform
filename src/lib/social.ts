@@ -4,6 +4,8 @@ export function hasAnySocial(social?: PlatformSocial | null) {
   return Boolean(
     social?.instagram?.trim() ||
       social?.facebook?.trim() ||
+      social?.x?.trim() ||
+      social?.youtube?.trim() ||
       social?.whatsapp?.trim(),
   );
 }
@@ -20,6 +22,20 @@ export function facebookUrl(value: string) {
   if (!v) return "";
   if (/^https?:\/\//i.test(v)) return v;
   return `https://facebook.com/${v.replace(/^@/, "")}`;
+}
+
+export function xUrl(value: string) {
+  const v = value.trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://x.com/${v.replace(/^@/, "")}`;
+}
+
+export function youtubeUrl(value: string) {
+  const v = value.trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://youtube.com/@${v.replace(/^@/, "")}`;
 }
 
 /** Enlace a WhatsApp. Acepta número o URL. México (52) si no trae lada. */

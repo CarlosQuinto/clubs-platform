@@ -168,6 +168,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    match /matchListings/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /matches/{id} {
       allow read: if true;
       allow create, delete: if isSuperAdmin();
