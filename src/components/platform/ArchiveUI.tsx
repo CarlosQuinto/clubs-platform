@@ -1,13 +1,15 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
-import { C, RADIUS, SHADOWS } from "../ui";
+import { ChevronDown } from "lucide-react";
+import { C } from "../ui";
 import type { Tournament } from "../../lib/types";
 import { footballTypeLabel } from "../../lib/types";
 import { formatShortDate } from "../../utils/helpers";
 import { deleteTournament, previewTournamentDelete } from "../../lib/deleteTournament";
+import { whatsappUrl } from "../../lib/social";
 import { useAuth } from "../../context/AuthContext";
 import { useTournamentEdit } from "../admin/TournamentEditModal";
+import { markScrollTopAfterNav } from "./PlatformLayout";
 import ConfirmModal from "../ConfirmModal";
 
 const DIVISION_TONE = [
@@ -36,8 +38,20 @@ export function TournamentCard({
   const tone = DIVISION_TONE[(Math.max(1, categoryOrder) - 1) % DIVISION_TONE.length];
   const begins = tournament.startDate || startDate || "";
   const showStart = tournament.status === "upcoming" && Boolean(begins);
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, platformConfig } = useAuth();
   const { openEdit } = useTournamentEdit();
+  const clubs = tournament.clubIds.length;
+  const meta = [
+    seasonName || "Temporada",
+    footballTypeLabel(tournament.footballType),
+    clubs === 1 ? "1 club" : `${clubs} clubes`,
+  ].join(" · ");
+  const joinHref = isSuperAdmin
+    ? ""
+    : whatsappUrl(
+        platformConfig?.social?.whatsapp || "",
+        `Hola, me gustaría participar con mi equipo o con un equipo en el torneo ${tournament.name}. ¿Me podría dar más información? Gracias.`,
+      );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingMatches, setPendingMatches] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -84,92 +98,45 @@ export function TournamentCard({
         : `También se eliminarán ${pendingMatches} partidos que aún no se juegan.`;
 
   return (
-    <article
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        backgroundColor: C.white,
-        border: `1px solid ${C.gray200}`,
-        borderRadius: RADIUS.lg,
-        boxShadow: SHADOWS.sm,
-        overflow: "hidden",
-      }}
-    >
+    <article className="tour-card">
       <Link
+        className="tour-card__main"
         to={`/torneos/${tournament.id}`}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          padding: "1rem",
-          textDecoration: "none",
-          color: C.gray800,
-        }}
+        onClick={markScrollTopAfterNav}
       >
-      <div style={{ fontWeight: 800 }}>{tournament.name}</div>
-      <div style={{ fontSize: "0.75rem", color: C.gray500, marginTop: 4 }}>
-        {[
-          seasonName || "Temporada",
-          footballTypeLabel(tournament.footballType),
-          tournament.clubIds.length > 0
-            ? `${tournament.clubIds.length} clubes`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </div>
-      {showStart && (
-        <div style={{ fontSize: "0.72rem", color: C.gray500, marginTop: 4, fontWeight: 700 }}>
-          Inicia {formatShortDate(begins)}
-        </div>
-      )}
+        <span className="tour-card__copy">
+          <strong>{tournament.name}</strong>
+          <span className="tour-card__meta">{meta}</span>
+          {showStart && <span className="tour-card__start">Inicia {formatShortDate(begins)}</span>}
+        </span>
+      </Link>
       {categoryName && (
-        <div style={{ marginTop: "auto", paddingTop: "0.7rem" }}>
+        <div className="tour-card__row">
           <span
-            style={{
-              display: "inline-block",
-              fontSize: "0.6875rem",
-              fontWeight: 800,
-              padding: "0.2rem 0.6rem",
-              borderRadius: RADIUS.full,
-              backgroundColor: tone.bg,
-              color: tone.text,
-              border: `1px solid ${tone.border}`,
-              letterSpacing: "0.02em",
-            }}
+            className="tour-card__division"
+            style={{ background: tone.bg, color: tone.text, borderColor: tone.border }}
           >
             {categoryName}
           </span>
         </div>
       )}
-      </Link>
-      {isSuperAdmin ? (
-        <div
-          style={{
-            display: "flex",
-            borderTop: `1px solid ${C.gray200}`,
-            backgroundColor: C.gray50,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => openEdit(tournament.id)}
-            style={cardAction(canDelete)}
-          >
-            <Pencil size={13} /> Editar
+      {isSuperAdmin && (
+        <div className="tour-card__actions">
+          <button type="button" onClick={() => openEdit(tournament.id)}>
+            Editar
           </button>
-          {canDelete ? (
-            <button
-              type="button"
-              onClick={() => void askDelete()}
-              style={{ ...cardAction(false), color: C.red }}
-            >
-              <Trash2 size={13} /> Eliminar
+          {canDelete && (
+            <button type="button" className="is-danger" onClick={() => void askDelete()}>
+              Eliminar
             </button>
-          ) : null}
+          )}
         </div>
-      ) : null}
+      )}
+      {joinHref && (
+        <a className="tour-card__join" href={joinHref} target="_blank" rel="noreferrer">
+          Quiero participar
+        </a>
+      )}
       <ConfirmModal
         open={confirmOpen}
         title={`Eliminar ${tournament.name}`}
@@ -186,35 +153,8 @@ export function TournamentCard({
   );
 }
 
-const cardAction = (split: boolean): CSSProperties => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "0.3rem",
-  flex: 1,
-  padding: "0.45rem 0.75rem",
-  border: "none",
-  borderRight: split ? `1px solid ${C.gray200}` : "none",
-  backgroundColor: "transparent",
-  color: C.navy900,
-  fontWeight: 800,
-  fontSize: "0.72rem",
-  cursor: "pointer",
-});
-
 export function TournamentGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        gap: "0.75rem",
-        alignItems: "stretch",
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className="tour-grid">{children}</div>;
 }
 
 export function ArchiveSection({
@@ -229,68 +169,35 @@ export function ArchiveSection({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!collapsed);
+  const label = count === 1 ? "1 torneo" : `${count} torneos`;
+  const heading = (
+    <>
+      {collapsed && <ChevronDown size={16} className={open ? "is-open" : ""} />}
+      <span className="tour-band__title">{title}</span>
+      <span className="tour-band__count">{label}</span>
+    </>
+  );
 
   return (
-    <section style={{ marginBottom: "1.35rem" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.5rem",
-          padding: "0.15rem 0 0.5rem",
-          background: "none",
-          border: "none",
-          borderBottom: `1px solid ${C.gray200}`,
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        <span
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            color: C.gray600,
-            fontWeight: 700,
-            fontSize: "0.78rem",
-            letterSpacing: "0.02em",
-          }}
+    <section className="tour-band">
+      {collapsed ? (
+        <button
+          type="button"
+          className="tour-band__head"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
         >
-          <ChevronDown
-            size={14}
-            color={C.gray400}
-            style={{
-              transform: open ? "rotate(0deg)" : "rotate(-90deg)",
-              transition: "transform 0.15s ease",
-            }}
-          />
-          {title}
-        </span>
-        <span
-          style={{
-            fontSize: "0.68rem",
-            fontWeight: 700,
-            color: C.gray400,
-          }}
-        >
-          {count}
-        </span>
-      </button>
-      {open && (
-        <div style={{ paddingTop: "0.75rem" }}>
-          {count === 0 ? (
-            <p style={{ margin: 0, color: C.gray400, fontSize: "0.85rem" }}>
-              No hay elementos en esta lista.
-            </p>
-          ) : (
-            children
-          )}
-        </div>
+          {heading}
+        </button>
+      ) : (
+        <div className="tour-band__head">{heading}</div>
       )}
+      {open &&
+        (count === 0 ? (
+          <p className="tour-band__empty">No hay elementos en esta lista.</p>
+        ) : (
+          children
+        ))}
     </section>
   );
 }

@@ -425,6 +425,15 @@ export default function Landing() {
         icon={<Trophy size={15} color={C.amber} />}
         id="torneos"
         tone="alt"
+        action={
+          <Link
+            to="/torneos"
+            className="landing-band__all"
+            onClick={markScrollTopAfterNav}
+          >
+            Ver todos →
+          </Link>
+        }
       >
         {tournamentsPending ? (
           <Pending />

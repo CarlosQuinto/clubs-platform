@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import {
@@ -8,7 +7,6 @@ import {
   TournamentCard,
   TournamentGrid,
 } from "../components/platform/ArchiveUI";
-import { C } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { usePlatformCatalog, usePlayedTournamentIds } from "../hooks/usePlatformCatalog";
 
@@ -63,22 +61,7 @@ export default function TournamentArchive() {
 
   return (
     <PlatformLayout>
-      <PageTitle
-        icon={<Trophy size={22} color="#cd9a40" />}
-        subtitle={
-          <>
-            Mira los torneos en curso y los que vienen.{" "}
-            <Link
-              to="/contacto"
-              style={{ color: C.navy900, fontWeight: 700, textDecoration: "underline" }}
-            >
-              Solicita información
-            </Link>
-          </>
-        }
-      >
-        Torneos
-      </PageTitle>
+      <PageTitle icon={<Trophy size={22} color="#cd9a40" />}>Torneos</PageTitle>
 
       {loading ? (
         <p style={{ color: "#9ca3af", fontSize: "0.9rem" }}>Cargando torneos…</p>
