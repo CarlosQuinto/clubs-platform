@@ -7,9 +7,8 @@ function asAd(id: string, data: DocumentData): Ad | null {
   if (typeof data.brand !== "string" || typeof data.imageUrl !== "string") {
     return null;
   }
-  const placements = Array.isArray(data.placements)
-    ? data.placements.filter(isAdPlacement)
-    : [];
+  const rawPlacements = Array.isArray(data.placements) ? data.placements : [];
+  const placements = rawPlacements.filter(isAdPlacement);
   return {
     id,
     brand: data.brand,
@@ -20,6 +19,7 @@ function asAd(id: string, data: DocumentData): Ad | null {
     endsAt: typeof data.endsAt === "string" ? data.endsAt : "",
     active: data.active === true,
     order: typeof data.order === "number" ? data.order : 0,
+    hasLegacyPlacement: rawPlacements.some((item) => !isAdPlacement(item)),
   };
 }
 
@@ -27,6 +27,7 @@ function asAd(id: string, data: DocumentData): Ad | null {
 export function useAds() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -39,12 +40,17 @@ export function useAds() {
         });
         next.sort((a, b) => a.order - b.order || a.brand.localeCompare(b.brand));
         setAds(next);
+        setError("");
         setLoading(false);
       },
-      () => setLoading(false),
+      (err) => {
+        console.error(err);
+        setError("No se pudo cargar el inventario.");
+        setLoading(false);
+      },
     );
     return unsub;
   }, []);
 
-  return { ads, loading };
+  return { ads, loading, error };
 }

@@ -716,26 +716,6 @@
   display: block;
 }
 
-.ad-slot__dots {
-  display: flex;
-  justify-content: center;
-  gap: 0.35rem;
-}
-
-.ad-slot__dot {
-  width: 7px;
-  height: 7px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: #d4ccbc;
-  cursor: pointer;
-}
-
-.ad-slot__dot.is-on {
-  background: #121212;
-}
-
 .ad-placements {
   display: flex;
   flex-direction: column;

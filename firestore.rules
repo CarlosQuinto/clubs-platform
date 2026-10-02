@@ -260,12 +260,16 @@ service cloud.firestore {
         && request.resource.data.imageUrl is string
         && request.resource.data.imageUrl.size() > 8
         && request.resource.data.imageUrl.size() < 2000
+        && (
+          request.resource.data.imageUrl.matches('^https://.+$')
+          || request.resource.data.imageUrl.matches('^http://.+$')
+        )
         && validAdHref(request.resource.data.href)
         && request.resource.data.placements is list
         && request.resource.data.placements.size() > 0
-        && request.resource.data.placements.size() <= 5
+        && request.resource.data.placements.size() <= 4
         && request.resource.data.placements.hasOnly([
-          'home', 'home_mid', 'tournament', 'club', 'teams'
+          'home', 'tournament', 'club', 'teams'
         ])
         && isIsoDate(request.resource.data.startsAt)
         && isIsoDate(request.resource.data.endsAt)

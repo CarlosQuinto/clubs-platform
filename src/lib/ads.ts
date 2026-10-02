@@ -21,6 +21,25 @@ export interface Ad {
   endsAt: string;
   active: boolean;
   order: number;
+  /** El documento guardaba una ubicación que la app ya no ofrece. */
+  hasLegacyPlacement: boolean;
+}
+
+export type AdWindow = "scheduled" | "current" | "ended";
+
+/** Ubicaciones conocidas, sin duplicados, en el orden del inventario. */
+export function canonicalPlacements(ids: readonly AdPlacement[]): AdPlacement[] {
+  const selected = new Set(ids);
+  return AD_PLACEMENTS.map((item) => item.id).filter((id) => selected.has(id));
+}
+
+export function adWindow(
+  ad: Pick<Ad, "startsAt" | "endsAt">,
+  today = todayIso(),
+): AdWindow {
+  if (ad.startsAt && today < ad.startsAt) return "scheduled";
+  if (ad.endsAt && today > ad.endsAt) return "ended";
+  return "current";
 }
 
 export function isAdPlacement(value: unknown): value is AdPlacement {
@@ -45,16 +64,40 @@ export function addDaysIso(days: number, date = new Date()) {
   return todayIso(next);
 }
 
-/** Enlace vacío, o http(s). Cualquier otro esquema se descarta. */
-export function safeAdHref(href: string) {
-  const clean = href.trim();
-  if (!clean) return "";
+function httpUrl(value: string, maxLength: number) {
+  const clean = value.trim();
+  if (!clean || clean.length > maxLength) return "";
   try {
     const url = new URL(clean);
     if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    return url.toString();
+    const canonical = url.toString();
+    if (canonical.length > maxLength) return "";
+    return canonical;
   } catch {
     return "";
+  }
+}
+
+/** Enlace vacío, o http(s) de menos de 500 caracteres. */
+export function safeAdHref(href: string) {
+  return httpUrl(href, 499);
+}
+
+/** Imagen http(s) de 9 a 1999 caracteres. */
+export function safeAdImageUrl(value: string) {
+  const canonical = httpUrl(value, 1999);
+  if (canonical.length < 9) return "";
+  return canonical;
+}
+
+/** URL de una imagen subida por este inventario, en platform/ads/. */
+export function isPlatformAdImageUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes("firebasestorage.googleapis.com")) return false;
+    return decodeURIComponent(parsed.pathname).includes("/platform/ads/");
+  } catch {
+    return false;
   }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { liveAdsFor, safeAdHref, type AdPlacement } from "../../lib/ads";
 import { useAds } from "../../hooks/useAds";
 
-const ROTATE_MS = 8000;
+const ROTATE_MS = 5000;
 
 interface Props {
   placement: AdPlacement;
@@ -33,7 +33,7 @@ export default function AdSlot({ placement, layout = "inset" }: Props) {
 
   const href = safeAdHref(ad.href);
   const image = (
-    <img src={ad.imageUrl} alt="" className="ad-slot__image" />
+    <img src={ad.imageUrl} alt={ad.brand} className="ad-slot__image" />
   );
 
   const card = (
@@ -49,21 +49,6 @@ export default function AdSlot({ placement, layout = "inset" }: Props) {
         </a>
       ) : (
         <div className="ad-slot__frame">{image}</div>
-      )}
-      {live.length > 1 && (
-        <div className="ad-slot__dots">
-          {live.map((item, i) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-label={`Imagen ${i + 1}`}
-              className={
-                i === index % live.length ? "ad-slot__dot is-on" : "ad-slot__dot"
-              }
-              onClick={() => setIndex(i)}
-            />
-          ))}
-        </div>
       )}
     </div>
   );
