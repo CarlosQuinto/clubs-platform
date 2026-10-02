@@ -1,13 +1,24 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { addDoc, serverTimestamp } from "firebase/firestore";
-import PlatformLayout from "../components/platform/PlatformLayout";
+import { Mail, Phone, Shield, Sparkles, User } from "lucide-react";
+import PlatformLayout, {
+  markScrollTopAfterNav,
+} from "../components/platform/PlatformLayout";
 import PageHeroBanner from "../components/platform/PageHeroBanner";
 import PublicFormBand from "../components/platform/PublicFormBand";
 import ClubDirectoryList from "../components/platform/ClubDirectoryList";
 import { usePlatformCatalog } from "../hooks/usePlatformCatalog";
 import { teamApplicationsCol } from "../lib/paths";
 import { EMAIL_RE } from "../lib/social";
+
+function FieldIcon({ children }: { children: ReactNode }) {
+  return (
+    <span className="contact-field__icon" aria-hidden="true">
+      {children}
+    </span>
+  );
+}
 
 export default function RegisterTeam() {
   const { clubs, localities } = usePlatformCatalog();
@@ -62,18 +73,33 @@ export default function RegisterTeam() {
     <PlatformLayout flush>
       <PageHeroBanner size="short" />
       <PublicFormBand>
-        <h1>Registra tu equipo</h1>
-        <p>
-          Completa el formulario para solicitar la inscripción de tu equipo. Te notificaremos una vez que sea aprobada.
-        </p>
+        <div className="contact-intro">
+          <span className="contact-intro__mark" aria-hidden="true">
+            <Shield size={22} strokeWidth={2.25} />
+            <Sparkles className="contact-intro__spark" size={14} />
+          </span>
+          <div>
+            <h1>Registra tu equipo</h1>
+            <p>
+              Completa el formulario para solicitar la inscripción de tu equipo.
+              Te notificaremos una vez que sea aprobada.
+            </p>
+            <span className="contact-intro__rule" />
+          </div>
+        </div>
         {sent ? (
           <p className="public-form-ok">
             Solicitud enviada. Queda pendiente de aprobación.
           </p>
         ) : (
-          <form className="public-stack-form" onSubmit={handleSubmit}>
-            <div className="public-form-group">
-              <h2>Datos del representante del equipo</h2>
+          <form
+            className="public-stack-form contact-form"
+            onSubmit={handleSubmit}
+          >
+            <label className="contact-field">
+              <FieldIcon>
+                <User size={16} />
+              </FieldIcon>
               <input
                 value={captainName}
                 onChange={(e) => setCaptainName(e.target.value)}
@@ -82,15 +108,11 @@ export default function RegisterTeam() {
                 maxLength={119}
                 autoComplete="name"
               />
-              <input
-                type="email"
-                value={captainEmail}
-                onChange={(e) => setCaptainEmail(e.target.value)}
-                placeholder="Correo electrónico"
-                required
-                maxLength={119}
-                autoComplete="email"
-              />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <Phone size={16} />
+              </FieldIcon>
               <input
                 type="tel"
                 value={captainPhone}
@@ -100,14 +122,33 @@ export default function RegisterTeam() {
                 maxLength={29}
                 autoComplete="tel"
               />
-            </div>
-            <input
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Nombre del equipo"
-              required
-              maxLength={79}
-            />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <Mail size={16} />
+              </FieldIcon>
+              <input
+                type="email"
+                value={captainEmail}
+                onChange={(e) => setCaptainEmail(e.target.value)}
+                placeholder="Correo electrónico"
+                required
+                maxLength={119}
+                autoComplete="email"
+              />
+            </label>
+            <label className="contact-field">
+              <FieldIcon>
+                <Shield size={16} />
+              </FieldIcon>
+              <input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Nombre del equipo"
+                required
+                maxLength={79}
+              />
+            </label>
             <label className="public-consent">
               <input
                 type="checkbox"
@@ -116,12 +157,23 @@ export default function RegisterTeam() {
                 required
               />
               <span>
-                He leído y acepto el uso de mis datos para registrar al equipo.
+                He leído y acepto el{" "}
+                <Link
+                  to="/aviso-de-privacidad"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markScrollTopAfterNav();
+                  }}
+                >
+                  aviso de privacidad
+                </Link>{" "}
+                y el
+                uso de mis datos para registrar al equipo.
               </span>
             </label>
             {error && <p className="public-form-error">{error}</p>}
             <button type="submit" className="public-submit" disabled={busy}>
-              {busy ? "Enviando..." : "Envía"}
+              {busy ? "Enviando..." : "Enviar"}
             </button>
           </form>
         )}

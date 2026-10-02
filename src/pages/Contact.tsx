@@ -2,7 +2,9 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import { Mail, MessageCircle, Phone, Sparkles, User } from "lucide-react";
-import PlatformLayout from "../components/platform/PlatformLayout";
+import PlatformLayout, {
+  markScrollTopAfterNav,
+} from "../components/platform/PlatformLayout";
 import PageHeroBanner from "../components/platform/PageHeroBanner";
 import PublicFormBand from "../components/platform/PublicFormBand";
 import { useAuth } from "../context/AuthContext";
@@ -187,8 +189,18 @@ export default function Contact() {
                 required
               />
               <span>
-                He leído y acepto el uso de mis datos para dar seguimiento a
-                esta solicitud.
+                He leído y acepto el{" "}
+                <Link
+                  to="/aviso-de-privacidad"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markScrollTopAfterNav();
+                  }}
+                >
+                  aviso de privacidad
+                </Link>{" "}
+                y el
+                uso de mis datos para dar seguimiento a esta solicitud.
               </span>
             </label>
             {error && <p className="public-form-error">{error}</p>}

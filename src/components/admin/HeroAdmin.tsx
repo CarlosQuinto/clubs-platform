@@ -36,6 +36,7 @@ interface Props {
 export default function HeroAdmin({ config }: Props) {
   const savedImages = config?.heroImages || [];
   const [name, setName] = useState(config?.name || PLATFORM_NAME);
+  const [motto, setMotto] = useState(config?.motto || "");
   const [logoUrl, setLogoUrl] = useState(config?.logoUrl || "");
   const [headline, setHeadline] = useState(
     config?.headline || PLATFORM_HEADLINE,
@@ -55,6 +56,7 @@ export default function HeroAdmin({ config }: Props) {
 
   useEffect(() => {
     setName(config?.name || PLATFORM_NAME);
+    setMotto(config?.motto || "");
     setLogoUrl(config?.logoUrl || "");
     setHeadline(config?.headline || PLATFORM_HEADLINE);
     setTagline(config?.tagline || PLATFORM_DESCRIPTION);
@@ -63,6 +65,7 @@ export default function HeroAdmin({ config }: Props) {
     setWhatsapp(config?.social?.whatsapp || "");
   }, [
     config?.name,
+    config?.motto,
     config?.logoUrl,
     config?.headline,
     config?.tagline,
@@ -86,6 +89,7 @@ export default function HeroAdmin({ config }: Props) {
       platformConfigRef(),
       {
         name: name.trim() || PLATFORM_NAME,
+        motto: motto.trim(),
         logoUrl: logoUrl.trim(),
       },
       { merge: true },
@@ -239,6 +243,14 @@ export default function HeroAdmin({ config }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={PLATFORM_NAME}
+            />
+          </Field>
+          <Field label="Lema">
+            <FormInput
+              value={motto}
+              onChange={(e) => setMotto(e.target.value)}
+              placeholder="Pasión por el fútbol, comunidad en cada partido."
+              maxLength={120}
             />
           </Field>
           {notice?.area === "header" && (

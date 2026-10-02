@@ -6,10 +6,11 @@ import {
   useState,
   type ReactNode,
   type Ref,
+  type TransitionEvent,
 } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Crown, Pencil, Trophy } from "lucide-react";
-import PlatformLayout from "../components/platform/PlatformLayout";
+import PlatformLayout, { markScrollTopAfterNav } from "../components/platform/PlatformLayout";
 import AdSlot from "../components/platform/AdSlot";
 import HeroCarousel from "../components/platform/HeroCarousel";
 import MatchList from "../components/platform/MatchList";
@@ -25,6 +26,7 @@ import {
   PLATFORM_HEADLINE,
 } from "../lib/clubDefaults";
 import { sortByDate } from "../lib/stats";
+import type { ClubSummary, Match } from "../lib/types";
 import { C, PrimaryButton, RADIUS, SHADOWS } from "../components/ui";
 import {
   ArchiveSection,
@@ -33,6 +35,125 @@ import {
 } from "../components/platform/ArchiveUI";
 
 const LANDING_MATCH_LIMIT = 6;
+const DESKTOP_QUERY = "(min-width: 900px)";
+const SLIDE_INTERVAL_MS = 6000;
+const SLIDE_DURATION_MS = 500;
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setMatches(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
+function chunkMatches(matches: Match[], size: number) {
+  const pages: Match[][] = [];
+  for (let i = 0; i < matches.length; i += size) {
+    pages.push(matches.slice(i, i + size));
+  }
+  return pages;
+}
+
+function LandingMatchRotator({
+  matches,
+  clubNames,
+  clubsById,
+  subtitleOf,
+}: {
+  matches: Match[];
+  clubNames: Record<string, string>;
+  clubsById: Record<string, ClubSummary>;
+  subtitleOf: (match: Match) => string;
+}) {
+  const pages = useMemo(
+    () => chunkMatches(matches, LANDING_MATCH_LIMIT),
+    [matches],
+  );
+  const [index, setIndex] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "armed" | "sliding">("idle");
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const sliding = useRef(false);
+  const commitRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (phase !== "armed") return;
+    const frame = window.requestAnimationFrame(() => setPhase("sliding"));
+    return () => window.cancelAnimationFrame(frame);
+  }, [phase]);
+
+  useEffect(() => {
+    setIndex(0);
+    setPhase("idle");
+    sliding.current = false;
+    if (pages.length < 2) return;
+    let fallback = 0;
+    const commit = () => {
+      if (!sliding.current) return;
+      sliding.current = false;
+      window.clearTimeout(fallback);
+      setPhase("idle");
+      setIndex((current) => (current + 1) % pages.length);
+    };
+    const interval = window.setInterval(() => {
+      if (sliding.current || phaseRef.current !== "idle") return;
+      sliding.current = true;
+      setPhase("armed");
+      fallback = window.setTimeout(commit, SLIDE_DURATION_MS + 120);
+    }, SLIDE_INTERVAL_MS);
+    commitRef.current = commit;
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(fallback);
+      sliding.current = false;
+      commitRef.current = () => {};
+    };
+  }, [pages.length]);
+
+  const onTransitionEnd = (event: TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.propertyName !== "transform") return;
+    commitRef.current();
+  };
+
+  const pageCount = pages.length;
+  const current = pages[index % pageCount] ?? [];
+  const next = pages[(index + 1) % pageCount] ?? [];
+  const list = (page: Match[]) => (
+    <MatchList
+      matches={page}
+      clubNames={clubNames}
+      clubsById={clubsById}
+      subtitleOf={subtitleOf}
+    />
+  );
+
+  return (
+    <div className="landing-match-rotator">
+      <div
+        className="landing-match-rotator__track"
+        style={{
+          transform: phase === "sliding" ? "translateX(-50%)" : "translateX(0)",
+          transition:
+            phase === "idle" ? "none" : `transform ${SLIDE_DURATION_MS}ms ease`,
+        }}
+        onTransitionEnd={onTransitionEnd}
+      >
+        <div className="landing-match-rotator__page">{list(current)}</div>
+        <div className="landing-match-rotator__page" aria-hidden={phase !== "sliding"}>
+          {list(next)}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function useVisibleOnce() {
   const ref = useRef<HTMLElement | null>(null);
@@ -120,6 +241,16 @@ export default function Landing() {
     [matches],
   );
   const visibleMatches = upcomingMatches.slice(0, LANDING_MATCH_LIMIT);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const rotateMatches =
+    desktop && !reduceMotion && upcomingMatches.length > LANDING_MATCH_LIMIT;
+  const subtitleOf = (match: Match) => {
+    const tournament = tournamentsById[match.tournamentId];
+    const category =
+      categoryName[tournament?.categoryId || match.categoryId] || "";
+    return [category, tournament?.name].filter(Boolean).join(" · ");
+  };
   const matchesPending =
     !matchesOn ||
     matchesLoading ||
@@ -205,6 +336,15 @@ export default function Landing() {
         icon={<Calendar size={15} color={C.amber} />}
         id="encuentros"
         tone="plain"
+        action={
+          <Link
+            to="/partidos"
+            className="landing-band__all"
+            onClick={markScrollTopAfterNav}
+          >
+            Ver todos →
+          </Link>
+        }
       >
         {platformUnclaimed && user && (
           <div
@@ -262,39 +402,20 @@ export default function Landing() {
           <Pending />
         ) : visibleMatches.length === 0 ? (
           <Empty>No hay partidos próximos en torneos vigentes.</Empty>
+        ) : rotateMatches ? (
+          <LandingMatchRotator
+            matches={upcomingMatches}
+            clubNames={clubNames}
+            clubsById={clubsById}
+            subtitleOf={subtitleOf}
+          />
         ) : (
-          <>
           <MatchList
             matches={visibleMatches}
             clubNames={clubNames}
             clubsById={clubsById}
-            subtitleOf={(m) => {
-              const tournament = tournamentsById[m.tournamentId];
-              const category =
-                categoryName[tournament?.categoryId || m.categoryId] || "";
-              return [category, tournament?.name].filter(Boolean).join(" · ");
-            }}
+            subtitleOf={subtitleOf}
           />
-          {upcomingMatches.length > LANDING_MATCH_LIMIT && (
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "0.85rem" }}>
-              <Link
-                to="/partidos"
-                style={{
-                  padding: "0.4rem 0.9rem",
-                  fontSize: "0.78rem",
-                  fontWeight: 800,
-                  border: `1px solid ${C.gray300}`,
-                  borderRadius: RADIUS.md,
-                  color: C.navy900,
-                  textDecoration: "none",
-                  background: C.white,
-                }}
-              >
-                Ver más
-              </Link>
-            </div>
-          )}
-          </>
         )}
       </Section>
 
@@ -366,6 +487,7 @@ const Section = forwardRef(function Section(
             alignItems: "center",
             gap: "0.45rem",
             fontSize: "1.05rem",
+            justifyContent: "space-between",
             fontWeight: 900,
             color: C.navy900,
             margin: "0 0 0.85rem",

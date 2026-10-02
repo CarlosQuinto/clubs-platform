@@ -7,10 +7,10 @@ import {
   Megaphone,
   LogIn,
   LogOut,
-  Mail,
-  Menu,
   Calendar,
+  Mail,
   MapPin,
+  Menu,
   Shield,
   Trophy,
   UserPlus,
@@ -27,6 +27,11 @@ type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" |
 
 /** Sobrevive al remonte del layout al cambiar de ruta. */
 let scrollTopAfterNav = false;
+
+/** Los enlaces fuera del pie marcan el tope antes de navegar. */
+export function markScrollTopAfterNav() {
+  scrollTopAfterNav = true;
+}
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
@@ -46,6 +51,7 @@ export default function PlatformLayout({
   const [menuOpen, setMenuOpen] = useState(false);
   const brandName = platformConfig?.name?.trim() || PLATFORM_NAME;
   const logoUrl = platformConfig?.logoUrl?.trim();
+  const motto = platformConfig?.motto?.trim() || "";
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
     return tab === "competition" ||
@@ -336,52 +342,75 @@ export default function PlatformLayout({
         <footer className="platform-footer">
           <div className="platform-footer__inner">
             <div className="platform-footer__brand">
-              <Link to="/" className="platform-footer__logo" onClick={closeMenu}>
+              <Link to="/" className="platform-footer__logo" onClick={() => onDestinationClick("/")} aria-label={brandName}>
                 {logoUrl ? (
                   <img src={logoUrl} alt="" />
                 ) : (
                   <Shield size={22} color={C.amber} />
                 )}
-                <span>{brandName}</span>
               </Link>
+              <div className="platform-footer__identity">
+                <Link to="/" className="platform-footer__name" onClick={() => onDestinationClick("/")}>
+                  {brandName}
+                </Link>
+                {motto ? <p className="platform-footer__motto">{motto}</p> : null}
+              </div>
             </div>
             <nav className="platform-footer__nav" aria-label="Enlaces del pie">
-              <Link to="/" onClick={() => onDestinationClick("/")}>
-                Inicio
-              </Link>
-              <Link to="/equipos" onClick={() => onDestinationClick("/equipos")}>
-                Equipos
-              </Link>
+              <p className="platform-footer__label">Navegación</p>
               <Link to="/torneos" onClick={() => onDestinationClick("/torneos")}>
-                Torneos
+                <Trophy size={16} /> Torneos
               </Link>
               <Link to="/partidos" onClick={() => onDestinationClick("/partidos")}>
-                Partidos
+                <Calendar size={16} /> Partidos
+              </Link>
+              <Link to="/equipos" onClick={() => onDestinationClick("/equipos")}>
+                <Shield size={16} /> Equipos
+              </Link>
+              {platformConfig?.courtsEnabled && (
+                <Link to="/canchas" onClick={() => onDestinationClick("/canchas")}>
+                  <MapPin size={16} /> Renta una cancha
+                </Link>
+              )}
+              <Link
+                to="/registrar-equipo#formulario"
+                onClick={() => onDestinationClick("/registrar-equipo#formulario")}
+              >
+                <UserPlus size={16} /> Registra tu equipo
               </Link>
               <Link
                 to="/contacto#formulario"
                 onClick={() => onDestinationClick("/contacto#formulario")}
               >
-                Contacto
-              </Link>
-              <Link
-                to="/registrar-equipo#formulario"
-                onClick={() => onDestinationClick("/registrar-equipo#formulario")}
-              >
-                Registra tu equipo
+                <Mail size={16} /> Contacto
               </Link>
             </nav>
             {hasAnySocial(platformConfig?.social) && (
               <div className="platform-footer__social">
-                <span>Síguenos</span>
-                <SocialLinks social={platformConfig?.social} tone="dark" compact />
+                <p className="platform-footer__label">Síguenos</p>
+                <SocialLinks social={platformConfig?.social} tone="dark" />
               </div>
             )}
           </div>
           <div className="platform-footer__bar">
             <span>
-              © {new Date().getFullYear()} {brandName}
+              © {new Date().getFullYear()} {brandName}. Todos los derechos
+              reservados.
             </span>
+            <nav className="platform-footer__legal" aria-label="Información legal">
+              <Link
+                to="/terminos"
+                onClick={() => onDestinationClick("/terminos")}
+              >
+                Términos de uso
+              </Link>
+              <Link
+                to="/aviso-de-privacidad"
+                onClick={() => onDestinationClick("/aviso-de-privacidad")}
+              >
+                Aviso de privacidad
+              </Link>
+            </nav>
           </div>
         </footer>
       </div>

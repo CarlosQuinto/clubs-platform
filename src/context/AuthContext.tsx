@@ -29,6 +29,8 @@ export interface PlatformConfig {
   heroImages?: string[];
   name?: string;
   logoUrl?: string;
+  /** Frase corta bajo el nombre en el pie. */
+  motto?: string;
   headline?: string;
   tagline?: string;
   social?: PlatformSocial;

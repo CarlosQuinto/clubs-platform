@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Facebook, Instagram, MessageCircle } from "lucide-react";
+import { ChevronRight, Facebook, Instagram, MessageCircle } from "lucide-react";
 import type { PlatformSocial } from "../../lib/types";
 import {
   facebookUrl,
@@ -71,6 +71,7 @@ export default function SocialLinks({
         >
           {item.icon}
           <span>{item.label}</span>
+          <ChevronRight className="social-links__chevron" size={16} />
         </a>
       ))}
     </div>

@@ -185,11 +185,6 @@ export default function MatchesPage() {
         <p style={{ color: C.gray400, fontSize: "0.9rem" }}>Cargando partidos…</p>
       ) : (
         <>
-          {isSuperAdmin && (
-            <p style={{ margin: "0 0 0.65rem", fontSize: "0.75rem", color: C.gray500 }}>
-              Toca Editar para fecha, hora y sede.
-            </p>
-          )}
           <div className="matches-filter-bar">
             <FormSelect
               value={tournamentId}
