@@ -1,5 +1,15 @@
 import { useMemo, useState, useEffect } from "react";
-import { addDoc, deleteDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import {
+  addTransaction as insertTransaction,
+  deleteFinancialGoal as removeFinancialGoal,
+  deleteTransaction as removeTransaction,
+  saveFinancialGoal,
+  setFinancialGoalStatus,
+  setGoalContribution,
+} from "../../../../dataconnect/generated";
+import { dataConnect } from "../../../lib/sqlConnect";
+import { requestClubRefresh } from "../../../features/club/useClubScreen";
+import { savedRow } from "../../../features/club/saved";
 import { useClub } from "../../../context/ClubContext";
 import { Transaction, Player } from "../types";
 
@@ -17,23 +27,14 @@ export function useFinancesData(
   transactions: Transaction[],
   players: Player[],
   date: string,
+  externalGoals?: Goal[],
 ) {
-  const { col, item } = useClub();
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const { clubId } = useClub();
+  const [goals, setGoals] = useState<Goal[]>(externalGoals || []);
 
   useEffect(() => {
-    const unsub = onSnapshot(col("goals"), (snapshot) => {
-      const fetchedGoals = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() }) as Goal,
-      );
-      fetchedGoals.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      setGoals(fetchedGoals);
-    });
-    return () => unsub();
-  }, [col]);
+    setGoals(externalGoals || []);
+  }, [externalGoals]);
 
   const activePlayers = useMemo(
     () => players.filter((p) => p.active !== false),
@@ -93,15 +94,25 @@ export function useFinancesData(
   }, [allTransactions]);
 
   const addTransaction = async (data: Omit<Transaction, "id">) => {
-    await addDoc(col("transactions"), {
-      ...data,
-      timestamp: new Date().toISOString(),
+    const saved = await insertTransaction(dataConnect, {
+      id: crypto.randomUUID(),
+      clubId,
+      type: data.type === "ingreso" ? "INGRESO" : "GASTO",
+      description: data.description,
+      category: data.category,
+      amount: data.amount,
+      txnDate: data.date,
     });
+    savedRow(saved.data.transaction);
+    requestClubRefresh();
   };
 
   const deleteTransaction = async (id: string) => {
+    if (id.startsWith("legacy-") || id.startsWith("goal-")) return;
     if (window.confirm("¿Seguro que deseas eliminar este movimiento?")) {
-      await deleteDoc(item("transactions", id));
+      const removed = await removeTransaction(dataConnect, { id, clubId });
+      savedRow(removed.data.deleted);
+      requestClubRefresh();
     }
   };
 
@@ -111,19 +122,22 @@ export function useFinancesData(
     amount: number,
     quotaPerPlayer: number,
   ) => {
-    await addDoc(col("goals"), {
+    const saved = await saveFinancialGoal(dataConnect, {
+      id: crypto.randomUUID(),
+      clubId,
       title,
       amount,
       quotaPerPlayer,
-      status: "active",
-      contributions: {},
-      createdAt: new Date().toISOString(),
     });
+    savedRow(saved.data.goal);
+    requestClubRefresh();
   };
 
   const completeGoal = async (id: string) => {
     if (window.confirm("¿Estás seguro de marcar esta meta como completada?")) {
-      await updateDoc(item("goals", id), { status: "completed" });
+      const saved = await setFinancialGoalStatus(dataConnect, { id, clubId, status: "COMPLETED" });
+      savedRow(saved.data.goal);
+      requestClubRefresh();
     }
   };
 
@@ -133,7 +147,9 @@ export function useFinancesData(
         "¿Seguro que deseas ELIMINAR esta meta? (Se restará del balance todo lo recaudado para ella)",
       )
     ) {
-      await deleteDoc(item("goals", id));
+      const removed = await removeFinancialGoal(dataConnect, { id, clubId });
+      savedRow(removed.data.deleted);
+      requestClubRefresh();
     }
   };
 
@@ -142,31 +158,9 @@ export function useFinancesData(
     playerId: string,
     amount: number,
   ) => {
-    const goal = goals.find((g) => g.id === goalId);
-    if (!goal) return;
-
-    // Calculamos la diferencia para sumarla al histórico del jugador
-    const oldAmount = goal.contributions[playerId] || 0;
-    const diff = amount - oldAmount;
-
-    // 1. Actualizamos la Meta (Finanzas)
-    const newContributions = { ...goal.contributions, [playerId]: amount };
-    await updateDoc(item("goals", goalId), {
-      contributions: newContributions,
-    });
-
-    // 2. Actualizamos el récord histórico del Jugador silenciosamente
-    const player = players.find((p) => p.id === playerId);
-    if (player) {
-      const currentTotal =
-        player.lifetime_contributions !== undefined
-          ? player.lifetime_contributions
-          : player.amount_paid || 0;
-
-      await updateDoc(item("players", playerId), {
-        lifetime_contributions: currentTotal + diff,
-      });
-    }
+    const saved = await setGoalContribution(dataConnect, { goalId, playerId, amount });
+    savedRow(saved.data.contribution);
+    requestClubRefresh();
   };
 
   return {

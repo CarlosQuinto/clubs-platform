@@ -9,19 +9,24 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import { Pencil, Plus, X } from "lucide-react";
-import { updateDoc } from "firebase/firestore";
-import { tournamentRef } from "../../lib/paths";
+import { diffFixtures, lateWalkoverFixtures, playedReturnsIfSingleLeg, tournamentLegs, expectedMatchCount, type LateEntryChoice } from "../../lib/fixtures";
+import { QueryFetchPolicy } from "firebase/data-connect";
 import {
-  expectedMatchCount,
-  lateWalkoverFixtures,
-  playedReturnsIfSingleLeg,
-  syncTournamentFixtures,
-  tournamentLegs,
-  type LateEntryChoice,
-} from "../../lib/fixtures";
+  addTournamentClub,
+  deleteUnplayedMatch,
+  insertUnplayedMatch,
+  markMatchWalkover,
+  removeTournamentClub,
+  tournamentEditor,
+  updateTournamentSettings,
+} from "../../../dataconnect/generated";
+import { auth } from "../../lib/firebase";
+import { dataConnect } from "../../lib/sqlConnect";
+import { notifyTournamentEdited } from "../../lib/tournamentEdited";
+import { toTournamentEditor, type TournamentEditorModel } from "../../features/tournament/tournamentEditorMapper";
 import { useAuth } from "../../context/AuthContext";
-import { usePlatformCatalog, useTournamentMatches } from "../../hooks/usePlatformCatalog";
 import { useModalLock } from "../../hooks/useModalLock";
 import { isPlayed } from "../../lib/stats";
 import {
@@ -30,7 +35,6 @@ import {
   asMatchDuration,
   footballTypeLabel,
   MATCH_DURATIONS,
-  type ClubSummary,
   type FootballType,
   type MatchDurationMinutes,
   type Tournament,
@@ -57,6 +61,7 @@ export function useTournamentEdit() {
 
 export function TournamentEditHost({ children }: { children: ReactNode }) {
   const { isSuperAdmin } = useAuth();
+  const location = useLocation();
   const [id, setId] = useState<string | null>(null);
   const openEdit = useCallback(
     (tournamentId: string) => {
@@ -68,9 +73,15 @@ export function TournamentEditHost({ children }: { children: ReactNode }) {
   const close = useCallback(() => setId(null), []);
   const [savedNotice, setSavedNotice] = useState(false);
   const handleSaved = useCallback(() => {
+    const editedId = id;
     setId(null);
+    if (editedId && location.pathname === `/torneos/${editedId}`) {
+      window.location.reload();
+      return;
+    }
+    notifyTournamentEdited();
     setSavedNotice(true);
-  }, []);
+  }, [id, location.pathname]);
 
   return (
     <EditCtx.Provider value={{ openEdit }}>
@@ -99,12 +110,31 @@ export default function TournamentEditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { tournamentsById, clubs, categoryName, seasons } = usePlatformCatalog();
-  const tournament = tournamentsById[tournamentId];
-  const season = seasons.find((item) => item.id === tournament?.seasonId);
-  const seasonStart = season?.startDate || undefined;
-  const seasonEnd = season?.endDate || undefined;
-  const { matches, loading: matchesLoading } = useTournamentMatches(tournamentId);
+  const [model, setModel] = useState<TournamentEditorModel | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    void tournamentEditor(dataConnect, { id: tournamentId }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
+      .then((result) => {
+        if (alive) setModel(toTournamentEditor(result.data));
+      })
+      .catch((err: unknown) => console.error(err))
+      .finally(() => {
+        if (alive) setLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tournamentId]);
+
+  const tournament = model?.tournament;
+  const clubs = model?.clubs ?? [];
+  const matches = model?.matches ?? [];
+  const seasonStart = model?.seasonStart;
+  const seasonEnd = model?.seasonEnd;
+  const categoryLabel = model?.categoryLabel || "—";
   const [draftClubIds, setDraftClubIds] = useState<string[]>([]);
   const [draftLegs, setDraftLegs] = useState<1 | 2>(2);
   const [draftFootballType, setDraftFootballType] = useState<FootballType>(7);
@@ -132,8 +162,8 @@ export default function TournamentEditModal({
   }, [tournamentId, hasTournament]);
 
   useEffect(() => {
-    if (ready && !hasTournament) onClose();
-  }, [ready, hasTournament, onClose]);
+    if (loaded && !hasTournament) onClose();
+  }, [loaded, hasTournament, onClose]);
 
   const clubNames = useMemo(
     () => Object.fromEntries(clubs.map((c) => [c.id, c.name])),
@@ -151,7 +181,7 @@ export default function TournamentEditModal({
 
   if (!tournament || !ready) return null;
 
-  const catLabel = categoryName[tournament.categoryId] || "—";
+  const catLabel = categoryLabel;
   const enrolled = clubs.filter((c) => draftClubIds.includes(c.id));
   const addable = clubs.filter((c) => c.active && !draftClubIds.includes(c.id));
   const savedLegs = tournamentLegs(tournament);
@@ -207,27 +237,76 @@ export default function TournamentEditModal({
   const confirmSave = async () => {
     try {
       setBusy(true);
-      await updateDoc(tournamentRef(tournament.id), {
+      const football =
+        draftFootballType === 7 ? "FUT_7" : draftFootballType === 9 ? "FUT_9" : "FUT_11";
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error("Debes iniciar sesión.");
+      const settings = await updateTournamentSettings(dataConnect, {
+        userId,
+        id: tournament.id,
+        legs: draftLegs,
+        footballType: football,
+        durationMinutes: draftDuration,
+        startDate: draftStartDate || null,
+      });
+      if (settings.data.tournament == null) throw new Error("No se pudo guardar.");
+      const previous = new Set(tournament.clubIds);
+      const next = new Set(nextClubIds);
+      for (const clubId of previous) {
+        if (!next.has(clubId)) {
+          await removeTournamentClub(dataConnect, { userId, tournamentId: tournament.id, clubId });
+        }
+      }
+      for (const clubId of next) {
+        if (!previous.has(clubId)) {
+          const added = await addTournamentClub(dataConnect, { userId, tournamentId: tournament.id, clubId });
+          if (added.data.row == null) throw new Error("No se pudo guardar.");
+        }
+      }
+      const updated: Tournament = {
+        ...tournament,
         clubIds: nextClubIds,
         legs: draftLegs,
         footballType: draftFootballType,
-        startDate: draftStartDate || null,
+        startDate: draftStartDate || undefined,
         durationMinutes: draftDuration,
-      });
-      await syncTournamentFixtures(
-        {
-          ...tournament,
-          clubIds: nextClubIds,
-          legs: draftLegs,
-          footballType: draftFootballType,
-          startDate: draftStartDate || undefined,
-          durationMinutes: draftDuration,
-        },
-        matches,
-        needsLateChoice && lateEntry
-          ? { lateEntry, newClubIds: addedClubIds }
-          : undefined,
-      );
+      };
+      const { toCreate, toDelete } = diffFixtures(updated, matches);
+      for (const match of toDelete) {
+        if (!isPlayed(match)) await deleteUnplayedMatch(dataConnect, { userId, id: match.id });
+      }
+      const fresh = new Set(addedClubIds);
+      for (const fixture of toCreate) {
+        const award =
+          needsLateChoice &&
+          lateEntry === "walkover" &&
+          (fresh.has(fixture.homeClubId) !== fresh.has(fixture.awayClubId));
+        const homeScore = !award ? null : fresh.has(fixture.homeClubId) ? 0 : 3;
+        const awayScore = !award ? null : fresh.has(fixture.homeClubId) ? 3 : 0;
+        const matchId = crypto.randomUUID();
+        const created = await insertUnplayedMatch(dataConnect, {
+          userId,
+          id: matchId,
+          tournamentId: tournament.id,
+          roundLabel: fixture.round.slice(0, 16),
+          roundNumber: Number(fixture.round) || 0,
+          homeClubId: fixture.homeClubId,
+          awayClubId: fixture.awayClubId,
+          status: award ? "PLAYED" : "UNSCHEDULED",
+          walkover: award,
+        });
+        if (created.data.match == null) throw new Error("No se pudo guardar.");
+        if (award && homeScore != null && awayScore != null) {
+          const marked = await markMatchWalkover(dataConnect, {
+            userId,
+            id: matchId,
+            homeScore,
+            awayScore,
+            walkover: true,
+          });
+          if (marked.data.match == null) throw new Error("No se pudo guardar.");
+        }
+      }
       setBusy(false);
       setSaveOpen(false);
       onSaved();
@@ -323,15 +402,7 @@ export default function TournamentEditModal({
             minHeight: 0,
           }}
         >
-
-        <TournamentSync
-          tournament={tournament}
-          matches={matches}
-          matchesLoading={matchesLoading}
-          dirty={dirty}
-        />
-
-        <div
+        <p
           style={{
             fontSize: "0.7rem",
             fontWeight: 800,
@@ -341,7 +412,7 @@ export default function TournamentEditModal({
           }}
         >
           Equipos — {catLabel}
-        </div>
+        </p>
         <ClubEnrollPicker
           enrolled={enrolled}
           addable={addable}
@@ -408,7 +479,7 @@ export default function TournamentEditModal({
           />
         </div>
         <p style={{ margin: "0.45rem 0 0", fontSize: "0.75rem", color: C.gray500 }}>
-          {matchesLoading
+          {!loaded
             ? "Cargando calendario…"
             : draftClubIds.length < 2
               ? "Con 2 o más equipos se genera el calendario según este formato."
@@ -431,7 +502,7 @@ export default function TournamentEditModal({
           </SecondaryButton>
           <PrimaryButton
             type="button"
-            disabled={!dirty || busy || matchesLoading}
+            disabled={!dirty || busy || !loaded}
             onClick={() => {
               setLateEntry(null);
               setLateEntryHint(false);
@@ -501,32 +572,6 @@ export default function TournamentEditModal({
     </div>,
     document.body,
   );
-}
-
-function TournamentSync({
-  tournament,
-  matches,
-  matchesLoading,
-  dirty,
-}: {
-  tournament: Tournament;
-  matches: ReturnType<typeof useTournamentMatches>["matches"];
-  matchesLoading: boolean;
-  dirty: boolean;
-}) {
-  useEffect(() => {
-    if (matchesLoading || dirty) return;
-    void syncTournamentFixtures(tournament, matches);
-  }, [
-    matchesLoading,
-    dirty,
-    tournament,
-    tournament.id,
-    tournament.legs,
-    tournament.clubIds.join(","),
-    matches,
-  ]);
-  return null;
 }
 
 function ClubEnrollPicker({

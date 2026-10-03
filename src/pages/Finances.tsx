@@ -9,6 +9,7 @@ import { FinancesProps, Transaction } from "../components/finances/types";
 export default function Finances({
   transactions,
   players,
+  goals: externalGoals,
   perms,
 }: FinancesProps) {
   const [date] = useState(new Date().toISOString().split("T")[0]);
@@ -26,7 +27,10 @@ export default function Finances({
     completeGoal,
     deleteGoal,
     updateGoalContribution,
-  } = useFinancesData(transactions, players, date);
+  } = useFinancesData(transactions, players, date, externalGoals?.map((goal) => ({
+    ...goal,
+    createdAt: goal.createdAt || "",
+  })));
 
   // ── CREACIÓN DE META CON CÁLCULO DE CUOTA ──
   const handleAddGoal = () => {
@@ -51,7 +55,10 @@ export default function Finances({
     if (!quotaStr) return;
     const quotaPerPlayer = parseFloat(quotaStr) || suggestedQuota;
 
-    addGoal(title, amount, quotaPerPlayer);
+    void addGoal(title, amount, quotaPerPlayer).catch((err: unknown) => {
+      console.error(err);
+      alert("No se pudo guardar.");
+    });
   };
 
   // ── REGISTRO DE APORTACIÓN ──
@@ -74,11 +81,14 @@ export default function Finances({
       alert("Por favor ingresa una cantidad numérica válida.");
       return;
     }
-    updateGoalContribution(goalId, playerId, newAmount);
+    void updateGoalContribution(goalId, playerId, newAmount).catch((err: unknown) => {
+      console.error(err);
+      alert("No se pudo guardar.");
+    });
   };
 
   const handleSubmitTransaction = (data: Omit<Transaction, "id">) => {
-    addTransaction(data);
+    return addTransaction(data);
   };
 
   return (
@@ -101,8 +111,18 @@ export default function Finances({
         players={activePlayers}
         canEdit={perms.canEditFinanzas}
         onAddGoal={handleAddGoal}
-        onCompleteGoal={completeGoal}
-        onDeleteGoal={deleteGoal}
+        onCompleteGoal={(id) => {
+          void completeGoal(id).catch((err: unknown) => {
+            console.error(err);
+            alert("No se pudo guardar.");
+          });
+        }}
+        onDeleteGoal={(id) => {
+          void deleteGoal(id).catch((err: unknown) => {
+            console.error(err);
+            alert("No se pudo guardar.");
+          });
+        }}
         onUpdateContribution={handleUpdateContribution}
       />
 
@@ -113,7 +133,12 @@ export default function Finances({
       <TransactionHistory
         transactions={allTransactions}
         canEdit={perms.canEditFinanzas}
-        onDelete={deleteTransaction}
+        onDelete={(id) => {
+          void deleteTransaction(id).catch((err: unknown) => {
+            console.error(err);
+            alert("No se pudo guardar.");
+          });
+        }}
       />
     </div>
   );

@@ -14,10 +14,19 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
-import { onSnapshot, serverTimestamp, setDoc, getDoc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
+import { onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { auth, functions } from "../lib/firebase";
-import { emailKey, platformConfigRef, platformInviteRef, userDocRef } from "../lib/paths";
+import {
+  adminAdmins,
+  bootstrapPlatformAdmin,
+  claimPlatformAdminInvite,
+  ensureMyProfile,
+  platformAdminById,
+  platformClaimOpen,
+} from "../../dataconnect/generated";
+import { dataConnect } from "../lib/sqlConnect";
+import { emailKey, platformConfigRef } from "../lib/paths";
 import type { CourtSlotMinutes, PlatformSocial, TimeWindow } from "../lib/types";
 
 export type { PlatformSocial };
@@ -48,9 +57,16 @@ interface AuthContextValue {
   user: User | null;
   /** true mientras Firebase resuelve la sesión inicial. */
   loading: boolean;
-  /** null = todavía no cargado; undefined = el documento no existe (plataforma sin reclamar). */
+  /** null = todavía no cargado; undefined = el documento no existe. */
   platformConfig: PlatformConfig | null | undefined;
+  /** null mientras se consulta; true si platform_admins está vacía. */
+  platformUnclaimed: boolean | null;
   isSuperAdmin: boolean;
+  /** null mientras se consulta platform_admins. */
+  sqlAdmin: boolean | null;
+  /** El documento de Firestore todavía lista a este usuario. Sirve para el alta inicial en SQL. */
+  firestoreIsSuperAdmin: boolean;
+  bootstrapPlatformRole: () => Promise<boolean>;
   login: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -59,7 +75,7 @@ interface AuthContextValue {
   ) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  /** Primer usuario: crea platform/config y se convierte en super administrador. */
+  /** Primer usuario: se convierte en superadministrador si nadie lo ha reclamado. */
   claimPlatformAdmin: () => Promise<void>;
 }
 
@@ -71,6 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [platformConfig, setPlatformConfig] = useState<
     PlatformConfig | null | undefined
   >(null);
+  const [sqlAdmin, setSqlAdmin] = useState<boolean | null>(null);
+  const [platformUnclaimed, setPlatformUnclaimed] = useState<boolean | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -80,8 +98,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, []);
 
-  // platform/config es de lectura pública (solo contiene uids); permite a la UI
-  // saber si la plataforma ya tiene super administrador.
+  useEffect(() => {
+    let cancelled = false;
+    const loadClaim = async () => {
+      try {
+        if (auth.currentUser) {
+          const listed = await adminAdmins(dataConnect);
+          if (cancelled) return;
+          const open = (listed.data.platformAdmins || []).length === 0;
+          setPlatformUnclaimed(open);
+          return;
+        }
+        const result = await platformClaimOpen(dataConnect);
+        if (cancelled) return;
+        const open = result.data.platformClaimStates[0]?.open !== false;
+        setPlatformUnclaimed(open);
+      } catch (err: unknown) {
+        console.error(err);
+        if (!cancelled) setPlatformUnclaimed(false);
+      }
+    };
+    void loadClaim();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // platform/config sigue alimentando la portada del superadministrador.
   useEffect(() => {
     const unsub = onSnapshot(
       platformConfigRef(),
@@ -98,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, []);
 
-  const isSuperAdmin = useMemo(
+  const firestoreIsSuperAdmin = useMemo(
     () =>
       !!user &&
       !!platformConfig &&
@@ -106,30 +149,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, platformConfig],
   );
 
-  const ensureUserDoc = useCallback(async (u: User) => {
-    await setDoc(
-      userDocRef(u.uid),
-      {
-        email: (u.email || "").toLowerCase(),
-        displayName: u.displayName || "",
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+  const refreshSqlAdmin = useCallback(async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setSqlAdmin(false);
+      return false;
+    }
+    const result = await platformAdminById(dataConnect, { id: uid });
+    const yes = Boolean(result.data.platformAdmin);
+    setSqlAdmin(yes);
+    return yes;
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setSqlAdmin(false);
+      return;
+    }
+    setSqlAdmin(null);
+    void refreshSqlAdmin().catch((err: unknown) => {
+      console.error(err);
+      setSqlAdmin(false);
+    });
+  }, [user, refreshSqlAdmin]);
+
+  const isSuperAdmin = sqlAdmin === true || (sqlAdmin === null && firestoreIsSuperAdmin);
 
   const claimPlatformInvite = useCallback(async (u: User) => {
     if (!u.email) return;
-    const invRef = platformInviteRef(emailKey(u.email));
-    const invite = await getDoc(invRef);
-    if (!invite.exists()) return;
-    await updateDoc(platformConfigRef(), {
-      superAdmins: arrayUnion(u.uid),
-      [`superAdminEmails.${u.uid}`]: u.email.toLowerCase(),
-      updatedAt: serverTimestamp(),
+    const email = u.email.toLowerCase();
+    await ensureMyProfile(dataConnect, {
+      email,
+      displayName: u.displayName || "",
     });
-    await deleteDoc(invRef).catch(() => {});
-  }, []);
+    await claimPlatformAdminInvite(dataConnect, { emailKey: emailKey(email) });
+    await refreshSqlAdmin();
+  }, [refreshSqlAdmin]);
 
   useEffect(() => {
     if (!user || isSuperAdmin) return;
@@ -141,26 +196,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      await ensureUserDoc(cred.user).catch(() => {});
+      await ensureMyProfile(dataConnect, {
+        email: (cred.user.email || email).trim().toLowerCase(),
+        displayName: cred.user.displayName || "",
+      });
       await claimPlatformInvite(cred.user).catch((err) => {
         console.error("No se pudo reclamar la invitación de superadmin:", err);
       });
     },
-    [ensureUserDoc, claimPlatformInvite],
+    [claimPlatformInvite],
   );
 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      if (displayName.trim()) {
-        await updateProfile(cred.user, { displayName: displayName.trim() });
+      const name = displayName.trim();
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
       }
-      await ensureUserDoc(cred.user).catch(() => {});
+      const profileEmail = email.trim().toLowerCase();
+      await ensureMyProfile(dataConnect, {
+        email: profileEmail,
+        displayName: name,
+      });
+      const admin = await bootstrapPlatformAdmin(dataConnect, {
+        userId: cred.user.uid,
+        email: profileEmail,
+        displayName: name,
+      });
+      if (admin.data.admin) {
+        setPlatformUnclaimed(false);
+        await refreshSqlAdmin();
+      }
       await claimPlatformInvite(cred.user).catch((err) => {
         console.error("No se pudo reclamar la invitación de superadmin:", err);
       });
     },
-    [ensureUserDoc, claimPlatformInvite],
+    [claimPlatformInvite, refreshSqlAdmin],
   );
 
   const logout = useCallback(async () => {
@@ -175,23 +247,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fn({ email: email.trim().toLowerCase() });
   }, []);
 
-  const claimPlatformAdmin = useCallback(async () => {
-    if (!user) throw new Error("Debes iniciar sesión.");
-    await setDoc(platformConfigRef(), {
-      superAdmins: [user.uid],
-      superAdminEmails: user.email
-        ? { [user.uid]: user.email.toLowerCase() }
-        : {},
-      createdAt: serverTimestamp(),
+  const bootstrapPlatformRole = useCallback(async () => {
+    if (!user?.email) return false;
+    await ensureMyProfile(dataConnect, {
+      email: user.email.toLowerCase(),
+      displayName: user.displayName || "",
     });
-  }, [user]);
+    const result = await bootstrapPlatformAdmin(dataConnect, {
+      userId: user.uid,
+      email: user.email.toLowerCase(),
+      displayName: user.displayName || "",
+    });
+    if (!result.data.admin) return false;
+    setPlatformUnclaimed(false);
+    await refreshSqlAdmin();
+    return true;
+  }, [user, refreshSqlAdmin]);
+
+  const claimPlatformAdmin = useCallback(async () => {
+    if (!user?.email) throw new Error("Debes iniciar sesión.");
+    const claimed = await bootstrapPlatformRole();
+    if (!claimed) throw new Error("La plataforma ya tiene administrador.");
+  }, [user, bootstrapPlatformRole]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
       platformConfig,
+      platformUnclaimed,
       isSuperAdmin,
+      sqlAdmin,
+      firestoreIsSuperAdmin,
+      bootstrapPlatformRole,
       login,
       register,
       logout,
@@ -202,7 +290,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       loading,
       platformConfig,
+      platformUnclaimed,
       isSuperAdmin,
+      sqlAdmin,
+      firestoreIsSuperAdmin,
+      bootstrapPlatformRole,
       login,
       register,
       logout,

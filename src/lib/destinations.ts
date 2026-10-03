@@ -1,13 +1,14 @@
 import type { User } from "firebase/auth";
 import {
-  deleteDoc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import { clubItemRef, emailKey, platformConfigRef } from "./paths";
+  acceptClubInvite,
+  myMemberships,
+  myOpenClubInvites,
+  platformAdminById,
+  type MemberRole,
+} from "../../dataconnect/generated";
+import { dataConnect } from "./sqlConnect";
+import { emailKey } from "./paths";
 import { ROLE_LABELS, type Role } from "./roles";
-import type { ClubSummary } from "./types";
 
 export type LoginDestination = {
   kind: "admin" | "club";
@@ -17,14 +18,17 @@ export type LoginDestination = {
   logoUrl?: string;
 };
 
-export async function resolveUserDestinations(
-  user: User,
-  clubs: ClubSummary[],
-): Promise<LoginDestination[]> {
+const ROLE_FROM_SQL: Record<MemberRole, Role> = {
+  ADMIN: "admin",
+  DT: "dt",
+  PRENSA: "prensa",
+  TESORERO: "tesorero",
+};
+
+export async function resolveUserDestinations(user: User): Promise<LoginDestination[]> {
   const dests: LoginDestination[] = [];
-  const config = await getDoc(platformConfigRef());
-  const superAdmins = (config.data()?.superAdmins || []) as string[];
-  if (superAdmins.includes(user.uid)) {
+  const admin = await platformAdminById(dataConnect, { id: user.uid });
+  if (admin.data.platformAdmin) {
     dests.push({
       kind: "admin",
       path: "/admin",
@@ -34,44 +38,30 @@ export async function resolveUserDestinations(
   }
 
   const email = (user.email || "").toLowerCase();
-  const memberships = await Promise.all(
-    clubs.map(async (club) => {
-      const memberRef = clubItemRef(club.id, "members", user.uid);
-      const member = await getDoc(memberRef);
-      let role = member.exists() ? (member.data().role as Role) : null;
+  if (email) {
+    const invites = await myOpenClubInvites(dataConnect, { emailKey: emailKey(email) });
+    for (const invite of invites.data.clubInvites) {
+      if (!invite.token) continue;
+      await acceptClubInvite(dataConnect, {
+        clubId: invite.club.id,
+        emailKey: emailKey(email),
+        token: invite.token,
+        displayName: user.displayName || "",
+      }).catch((err: unknown) => {
+        console.error("No se pudo aceptar la invitación:", err);
+      });
+    }
+  }
 
-      if (!role && email) {
-        const inviteRef = clubItemRef(club.id, "invites", emailKey(email));
-        const invite = await getDoc(inviteRef);
-        if (invite.exists() && invite.data().kind !== "accept") {
-          role = invite.data().role as Role;
-          try {
-            await setDoc(memberRef, {
-              role,
-              email,
-              displayName: user.displayName || "",
-              joinedAt: serverTimestamp(),
-            });
-            await deleteDoc(inviteRef).catch(() => {});
-          } catch (err) {
-            console.error("No se pudo reclamar la invitación:", err);
-          }
-        }
-      }
-
-      if (!role) return null;
-      return { club, role };
-    }),
-  );
-
-  for (const item of memberships) {
-    if (!item) continue;
+  const memberships = await myMemberships(dataConnect, { userId: user.uid });
+  for (const member of memberships.data.clubMembers) {
+    const role = ROLE_FROM_SQL[member.role];
     dests.push({
       kind: "club",
-      path: `/${item.club.slug || item.club.id}`,
-      title: item.club.name,
-      subtitle: ROLE_LABELS[item.role] || "Administración",
-      logoUrl: item.club.logoUrl,
+      path: `/${member.club.slug || member.club.id}`,
+      title: member.club.name,
+      subtitle: ROLE_LABELS[role] || "Administración",
+      logoUrl: member.club.logoUrl || undefined,
     });
   }
 

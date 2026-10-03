@@ -16,6 +16,14 @@ export async function reviewTeamApplication(params: {
   applicationId: string;
   action: "approve" | "reject";
   localityId?: string;
+  prepared?: boolean;
+  teamName?: string;
+  captainName?: string;
+  captainEmail?: string;
+  slug?: string;
+  clubId?: string;
+  token?: string;
+  emailKey?: string;
 }) {
   const fn = httpsCallable<typeof params, ReviewTeamResult>(
     functions,

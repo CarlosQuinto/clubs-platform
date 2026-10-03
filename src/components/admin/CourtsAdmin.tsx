@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { addDoc, deleteDoc, getDoc, getDocs, query, updateDoc, where, writeBatch } from "firebase/firestore";
+import { getDoc } from "firebase/firestore";
 import {
   Calendar,
   CircleDollarSign,
@@ -16,8 +16,16 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
-import { useCourtHolds, useCourts } from "../../hooks/useCourts";
+import {
+  loadCourts,
+  removeCourt,
+  removeManualHold,
+  saveCourtModule,
+  upsertCourt,
+  upsertHold,
+} from "../../features/admin/commands";
+import { toCourtsAdmin } from "../../features/admin/courts/courtsAdminMapper";
+import { useAdminQuery } from "../../features/admin/useAdminQuery";
 import { useModalLock } from "../../hooks/useModalLock";
 import {
   courtsFreeAt,
@@ -27,27 +35,22 @@ import {
   fromMinutes,
   rangesOverlap,
   readWindows,
+  todayIso,
   toMinutes,
   weekdayOf,
 } from "../../lib/courts";
 import {
-  clubDocRef,
-  courtHoldRef,
-  courtHoldsCol,
-  courtRef,
-  courtsCol,
   matchRef,
-  matchesCol,
-  platformConfigRef,
   platformStoragePath,
   tournamentRef,
 } from "../../lib/paths";
-import { db } from "../../lib/firebase";
 import { scheduleMatch } from "../../lib/scheduleMatch";
+import { sendCourtBookingNotice } from "../../lib/courtBookingMail";
+import { isEmail } from "../../lib/textLimits";
 import { uploadImageFile } from "../../lib/uploadImage";
-import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type CourtSlotMinutes, type TimeWindow } from "../../lib/types";
+import { asMatchDuration, type Court, type CourtHold, type CourtSlotMinutes, type TimeWindow } from "../../lib/types";
 import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
-import WindowsEditor, { dayLabel } from "../courts/WindowsEditor";
+import WindowsEditor from "../courts/WindowsEditor";
 import ConfirmModal from "../ConfirmModal";
 import Field from "./Field";
 import {
@@ -60,6 +63,62 @@ import {
 } from "../ui";
 
 const COURT_TEXT_LIMIT = 15;
+
+function courtSaveHint(name: string, description: string, rate: string) {
+  const missing: string[] = [];
+  if (!name.trim()) missing.push("el nombre");
+  if (!description.trim()) missing.push("la descripción");
+  const hourlyRate = Number(rate);
+  if (rate.trim() === "" || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
+    missing.push("el costo por hora");
+  }
+  if (missing.length === 0) return "";
+  if (missing.length === 1) return `Escribe ${missing[0]}.`;
+  if (missing.length === 2) return `Escribe ${missing[0]} y ${missing[1]}.`;
+  return `Escribe ${missing[0]}, ${missing[1]} y ${missing[2]}.`;
+}
+
+const BOOKING_MAIL_FAIL = "El cambio quedó guardado, pero el correo no se envió.";
+
+function bookingPriceLabel(hourlyRate: number, minutes: number) {
+  const price = Math.round(((hourlyRate * minutes) / 60) * 100) / 100;
+  const text = Number.isInteger(price) ? String(price) : price.toFixed(2);
+  return `$${text}`;
+}
+
+function bookingSlot(court: Court | undefined, start: number, end: number) {
+  const minutes = Math.max(0, end - start);
+  return {
+    courtName: court?.name || "Cancha",
+    startLabel: formatFriendlyTime(fromMinutes(start)),
+    endLabel: formatFriendlyTime(fromMinutes(end)),
+    durationLabel: formatDuration(minutes),
+    priceLabel: bookingPriceLabel(court?.hourlyRate ?? 0, minutes),
+  };
+}
+
+async function mailBooking(input: {
+  to: string;
+  kind: "created" | "updated" | "cancelled";
+  date: string;
+  note: string;
+  slots: ReturnType<typeof bookingSlot>[];
+}) {
+  const to = input.to.trim().toLowerCase();
+  if (!to) return true;
+  try {
+    return await sendCourtBookingNotice({
+      to,
+      kind: input.kind,
+      dateLabel: formatFriendlyDate(input.date),
+      note: input.note,
+      slots: input.slots,
+    });
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
 
 function clipCourtText(value: string) {
   return value.slice(0, COURT_TEXT_LIMIT);
@@ -78,44 +137,39 @@ function deleteCourtMessage(name: string, matches: number, rentals: number, link
   return `¿Seguro que deseas eliminar ${name}? ${has}Se quitarán esos apartados y los partidos quedarán sin esta cancha. El marcador y la fecha se conservan.`;
 }
 
-async function deleteCourtAndLinks(court: Court) {
-  const [holdSnap, matchSnap] = await Promise.all([
-    getDocs(query(courtHoldsCol(), where("courtId", "==", court.id))),
-    getDocs(query(matchesCol(), where("courtId", "==", court.id))),
-  ]);
-  const rentals = holdSnap.docs.filter((docSnap) => docSnap.data().source !== "match").length;
-  const linked = holdSnap.size > 0 || matchSnap.size > 0;
-  if (!window.confirm(deleteCourtMessage(court.name, matchSnap.size, rentals, linked))) return false;
-
-  const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
-  for (const docSnap of holdSnap.docs) ops.push((batch) => batch.delete(docSnap.ref));
-  for (const docSnap of matchSnap.docs) ops.push((batch) => batch.update(docSnap.ref, { courtId: "" }));
-  for (let index = 0; index < ops.length; index += 450) {
-    const batch = writeBatch(db);
-    for (const op of ops.slice(index, index + 450)) op(batch);
-    await batch.commit();
-  }
-  await deleteDoc(courtRef(court.id));
+async function deleteCourtAndLinks(court: Court, holds: CourtHold[]) {
+  const own = holds.filter((hold) => hold.courtId === court.id);
+  const matches = own.filter((hold) => hold.source === "match").length;
+  const rentals = own.filter((hold) => hold.source !== "match").length;
+  const linked = own.length > 0;
+  if (!window.confirm(deleteCourtMessage(court.name, matches, rentals, linked))) return false;
+  await removeCourt(court.id);
   return true;
 }
 
 export default function CourtsAdmin() {
-  const { platformConfig } = useAuth();
-  const { courts } = useCourts();
   const today = useMemo(() => {
     const now = new Date();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
     return `${now.getFullYear()}-${month}-${day}`;
   }, []);
-  const { holds } = useCourtHolds(today, "2099-12-31");
-  const [enabled, setEnabled] = useState(platformConfig?.courtsEnabled === true);
-  const [slot, setSlot] = useState<CourtSlotMinutes>(
-    asCourtSlot(platformConfig?.courtSlotMinutes),
+  const screen = useAdminQuery(() => loadCourts());
+  const view = useMemo(
+    () => (screen.data ? toCourtsAdmin(screen.data) : null),
+    [screen.data],
   );
-  const [windows, setWindows] = useState<TimeWindow[]>(
-    readWindows(platformConfig?.courtOpenWindows),
-  );
+  const courts = view?.courts ?? [];
+  const holds = view?.holds ?? [];
+  const [enabled, setEnabled] = useState(false);
+  const [slot, setSlot] = useState<CourtSlotMinutes>(60);
+  const [windows, setWindows] = useState<TimeWindow[]>([]);
+  useEffect(() => {
+    if (!view) return;
+    setEnabled(view.enabled);
+    setSlot(view.slot);
+    setWindows(view.windows);
+  }, [view]);
   const [configBusy, setConfigBusy] = useState(false);
   const [gridDate, setGridDate] = useState(today);
   const [courtModal, setCourtModal] = useState<null | "add" | Court>(null);
@@ -132,12 +186,17 @@ export default function CourtsAdmin() {
     const clean = readWindows(windows);
     setConfigBusy(true);
     try {
-      await updateDoc(platformConfigRef(), {
-        courtsEnabled: enabled,
-        courtSlotMinutes: slot,
-        courtOpenWindows: clean,
-      });
+      await saveCourtModule(
+        enabled,
+        slot,
+        clean.map((window) => ({
+          weekday: window.day,
+          startTime: window.start,
+          endTime: window.end,
+        })),
+      );
       setWindows(clean);
+      screen.reload();
     } catch (err) {
       console.error(err);
       alert("No se pudo guardar el horario de canchas.");
@@ -190,10 +249,7 @@ export default function CourtsAdmin() {
     const cleanName = clipCourtText(draftName.trim());
     const cleanDescription = clipCourtText(draftDescription.trim());
     const hourlyRate = Number(draftRate);
-    if (!cleanName || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
-      alert("Escribe el nombre y un costo por hora válido.");
-      return;
-    }
+    if (courtSaveHint(draftName, draftDescription, draftRate)) return;
     setDraftBusy(true);
     try {
       let imageUrl = draftImageUrl.trim();
@@ -206,24 +262,29 @@ export default function CourtsAdmin() {
       }
       if (courtModal === "add") {
         const order = courts.reduce((max, court) => Math.max(max, court.order), 0) + 1;
-        await addDoc(courtsCol(), {
+        await upsertCourt({
+          id: crypto.randomUUID(),
           name: cleanName,
           description: cleanDescription,
           hourlyRate,
           imageUrl,
           football: draftFootball,
           active: true,
-          order,
+          sortOrder: order,
         });
       } else if (courtModal) {
-        await updateDoc(courtRef(courtModal.id), {
+        await upsertCourt({
+          id: courtModal.id,
           name: cleanName,
           description: cleanDescription,
           hourlyRate,
           imageUrl,
           football: draftFootball,
+          active: courtModal.active,
+          sortOrder: courtModal.order,
         });
       }
+      screen.reload();
       clearPhoto();
       setCourtModal(null);
     } catch (err) {
@@ -304,6 +365,7 @@ export default function CourtsAdmin() {
           slot={slot}
           onEditCourt={openEditCourt}
           onAddCourt={openAddCourt}
+          onChanged={screen.reload}
         />
       </SectionCard>
       <CourtFormModal
@@ -315,7 +377,6 @@ export default function CourtsAdmin() {
         football={draftFootball}
         preview={draftPreview}
         busy={draftBusy}
-        canSave={Boolean(draftName.trim()) && draftRate.trim() !== ""}
         onName={setDraftName}
         onDescription={setDraftDescription}
         onRate={setDraftRate}
@@ -337,20 +398,31 @@ export default function CourtsAdmin() {
           ) {
             return;
           }
-          void updateDoc(courtRef(courtModal.id), {
-            active: next,
+          void upsertCourt({
+            id: courtModal.id,
             name: clipCourtText(courtModal.name),
             description: clipCourtText(courtModal.description),
+            hourlyRate: courtModal.hourlyRate,
+            football: courtModal.football !== false,
+            imageUrl: courtModal.imageUrl || "",
+            sortOrder: courtModal.order,
+            active: next,
           })
-            .then(() => setCourtModal({ ...courtModal, active: next }))
+            .then(() => {
+              screen.reload();
+              setCourtModal({ ...courtModal, active: next });
+            })
             .catch(() => alert("No se pudo actualizar la cancha."));
         }}
         onDelete={() => {
           if (!courtModal || courtModal === "add" || draftBusy) return;
           setDraftBusy(true);
-          void deleteCourtAndLinks(courtModal)
+          void deleteCourtAndLinks(courtModal, holds)
             .then((removed) => {
-              if (removed) setCourtModal(null);
+              if (removed) {
+                screen.reload();
+                setCourtModal(null);
+              }
             })
             .catch(() => alert("No se pudo eliminar la cancha."))
             .finally(() => setDraftBusy(false));
@@ -369,7 +441,6 @@ function CourtFormModal({
   football,
   preview,
   busy,
-  canSave,
   onName,
   onDescription,
   onRate,
@@ -389,7 +460,6 @@ function CourtFormModal({
   football: boolean;
   preview: string;
   busy: boolean;
-  canSave: boolean;
   onName: (value: string) => void;
   onDescription: (value: string) => void;
   onRate: (value: string) => void;
@@ -402,8 +472,18 @@ function CourtFormModal({
   onDelete: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [saveHint, setSaveHint] = useState("");
   useModalLock(open ? onCancel : null);
+  useEffect(() => {
+    setSaveHint("");
+  }, [name, description, rate, open]);
   if (!open) return null;
+
+  const trySave = () => {
+    const hint = courtSaveHint(name, description, rate);
+    setSaveHint(hint);
+    if (!hint) onSave();
+  };
 
   return (
     <div
@@ -571,10 +651,17 @@ function CourtFormModal({
             <button type="button" className="court-form__ghost" disabled={busy} onClick={onCancel}>
               Cancelar
             </button>
-            <PrimaryButton variant="green" disabled={busy || !canSave} onClick={onSave}>
-              <Save size={15} />
-              {busy ? "Guardando…" : "Guardar"}
-            </PrimaryButton>
+            <span className="court-form__save">
+              {saveHint ? (
+                <span className="court-form__hint" role="tooltip">
+                  {saveHint}
+                </span>
+              ) : null}
+              <PrimaryButton variant="green" disabled={busy} onClick={trySave}>
+                <Save size={15} />
+                {busy ? "Guardando…" : "Guardar"}
+              </PrimaryButton>
+            </span>
           </div>
         </footer>
       </div>
@@ -591,6 +678,7 @@ function DayGrid({
   slot,
   onEditCourt,
   onAddCourt,
+  onChanged,
 }: {
   date: string;
   onDate: (value: string) => void;
@@ -600,16 +688,21 @@ function DayGrid({
   slot: CourtSlotMinutes;
   onEditCourt: (court: Court) => void;
   onAddCourt: () => void;
+  onChanged: () => void;
 }) {
   const day = weekdayOf(date);
   const starts = day ? daySlotStarts(windows, day, slot) : [];
   const [picked, setPicked] = useState<SlotPick[]>([]);
   const [open, setOpen] = useState(false);
   const [guest, setGuest] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestHint, setGuestHint] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [editHold, setEditHold] = useState<CourtHold | null>(null);
   const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editNameHint, setEditNameHint] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editDate, setEditDate] = useState(date);
   const [editStart, setEditStart] = useState(0);
@@ -621,40 +714,6 @@ function DayGrid({
   const [matchDuration, setMatchDuration] = useState(90);
   const [matchBusy, setMatchBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [matchLabels, setMatchLabels] = useState<Record<string, { home: string; away: string }>>({});
-  const matchKey = holds
-    .filter((hold) => hold.date === date && hold.matchId)
-    .map((hold) => hold.matchId)
-    .sort()
-    .join("|");
-
-  useEffect(() => {
-    if (!matchKey) {
-      setMatchLabels({});
-      return;
-    }
-    let cancel = false;
-    void Promise.all(
-      matchKey.split("|").map(async (id) => {
-        const snap = await getDoc(matchRef(id));
-        const data = snap.data();
-        if (!data) return null;
-        const homeName = await clubName(data.homeClubId, "Local");
-        const awayName = await clubName(data.awayClubId, "Visita");
-        return [id, { home: homeName, away: awayName }] as const;
-      }),
-    ).then((rows) => {
-      if (cancel) return;
-      const next: Record<string, { home: string; away: string }> = {};
-      for (const row of rows) {
-        if (row) next[row[0]] = row[1];
-      }
-      setMatchLabels(next);
-    });
-    return () => {
-      cancel = true;
-    };
-  }, [matchKey]);
 
   useEffect(() => {
     setPicked([]);
@@ -672,7 +731,10 @@ function DayGrid({
     })
     .join("\n");
 
+  const past = date < todayIso();
+
   const toggle = (courtId: string, start: number) => {
+    if (past) return;
     setPicked((current) => {
       const exists = current.some((item) => item.courtId === courtId && item.start === start);
       if (exists) return current.filter((item) => !(item.courtId === courtId && item.start === start));
@@ -682,6 +744,7 @@ function DayGrid({
 
   const close = () => {
     if (busy) return;
+    setGuestHint("");
     setOpen(false);
   };
 
@@ -701,12 +764,25 @@ function DayGrid({
         matchHold,
       )
     : null;
-  const matchNames = matchHold?.matchId ? matchLabels[matchHold.matchId] : undefined;
-  const matchTitle = matchNames ? `${matchNames.home} vs ${matchNames.away}` : "Partido";
+  const homeName = matchHold?.homeClubName?.trim();
+  const awayName = matchHold?.awayClubName?.trim();
+  const matchTitle = homeName && awayName ? `${homeName} vs ${awayName}` : "Partido";
 
   const saveHold = async () => {
-    if (!editHold || !editCourt || !editName.trim()) return;
-    const text = editNote.trim() ? `${editName.trim()} · ${editNote.trim()}` : editName.trim();
+    const cleanName = editName.trim().slice(0, 30);
+    const cleanNote = editNote.trim().slice(0, 50);
+    if (!editHold || editHold.date < todayIso() || !editCourt) return;
+    const cleanEmail = editEmail.trim().toLowerCase();
+    if (!cleanName) {
+      setEditNameHint("Escribe el nombre.");
+      return;
+    }
+    if (cleanEmail && !isEmail(cleanEmail)) {
+      setEditNameHint("Escribe un correo válido.");
+      return;
+    }
+    setEditNameHint("");
+    const text = cleanNote ? `${cleanName} · ${cleanNote}` : cleanName;
     if (text.length >= 200) {
       alert("El nombre y la nota juntos no pueden pasar de 200 caracteres.");
       return;
@@ -714,17 +790,26 @@ function DayGrid({
     const end = editStart + editDuration;
     setEditBusy(true);
     try {
-      await updateDoc(courtHoldRef(editHold.id), {
+      await upsertHold({
+        id: editHold.id,
         courtId: editCourt.id,
-        date: editDate,
+        holdDate: editDate,
         startTime: fromMinutes(editStart),
         endTime: fromMinutes(end),
         note: text,
+        guestEmail: cleanEmail,
+      });
+      onChanged();
+      const mailed = await mailBooking({
+        to: cleanEmail,
+        kind: "updated",
+        date: editDate,
+        note: cleanNote,
+        slots: [bookingSlot(editCourt, editStart, end)],
       });
       setEditHold(null);
-      setNotice(
-        `${editCourt.name} apartada para ${formatFriendlyDate(editDate)} de ${formatFriendlyTime(fromMinutes(editStart))} a ${formatFriendlyTime(fromMinutes(end))}.`,
-      );
+      const saved = `${editCourt.name} apartada para ${formatFriendlyDate(editDate)} de ${formatFriendlyTime(fromMinutes(editStart))} a ${formatFriendlyTime(fromMinutes(end))}.`;
+      setNotice(mailed ? saved : `${saved} ${BOOKING_MAIL_FAIL}`);
     } catch (err) {
       console.error(err);
       alert("No se pudo guardar el apartado.");
@@ -734,7 +819,7 @@ function DayGrid({
   };
 
   const saveMatch = async () => {
-    if (!matchHold?.matchId || !matchCourt) return;
+    if (!matchHold?.matchId || matchHold.date < todayIso() || !matchCourt) return;
     setMatchBusy(true);
     try {
       await scheduleMatch({
@@ -758,9 +843,20 @@ function DayGrid({
   };
 
   const save = async () => {
-    const cleanName = guest.trim();
-    if (!cleanName || ranges.length === 0) return;
-    const text = note.trim() ? `${cleanName} · ${note.trim()}` : cleanName;
+    const cleanName = guest.trim().slice(0, 30);
+    const cleanNote = note.trim().slice(0, 50);
+    if (past || ranges.length === 0) return;
+    const cleanEmail = guestEmail.trim().toLowerCase();
+    if (!cleanName) {
+      setGuestHint("Escribe el nombre.");
+      return;
+    }
+    if (!isEmail(cleanEmail)) {
+      setGuestHint("Escribe un correo válido.");
+      return;
+    }
+    setGuestHint("");
+    const text = cleanNote ? `${cleanName} · ${cleanNote}` : cleanName;
     if (text.length >= 200) {
       alert("El nombre y la nota juntos no pueden pasar de 200 caracteres.");
       return;
@@ -768,19 +864,36 @@ function DayGrid({
     setBusy(true);
     try {
       for (const range of ranges) {
-        await addDoc(courtHoldsCol(), {
+        await upsertHold({
+          id: crypto.randomUUID(),
           courtId: range.courtId,
-          date,
+          holdDate: date,
           startTime: fromMinutes(range.start),
           endTime: fromMinutes(range.end),
-          source: "manual",
           note: text,
+          guestEmail: cleanEmail,
         });
       }
+      onChanged();
+      const mailed = await mailBooking({
+        to: cleanEmail,
+        kind: "created",
+        date,
+        note: cleanNote,
+        slots: ranges.map((range) =>
+          bookingSlot(
+            courts.find((court) => court.id === range.courtId),
+            range.start,
+            range.end,
+          ),
+        ),
+      });
       setPicked([]);
       setGuest("");
+      setGuestEmail("");
       setNote("");
       setOpen(false);
+      if (!mailed) setNotice(BOOKING_MAIL_FAIL);
     } catch (err) {
       console.error(err);
       alert("No se pudo apartar ese horario.");
@@ -814,7 +927,7 @@ function DayGrid({
           <span><i className="is-hold" /> Apartado</span>
         </div>
       </div>
-      {ranges.length > 0 && (
+      {!past && ranges.length > 0 && (
         <div className="book-bar">
           <button type="button" className="book-bar__go" onClick={() => setOpen(true)}>
             <Calendar size={15} />
@@ -831,7 +944,16 @@ function DayGrid({
         </div>
       )}
       {courts.length > 0 && starts.length === 0 && (
-        <p className="book-closed">Este día las canchas están cerradas.</p>
+        <>
+          <p className="book-closed">Este día las canchas están cerradas.</p>
+          <ul className="book-court-list">
+            {courts.map((court) => (
+              <li key={court.id}>
+                <CourtName court={court} onEdit={() => onEditCourt(court)} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {courts.length > 0 && starts.length > 0 && (
         <div className="book-grid-wrap">
@@ -854,9 +976,9 @@ function DayGrid({
                   date={date}
                   slot={slot}
                   picked={freePicked}
+                  past={past}
                   onToggle={toggle}
                   onEdit={() => onEditCourt(court)}
-                  matchLabels={matchLabels}
                   onOpenHold={(hold) => {
                     const start = toMinutes(hold.startTime) ?? 0;
                     const end = toMinutes(hold.endTime);
@@ -875,8 +997,10 @@ function DayGrid({
                       return;
                     }
                     const parts = splitHoldNote(hold.note || "");
-                    setEditName(parts.name);
-                    setEditNote(parts.note);
+                    setEditNameHint("");
+                    setEditName(parts.name.slice(0, 30));
+                    setEditEmail((hold.guestEmail || "").slice(0, 320));
+                    setEditNote(parts.note.slice(0, 50));
                     setEditDate(hold.date);
                     setEditStart(start);
                     setEditDuration(duration);
@@ -897,7 +1021,7 @@ function DayGrid({
         message={summary}
         confirmLabel="Apartar"
         busy={busy}
-        confirmDisabled={!guest.trim()}
+        confirmHint={guestHint}
         onConfirm={() => void save()}
         onCancel={close}
       >
@@ -905,15 +1029,33 @@ function DayGrid({
           <Field label="Nombre">
             <FormInput
               value={guest}
-              onChange={(e) => setGuest(e.target.value)}
+              maxLength={30}
+              onChange={(e) => {
+                setGuest(e.target.value.slice(0, 30));
+                setGuestHint("");
+              }}
               placeholder="Quién aparta"
               autoFocus
+            />
+          </Field>
+          <Field label="Correo">
+            <FormInput
+              type="email"
+              value={guestEmail}
+              maxLength={320}
+              onChange={(e) => {
+                setGuestEmail(e.target.value.slice(0, 320));
+                setGuestHint("");
+              }}
+              placeholder="correo@ejemplo.com"
+              autoComplete="email"
             />
           </Field>
           <Field label="Nota">
             <FormInput
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              maxLength={50}
+              onChange={(e) => setNote(e.target.value.slice(0, 50))}
               placeholder="Opcional"
             />
           </Field>
@@ -923,36 +1065,64 @@ function DayGrid({
         open={editHold !== null}
         title="Apartado"
         confirmLabel="Guardar"
+        cancelLabel={editHold && editHold.date < todayIso() ? "Cerrar" : "Cancelar"}
         busy={editBusy}
-        confirmDisabled={!editName.trim() || !editCourt}
+        readOnly={editHold !== null && editHold.date < todayIso()}
+        confirmDisabled={!editCourt}
+        confirmHint={editNameHint}
         dangerAction={{
           label: "Eliminar",
           onClick: () => {
             if (!editHold) return;
+            const hold = editHold;
+            const court = courts.find((item) => item.id === hold.courtId);
+            const start = toMinutes(hold.startTime) ?? 0;
+            const end = toMinutes(hold.endTime) ?? start;
+            const comment = splitHoldNote(hold.note || "").note;
             setEditBusy(true);
-            void deleteDoc(courtHoldRef(editHold.id))
-              .then(() => setEditHold(null))
+            void removeManualHold(hold.id)
+              .then(async () => {
+                onChanged();
+                setEditHold(null);
+                const mailed = await mailBooking({
+                  to: hold.guestEmail || "",
+                  kind: "cancelled",
+                  date: hold.date,
+                  note: comment,
+                  slots: [bookingSlot(court, start, end)],
+                });
+                if (!mailed) setNotice(BOOKING_MAIL_FAIL);
+              })
               .catch(() => alert("No se pudo quitar el apartado."))
               .finally(() => setEditBusy(false));
           },
         }}
         onConfirm={() => void saveHold()}
         onCancel={() => {
-          if (!editBusy) setEditHold(null);
+          if (editBusy) return;
+          setEditNameHint("");
+          setEditHold(null);
         }}
       >
         <HoldEditor
           name={editName}
+          email={editEmail}
           note={editNote}
           dateValue={editDate}
           start={editStart}
           duration={editDuration}
           slot={slot}
           windows={windows}
-          status={editCourt ? `Disponible en ${editCourt.name}` : "No hay cancha disponible en ese horario."}
-          available={Boolean(editCourt)}
-          onName={setEditName}
-          onNote={setEditNote}
+          locked={editHold !== null && editHold.date < todayIso()}
+          onName={(value) => {
+            setEditName(value.slice(0, 30));
+            setEditNameHint("");
+          }}
+          onEmail={(value) => {
+            setEditEmail(value.slice(0, 320));
+            setEditNameHint("");
+          }}
+          onNote={(value) => setEditNote(value.slice(0, 50))}
           onDate={(value) => {
             setEditDate(value);
             const day = weekdayOf(value);
@@ -967,7 +1137,9 @@ function DayGrid({
         open={matchHold !== null}
         title={matchTitle}
         confirmLabel="Guardar"
+        cancelLabel={matchHold && matchHold.date < todayIso() ? "Cerrar" : "Cancelar"}
         busy={matchBusy}
+        readOnly={matchHold !== null && matchHold.date < todayIso()}
         confirmDisabled={!matchCourt}
         onConfirm={() => void saveMatch()}
         onCancel={() => {
@@ -979,6 +1151,7 @@ function DayGrid({
             <FormInput
               type="date"
               value={matchDate}
+              disabled={matchHold !== null && matchHold.date < todayIso()}
               onChange={(e) => {
                 const value = e.target.value;
                 setMatchDate(value);
@@ -989,7 +1162,11 @@ function DayGrid({
             />
           </Field>
           <Field label="Horario">
-            <FormSelect value={String(matchStart)} onChange={(e) => setMatchStart(Number(e.target.value))}>
+            <FormSelect
+              value={String(matchStart)}
+              disabled={matchHold !== null && matchHold.date < todayIso()}
+              onChange={(e) => setMatchStart(Number(e.target.value))}
+            >
               {matchStarts.map((minutes) => (
                 <option key={minutes} value={minutes}>
                   {formatFriendlyTime(fromMinutes(minutes))}
@@ -999,9 +1176,6 @@ function DayGrid({
           </Field>
           <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray500 }}>
             Duración del partido: {formatDuration(matchDuration)}
-          </p>
-          <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 800, color: matchCourt ? C.green : C.red }}>
-            {matchCourt ? `Disponible en ${matchCourt.name}` : "No hay cancha disponible en ese horario."}
           </p>
         </div>
       </ConfirmModal>
@@ -1025,10 +1199,10 @@ function CourtGridRow({
   date,
   slot,
   picked,
+  past,
   onToggle,
   onEdit,
   onOpenHold,
-  matchLabels,
 }: {
   court: Court;
   starts: number[];
@@ -1036,25 +1210,21 @@ function CourtGridRow({
   date: string;
   slot: number;
   picked: SlotPick[];
+  past: boolean;
   onToggle: (courtId: string, start: number) => void;
   onEdit: () => void;
   onOpenHold: (hold: CourtHold) => void;
-  matchLabels: Record<string, { home: string; away: string }>;
 }) {
   const cells = rowCells(holds, court.id, date, starts, slot);
   const chosen = picked.some((item) => item.courtId === court.id);
   return (
     <>
-      <span className={`book-court${chosen ? " is-on" : ""}${court.active ? "" : " is-hidden"}`}>
-        <CourtMark football={court.football !== false} />
-        <span className="book-court__name">{court.name}</span>
-        {!court.active && <span className="book-court__hidden">Oculta</span>}
-        <button type="button" className="book-court__edit" aria-label={`Editar ${court.name}`} onClick={onEdit}>
-          <Pencil size={13} />
-        </button>
-      </span>
+      <CourtName court={court} chosen={chosen} onEdit={onEdit} />
       {cells.map((cell) => {
         if (cell.kind === "free") {
+          if (past) {
+            return <span key={cell.start} className="book-cell book-cell--free" title="Libre" />;
+          }
           const selected = picked.some((item) => item.courtId === court.id && item.start === cell.start);
           return (
             <button
@@ -1068,7 +1238,7 @@ function CourtGridRow({
           );
         }
         const manual = cell.hold.source === "manual";
-        const label = manual ? holdLabel(cell.hold) : matchSigla(cell.hold, matchLabels);
+        const label = manual ? holdLabel(cell.hold) : matchSigla(cell.hold);
         return (
           <button
             key={cell.hold.id + cell.start}
@@ -1084,6 +1254,27 @@ function CourtGridRow({
         );
       })}
     </>
+  );
+}
+
+function CourtName({
+  court,
+  chosen = false,
+  onEdit,
+}: {
+  court: Court;
+  chosen?: boolean;
+  onEdit: () => void;
+}) {
+  return (
+    <span className={`book-court${chosen ? " is-on" : ""}${court.active ? "" : " is-hidden"}`}>
+      <CourtMark football={court.football !== false} />
+      <span className="book-court__name">{court.name}</span>
+      {!court.active && <span className="book-court__hidden">Oculta</span>}
+      <button type="button" className="book-court__edit" aria-label={`Editar ${court.name}`} onClick={onEdit}>
+        <Pencil size={13} />
+      </button>
+    </span>
   );
 }
 
@@ -1165,23 +1356,17 @@ function holdLabel(hold: CourtHold) {
   return note.split(" · ")[0] || note;
 }
 
-async function clubName(id: unknown, fallback: string) {
-  if (typeof id !== "string" || !id) return fallback;
-  const snap = await getDoc(clubDocRef(id));
-  const name = snap.data()?.name;
-  return typeof name === "string" && name.trim() ? name : fallback;
-}
-
 function teamInitials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   return words.map((word) => word[0] || "").join("").toUpperCase();
 }
 
-function matchSigla(hold: CourtHold, labels: Record<string, { home: string; away: string }>) {
-  const names = hold.matchId ? labels[hold.matchId] : undefined;
-  if (!names) return "Partido";
-  return `${teamInitials(names.home)} vs ${teamInitials(names.away)}`;
+function matchSigla(hold: CourtHold) {
+  const home = hold.homeClubName?.trim();
+  const away = hold.awayClubName?.trim();
+  if (!home || !away) return "Partido";
+  return `${teamInitials(home)} vs ${teamInitials(away)}`;
 }
 
 function slotStartsFor(windows: TimeWindow[], dateValue: string, slot: CourtSlotMinutes) {
@@ -1212,17 +1397,6 @@ function pickCourt(
   return free.find((court) => court.id === current.courtId) || free[0] || null;
 }
 
-function dayHoursHint(windows: TimeWindow[], dateValue: string) {
-  const day = weekdayOf(dateValue);
-  if (!day) return "Elige una fecha";
-  const ranges = windowsOnDay(windows, day);
-  if (!ranges.length) return `${dayLabel(day)}: cerrado`;
-  const hours = ranges
-    .map(([start, end]) => `${formatFriendlyTime(fromMinutes(start))} a ${formatFriendlyTime(fromMinutes(end))}`)
-    .join(", ");
-  return `${dayLabel(day)}: ${hours}`;
-}
-
 function durationOptions(windows: TimeWindow[], dateValue: string, start: number, slot: CourtSlotMinutes) {
   const day = weekdayOf(dateValue);
   if (!day) return [];
@@ -1235,30 +1409,32 @@ function durationOptions(windows: TimeWindow[], dateValue: string, start: number
 
 function HoldEditor({
   name,
+  email,
   note,
   dateValue,
   start,
   duration,
   slot,
   windows,
-  status,
-  available,
+  locked = false,
   onName,
+  onEmail,
   onNote,
   onDate,
   onStart,
   onDuration,
 }: {
   name: string;
+  email: string;
   note: string;
   dateValue: string;
   start: number;
   duration: number;
   slot: CourtSlotMinutes;
   windows: TimeWindow[];
-  status: string;
-  available: boolean;
+  locked?: boolean;
   onName: (value: string) => void;
+  onEmail: (value: string) => void;
   onNote: (value: string) => void;
   onDate: (value: string) => void;
   onStart: (value: number) => void;
@@ -1267,26 +1443,45 @@ function HoldEditor({
   const starts = slotStartsFor(windows, dateValue, slot);
   const options = durationOptions(windows, dateValue, start, slot);
   useEffect(() => {
-    if (!options.length || options.includes(duration)) return;
+    if (locked || !options.length || options.includes(duration)) return;
     onDuration(options[options.length - 1]);
-  }, [duration, onDuration, options]);
+  }, [duration, locked, onDuration, options]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
       <Field label="Nombre">
-        <FormInput value={name} onChange={(e) => onName(e.target.value)} autoFocus />
+        <FormInput
+          value={name}
+          maxLength={30}
+          disabled={locked}
+          onChange={(e) => onName(e.target.value.slice(0, 30))}
+          autoFocus
+        />
+      </Field>
+      <Field label="Correo">
+        <FormInput
+          type="email"
+          value={email}
+          maxLength={320}
+          disabled={locked}
+          onChange={(e) => onEmail(e.target.value.slice(0, 320))}
+          placeholder="correo@ejemplo.com"
+          autoComplete="email"
+        />
       </Field>
       <Field label="Nota">
         <FormInput
           value={note}
-          onChange={(e) => onNote(e.target.value)}
+          maxLength={50}
+          disabled={locked}
+          onChange={(e) => onNote(e.target.value.slice(0, 50))}
           placeholder="Pagó la mitad, pago completo…"
         />
       </Field>
       <Field label="Fecha">
-        <FormInput type="date" value={dateValue} onChange={(e) => onDate(e.target.value)} />
+        <FormInput type="date" value={dateValue} disabled={locked} onChange={(e) => onDate(e.target.value)} />
       </Field>
       <Field label="Horario">
-        <FormSelect value={String(start)} onChange={(e) => onStart(Number(e.target.value))}>
+        <FormSelect value={String(start)} disabled={locked} onChange={(e) => onStart(Number(e.target.value))}>
           {starts.length === 0 ? (
             <option value={start}>Sin horario</option>
           ) : (
@@ -1298,9 +1493,10 @@ function HoldEditor({
           )}
         </FormSelect>
       </Field>
-      <Field label="Duración" hint={dayHoursHint(windows, dateValue)}>
+      <Field label="Duración">
         <FormSelect
           value={options.includes(duration) ? String(duration) : ""}
+          disabled={locked}
           onChange={(e) => onDuration(Number(e.target.value))}
         >
           {options.length === 0 ? (
@@ -1314,9 +1510,6 @@ function HoldEditor({
           )}
         </FormSelect>
       </Field>
-      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 800, color: available ? C.green : C.red }}>
-        {status}
-      </p>
     </div>
   );
 }

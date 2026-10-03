@@ -8,8 +8,13 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { setDoc } from "firebase/firestore";
-import { platformConfigRef, platformStoragePath } from "../../lib/paths";
+import { platformStoragePath } from "../../lib/paths";
+import {
+  replaceHeroImages,
+  saveCoverText,
+  saveHeader,
+  saveSocial,
+} from "../../features/admin/commands";
 import { uploadImageFile } from "../../lib/uploadImage";
 import type { PlatformConfig } from "../../context/AuthContext";
 import {
@@ -31,6 +36,7 @@ import {
 
 interface Props {
   config?: PlatformConfig | null;
+  onSaved?: () => void;
 }
 
 const LIMIT = {
@@ -49,7 +55,7 @@ function clip(value: string, max: number) {
   return value.slice(0, max);
 }
 
-export default function HeroAdmin({ config }: Props) {
+export default function HeroAdmin({ config, onSaved }: Props) {
   const savedImages = config?.heroImages || [];
   const [name, setName] = useState(clip(config?.name || PLATFORM_NAME, LIMIT.name));
   const [motto, setMotto] = useState(clip(config?.motto || "", LIMIT.motto));
@@ -78,6 +84,7 @@ export default function HeroAdmin({ config }: Props) {
   const [notice, setNotice] = useState<{
     area: "header" | "cover" | "social";
     text: string;
+    ok: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -104,48 +111,66 @@ export default function HeroAdmin({ config }: Props) {
     config?.social?.whatsapp,
   ]);
 
-  const flash = (area: "header" | "cover" | "social", text: string) => {
-    setNotice({ area, text });
+  const flash = (
+    area: "header" | "cover" | "social",
+    text: string,
+    ok = true,
+  ) => {
+    setNotice({ area, text, ok });
     window.setTimeout(() => setNotice(null), 2500);
   };
 
-  const saveImages = async (next: string[]) => {
-    await setDoc(platformConfigRef(), { heroImages: next }, { merge: true });
+  const fail = (area: "header" | "cover" | "social", err: unknown) => {
+    console.error(err);
+    const text = err instanceof Error && err.message ? err.message : "No se pudo guardar.";
+    flash(area, text, false);
   };
 
-  const saveHeader = async (e: React.FormEvent) => {
+  const saveImages = async (next: string[]) => {
+    await replaceHeroImages(next);
+    onSaved?.();
+  };
+
+  const saveHeaderForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    await setDoc(
-      platformConfigRef(),
-      {
-        name: clip(name.trim() || PLATFORM_NAME, LIMIT.name),
-        motto: clip(motto.trim(), LIMIT.motto),
-        logoUrl: logoUrl.trim(),
-      },
-      { merge: true },
-    );
-    flash("header", "Header guardado.");
+    try {
+      await saveHeader(
+        clip(name.trim() || PLATFORM_NAME, LIMIT.name),
+        clip(motto.trim(), LIMIT.motto),
+        logoUrl.trim(),
+      );
+      onSaved?.();
+      flash("header", "Header guardado.");
+    } catch (err) {
+      fail("header", err);
+    }
   };
 
   const saveCover = async (e: React.FormEvent) => {
     e.preventDefault();
-    await setDoc(
-      platformConfigRef(),
-      {
-        headline: clip(headline.trim() || PLATFORM_HEADLINE, LIMIT.headline),
-        tagline: clip(tagline.trim() || PLATFORM_DESCRIPTION, LIMIT.tagline),
-      },
-      { merge: true },
-    );
-    flash("cover", "Portada guardada.");
+    try {
+      await saveCoverText(
+        clip(headline.trim() || PLATFORM_HEADLINE, LIMIT.headline),
+        clip(tagline.trim() || PLATFORM_DESCRIPTION, LIMIT.tagline),
+      );
+      onSaved?.();
+      flash("cover", "Portada guardada.");
+    } catch (err) {
+      fail("cover", err);
+    }
   };
 
   const addUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = url.trim();
     if (!clean) return;
-    await saveImages([...savedImages, clean]);
-    setUrl("");
+    try {
+      await saveImages([...savedImages, clean]);
+      setUrl("");
+      flash("cover", "Imagen añadida.");
+    } catch (err) {
+      fail("cover", err);
+    }
   };
 
   const upload = async (file: File, kind: "carousel" | "logo") => {
@@ -162,7 +187,12 @@ export default function HeroAdmin({ config }: Props) {
       );
       if (kind === "logo") {
         setLogoUrl(download);
-        await setDoc(platformConfigRef(), { logoUrl: download }, { merge: true });
+        await saveHeader(
+          clip(name.trim() || PLATFORM_NAME, LIMIT.name),
+          clip(motto.trim(), LIMIT.motto),
+          download,
+        );
+        onSaved?.();
       } else {
         await saveImages([...savedImages, download]);
       }
@@ -180,7 +210,11 @@ export default function HeroAdmin({ config }: Props) {
     const copy = [...savedImages];
     const [item] = copy.splice(index, 1);
     copy.splice(next, 0, item);
-    await saveImages(copy);
+    try {
+      await saveImages(copy);
+    } catch (err) {
+      fail("cover", err);
+    }
   };
 
   const displayImages =
@@ -193,7 +227,7 @@ export default function HeroAdmin({ config }: Props) {
           Logo y nombre de la barra superior, en todas las páginas.
         </p>
         <form
-          onSubmit={saveHeader}
+          onSubmit={saveHeaderForm}
           style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
         >
           <div className="header-brand-row">
@@ -285,7 +319,7 @@ export default function HeroAdmin({ config }: Props) {
             />
           </Field>
           {notice?.area === "header" && (
-            <p style={{ margin: 0, color: C.green, fontSize: "0.8rem" }}>
+            <p style={{ margin: 0, color: notice.ok ? C.green : C.red, fontSize: "0.8rem" }}>
               {notice.text}
             </p>
           )}
@@ -321,7 +355,7 @@ export default function HeroAdmin({ config }: Props) {
             />
           </Field>
           {notice?.area === "cover" && (
-            <p style={{ margin: 0, color: C.green, fontSize: "0.8rem" }}>
+            <p style={{ margin: 0, color: notice.ok ? C.green : C.red, fontSize: "0.8rem" }}>
               {notice.text}
             </p>
           )}
@@ -398,9 +432,11 @@ export default function HeroAdmin({ config }: Props) {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      void saveImages(savedImages.filter((_, idx) => idx !== i))
-                    }
+                    onClick={() => {
+                      void saveImages(savedImages.filter((_, idx) => idx !== i)).catch((err) =>
+                        fail("cover", err),
+                      );
+                    }}
                     title="Quitar"
                     style={{
                       border: "none",
@@ -425,7 +461,11 @@ export default function HeroAdmin({ config }: Props) {
         {savedImages.length === 0 && (
           <SecondaryButton
             type="button"
-            onClick={() => void saveImages([...DEFAULT_PLATFORM_HERO_IMAGES])}
+            onClick={() => {
+              void saveImages([...DEFAULT_PLATFORM_HERO_IMAGES]).catch((err) =>
+                fail("cover", err),
+              );
+            }}
             style={{ marginBottom: "0.85rem", width: "fit-content" }}
           >
             Empezar con las fotos genéricas
@@ -469,20 +509,19 @@ export default function HeroAdmin({ config }: Props) {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await setDoc(
-              platformConfigRef(),
-              {
-                social: {
-                  instagram: clip(instagram.trim(), LIMIT.instagram),
-                  facebook: clip(facebook.trim(), LIMIT.facebook),
-                  x: clip(x.trim(), LIMIT.x),
-                  youtube: clip(youtube.trim(), LIMIT.youtube),
-                  whatsapp: clip(whatsapp.trim(), LIMIT.whatsapp),
-                },
-              },
-              { merge: true },
-            );
-            flash("social", "Redes guardadas.");
+            try {
+              await saveSocial({
+                instagram: clip(instagram.trim(), LIMIT.instagram),
+                facebook: clip(facebook.trim(), LIMIT.facebook),
+                x: clip(x.trim(), LIMIT.x),
+                youtube: clip(youtube.trim(), LIMIT.youtube),
+                whatsapp: clip(whatsapp.trim(), LIMIT.whatsapp),
+              });
+              onSaved?.();
+              flash("social", "Redes guardadas.");
+            } catch (err) {
+              fail("social", err);
+            }
           }}
           style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
         >
@@ -527,7 +566,7 @@ export default function HeroAdmin({ config }: Props) {
             />
           </Field>
           {notice?.area === "social" && (
-            <p style={{ margin: 0, color: C.green, fontSize: "0.8rem" }}>
+            <p style={{ margin: 0, color: notice.ok ? C.green : C.red, fontSize: "0.8rem" }}>
               {notice.text}
             </p>
           )}

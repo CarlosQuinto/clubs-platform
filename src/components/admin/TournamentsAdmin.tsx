@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trophy } from "lucide-react";
-import { addDoc, serverTimestamp } from "firebase/firestore";
 import { clampIsoDate, todayIso } from "../../lib/courts";
-import { categoriesCol, tournamentsCol } from "../../lib/paths";
+import { lettersAndNumbers } from "../../lib/textLimits";
+import { addCategory, addTournament } from "../../features/admin/commands";
 import {
   FOOTBALL_TYPES,
   MATCH_DURATIONS,
@@ -29,11 +29,13 @@ import {
 interface Props {
   seasons: Season[];
   categories: Category[];
+  onChange: () => void;
 }
 
 export default function TournamentsAdmin({
   seasons,
   categories,
+  onChange,
 }: Props) {
   const [name, setName] = useState("");
   const [seasonId, setSeasonId] = useState("");
@@ -88,22 +90,21 @@ export default function TournamentsAdmin({
     try {
       setBusy(true);
       const groupId = crypto.randomUUID();
+      const football =
+        footballType === 7 ? "FUT_7" : footballType === 9 ? "FUT_9" : "FUT_11";
       for (const categoryId of selectedCats) {
-        await addDoc(tournamentsCol(), {
+        await addTournament({
           name: clean,
           seasonId,
           categoryId,
-          clubIds: [],
-          status: "upcoming",
-          description: description.trim() || "",
           groupId,
-          legs: 2,
-          footballType,
+          footballType: football,
           durationMinutes: duration,
           startDate,
-          createdAt: serverTimestamp(),
+          description: description.trim() || "",
         });
       }
+      onChange();
       setName("");
       setDescription("");
       setSelectedCats([]);
@@ -136,7 +137,8 @@ export default function TournamentsAdmin({
           <Field label="Nombre">
             <FormInput
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              maxLength={20}
+              onChange={(e) => setName(lettersAndNumbers(e.target.value, 20))}
               placeholder="Ej. Liga Municipal"
               required
             />
@@ -197,13 +199,15 @@ export default function TournamentsAdmin({
             categories={categories}
             selectedIds={selectedCats}
             onChange={setSelectedCats}
+            onCreated={onChange}
           />
         </Field>
         <Field label="Descripción (opcional)">
           <FormTextarea
             rows={2}
+            maxLength={100}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => setDescription(lettersAndNumbers(e.target.value, 100))}
           />
         </Field>
         <PrimaryButton
@@ -229,10 +233,12 @@ function CategoryPicker({
   categories,
   selectedIds,
   onChange,
+  onCreated,
 }: {
   categories: Category[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -277,12 +283,9 @@ function CategoryPicker({
       setCreating(true);
       const nextOrder =
         categories.reduce((max, c) => Math.max(max, c.order ?? 0), 0) + 1;
-      const ref = await addDoc(categoriesCol(), {
-        name: clean,
-        order: nextOrder,
-        createdAt: serverTimestamp(),
-      });
-      addId(ref.id);
+      const id = await addCategory(clean, nextOrder);
+      onCreated();
+      addId(id);
       setNewName("");
     } catch (err) {
       console.error(err);
@@ -430,7 +433,8 @@ function CategoryPicker({
             <div style={{ display: "flex", gap: "0.35rem" }}>
               <FormInput
                 value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+                maxLength={20}
+                onChange={(e) => setNewName(lettersAndNumbers(e.target.value, 20))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();

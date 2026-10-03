@@ -18,14 +18,12 @@ import {
   Crown,
   ArrowLeft,
 } from "lucide-react";
-import { useClubData, type ClubSlice } from "../hooks/useClubData";
+import { useClubModel, ClubModelProvider, useClubModelContext } from "../features/club/useClubScreen";
 import { useModalLock } from "../hooks/useModalLock";
-import { useMembership } from "../hooks/useMembership";
-import {
-  defaultSeasonId,
-  useClubScopedMatches,
-  usePlatformCatalog,
-} from "../hooks/usePlatformCatalog";
+import { QueryFetchPolicy } from "firebase/data-connect";
+import { acceptClubInvite, myOpenClubInvites } from "../../dataconnect/generated";
+import { emailKey } from "../lib/paths";
+import { defaultSeasonId } from "../hooks/usePlatformCatalog";
 import StatsScopeBar from "../components/club/StatsScopeBar";
 import AvailabilityPanel from "../components/club/AvailabilityPanel";
 import {
@@ -40,7 +38,7 @@ import type { StatsScope } from "../lib/types";
 import { useAuth } from "../context/AuthContext";
 import { ClubProvider, useClub } from "../context/ClubContext";
 import { buildPerms, ROLE_LABELS } from "../lib/roles";
-import { findClubBySlug, normalizeSlug } from "../lib/paths";
+import { normalizeSlug } from "../lib/paths";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../lib/clubDefaults";
 import {
   C,
@@ -57,7 +55,9 @@ import Finances from "./Finances";
 import Inventory from "./Inventory";
 import MembersModal from "../components/club/MembersModal";
 import AdSlot from "../components/platform/AdSlot";
-import { updateDoc } from "firebase/firestore";
+import { requestClubRefresh } from "../features/club/useClubScreen";
+import { saveClubProfile } from "../../dataconnect/generated";
+import { dataConnect } from "../lib/sqlConnect";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { uploadImageFile } from "../lib/uploadImage";
 
@@ -89,39 +89,19 @@ function useWindowSize() {
 export default function ClubPage() {
   const { slug: raw = "" } = useParams();
   const slug = normalizeSlug(raw);
-  const [clubId, setClubId] = useState<string | null>(null);
-  const [missing, setMissing] = useState(false);
+  const { user } = useAuth();
+  const screen = useClubModel(slug, user?.uid || null);
+  const clubId = screen.model?.clubInfo?.id || null;
 
-  useEffect(() => {
-    if (!slug) {
-      setClubId(null);
-      setMissing(true);
-      return;
-    }
-    let cancelled = false;
-    setClubId(null);
-    setMissing(false);
-    findClubBySlug(slug)
-      .then((snap) => {
-        if (cancelled) return;
-        if (!snap) setMissing(true);
-        else setClubId(snap.id);
-      })
-      .catch(() => {
-        if (!cancelled) setMissing(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
-  if (!slug || missing) return <ClubNotFound slug={raw} />;
+  if (!slug || (screen.model && !screen.model.exists)) return <ClubNotFound slug={raw} />;
   if (!clubId) return null;
 
   return (
-    <ClubProvider key={clubId} clubId={clubId}>
-      <ClubShell />
-    </ClubProvider>
+    <ClubModelProvider value={screen}>
+      <ClubProvider key={clubId} clubId={clubId}>
+        <ClubShell />
+      </ClubProvider>
+    </ClubModelProvider>
   );
 }
 
@@ -210,10 +190,38 @@ function ClubShell() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const section = tabFromSearch(searchParams);
-  const { clubId, clubRef, storagePath } = useClub();
+  const { clubId, storagePath } = useClub();
   const navigate = useNavigate();
   const { user, isSuperAdmin, logout } = useAuth();
-  const { role } = useMembership(clubId);
+  const { role: sqlRole } = useClubModelContext().model || { role: null };
+  const screenModel = useClubModelContext().model;
+  const role = sqlRole;
+  const claimTried = useRef(false);
+  useEffect(() => {
+    if (!user?.email || !clubId || sqlRole || !screenModel?.exists || claimTried.current) return;
+    claimTried.current = true;
+    const email = user.email;
+    void (async () => {
+      const invites = await myOpenClubInvites(
+        dataConnect,
+        { emailKey: emailKey(email) },
+        { fetchPolicy: QueryFetchPolicy.SERVER_ONLY },
+      );
+      const invite = invites.data.clubInvites.find((item) => item.club.id === clubId && item.token);
+      if (!invite?.token) return;
+      const result = await acceptClubInvite(dataConnect, {
+        clubId,
+        emailKey: emailKey(email),
+        token: invite.token,
+        displayName: user.displayName || "",
+      });
+      if (result.data.member == null) return;
+      requestClubRefresh();
+    })().catch((err: unknown) => {
+      console.error("No se pudo reclamar la invitación:", err);
+    });
+  }, [user, clubId, sqlRole, screenModel?.exists]);
+  const [showMembers, setShowMembers] = useState(false);
   const [activeTab, setActiveTab] = useState<ClubTab>(section);
   const [visitState, setVisitState] = useState({
     clubId,
@@ -246,39 +254,35 @@ function ClubShell() {
     setZoneState((prev) => (prev.albums ? prev : { ...prev, albums: true }));
   }, []);
 
-  const slices = useMemo(() => {
-    const need = new Set<ClubSlice>();
-    if (visited.inicio || visited.agenda || visited.jugadores || visited.finanzas) {
-      need.add("players");
-    }
-    if (visited.agenda || hallSeen || albumsSeen) need.add("events");
-    if (albumsSeen) need.add("gallery");
-    if (visited.jugadores) need.add("goals");
-    if (visited.finanzas) need.add("transactions");
-    if (visited.inventario) need.add("inventory");
-    return [...need];
-  }, [visited, hallSeen, albumsSeen]);
-
-  const {
-    clubInfo,
-    clubExists,
-    transactions,
-    players,
-    inventory,
-    events,
-    gallery,
-    goals,
-    ready,
-    loading,
-  } = useClubData(clubId, slices);
-  const [showMembers, setShowMembers] = useState(false);
-
-  // ── Competición: partidos oficiales del club y catálogo de la plataforma ──
-  const { seasons, categories, tournaments, clubNames, tournamentsById, seasonName, categoryName, loading: catalogLoading } =
-    usePlatformCatalog();
+  const model = screenModel;
+  const clubInfo = model?.clubInfo ?? null;
+  const clubExists = model ? model.exists : null;
+  const transactions = model?.transactions ?? [];
+  const players = model?.players ?? [];
+  const inventory = model?.inventory ?? [];
+  const events = model?.events ?? [];
+  const gallery = model?.gallery ?? [];
+  const goals = model?.goals ?? [];
+  const ready = {
+    players: true,
+    events: true,
+    transactions: true,
+    inventory: true,
+    gallery: true,
+    goals: true,
+  };
+  const loading = false;
+  const seasons = model?.seasons ?? [];
+  const categories = model?.categories ?? [];
+  const tournaments = model?.tournaments ?? [];
+  const clubNames = model?.clubNames ?? {};
+  const tournamentsById = model?.tournamentsById ?? {};
+  const seasonName = model?.seasonName ?? {};
+  const categoryName = model?.categoryName ?? {};
+  const catalogLoading = false;
   const [scope, setScope] = useState<StatsScope>({});
   const [scopeReady, setScopeReady] = useState(false);
-  const { matches } = useClubScopedMatches(clubId, scopeReady ? scope : null);
+  const matches = model?.matches ?? [];
 
   useEffect(() => {
     if (catalogLoading || scopeReady) return;
@@ -426,11 +430,13 @@ function ClubShell() {
           await deleteObject(fileRef);
         } catch (e) {}
       }
-      await updateDoc(clubRef, {
+      await saveClubProfile(dataConnect, {
+        id: clubId,
         name: editClubName,
         logoUrl: editClubLogo,
         presidentPhone: editClubPhone.trim(),
       });
+      requestClubRefresh();
       setNewlyUploadedLogos([]);
       setShowEditClub(false);
     } catch (error) {
@@ -1199,6 +1205,8 @@ function ClubShell() {
       {/* ── MODAL DE MIEMBROS (ADMIN / SUPERADMIN) ── */}
       {showMembers && (
         <MembersModal
+          sql
+          slug={normalizeSlug(routeSlug)}
           clubName={clubInfo?.name || DEFAULT_CLUB_NAME}
           onClose={() => setShowMembers(false)}
         />
@@ -1369,7 +1377,7 @@ function ClubShell() {
                     <>
                     {perms.canEditAgenda && (
                       <div style={{ marginBottom: "1.5rem" }}>
-                        <AvailabilityPanel clubId={clubId} />
+                        <AvailabilityPanel clubId={clubId} windows={screenModel?.windows || []} />
                       </div>
                     )}
                     <Agenda
@@ -1409,6 +1417,7 @@ function ClubShell() {
                     <Finances
                       transactions={transactions as any}
                       players={players as any}
+                      goals={goals as any}
                       perms={perms}
                     />
                     ) : (

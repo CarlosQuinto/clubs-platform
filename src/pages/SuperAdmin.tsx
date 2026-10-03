@@ -1,13 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import {
-  addDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
 import {
   Crown,
   ExternalLink,
@@ -22,33 +14,21 @@ import {
 } from "lucide-react";
 import PlatformLayout from "../components/platform/PlatformLayout";
 import MembersModal from "../components/club/MembersModal";
-import HeroAdmin from "../components/admin/HeroAdmin";
+import CoverAdminView from "../features/admin/cover/CoverAdminView";
 import AdsAdmin from "../components/admin/AdsAdmin";
 import InboxAdmin from "../components/admin/InboxAdmin";
 import SuperAdminsAdmin from "../components/admin/SuperAdminsAdmin";
-import SeasonsAdmin from "../components/admin/SeasonsAdmin";
-import TournamentsAdmin from "../components/admin/TournamentsAdmin";
+import CompetitionAdminView from "../features/admin/competition/CompetitionAdminView";
 import CourtsAdmin from "../components/admin/CourtsAdmin";
 import Field from "../components/admin/Field";
 import InviteSignupLink from "../components/platform/InviteSignupLink";
 import ConfirmModal from "../components/ConfirmModal";
 import { ClubProvider } from "../context/ClubContext";
 import { useAuth } from "../context/AuthContext";
-import {
-  usePlatformCatalog,
-  type PlatformCatalogParts,
-} from "../hooks/usePlatformCatalog";
-import {
-  clubDocRef,
-  clubItemRef,
-  clubsCol,
-  emailKey,
-  findClubBySlug,
-  localitiesCol,
-  normalizeSlug,
-  RESERVED_SLUGS,
-} from "../lib/paths";
-import { markSignupInvite } from "../lib/signupInvite";
+import { normalizeSlug, RESERVED_SLUGS } from "../lib/paths";
+import { digitsOnly, isEmail, lettersAndNumbers } from "../lib/textLimits";
+import { addClub, addLocality, loadClubs, removeClub, setClubVisible } from "../features/admin/commands";
+import { useAdminQuery } from "../features/admin/useAdminQuery";
 import {
   DEFAULT_CLUB_DESCRIPTION,
   DEFAULT_HERO_IMAGE,
@@ -66,32 +46,16 @@ import {
 
 type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
 
-const CATALOG_OFF: PlatformCatalogParts = {
-  clubs: false,
-  localities: false,
-  seasons: false,
-  tournaments: false,
-  categories: false,
-};
-
-function catalogForTab(tab: Tab): PlatformCatalogParts {
-  if (tab === "clubs") {
-    return { ...CATALOG_OFF, clubs: true, localities: true };
-  }
-  if (tab === "competition") {
-    return {
-      ...CATALOG_OFF,
-      seasons: true,
-      categories: true,
-      tournaments: true,
-      slimTournaments: true,
-    };
-  }
-  return CATALOG_OFF;
-}
-
 export default function SuperAdmin() {
-  const { user, loading, isSuperAdmin, platformConfig } = useAuth();
+  const {
+    user,
+    loading,
+    isSuperAdmin,
+    platformConfig,
+    sqlAdmin,
+    firestoreIsSuperAdmin,
+    bootstrapPlatformRole,
+  } = useAuth();
   const [params] = useSearchParams();
   const tabParam = params.get("tab");
   const tab: Tab =
@@ -103,10 +67,16 @@ export default function SuperAdmin() {
     tabParam === "courts"
       ? tabParam
       : "clubs";
-  const catalog = usePlatformCatalog(catalogForTab(tab));
   const [membersClub, setMembersClub] = useState<ClubSummary | null>(null);
+  const [bootTried, setBootTried] = useState(false);
 
-  if (loading || platformConfig === null) {
+  useEffect(() => {
+    if (sqlAdmin !== false || !firestoreIsSuperAdmin || bootTried) return;
+    setBootTried(true);
+    void bootstrapPlatformRole().catch((err: unknown) => console.error(err));
+  }, [sqlAdmin, firestoreIsSuperAdmin, bootTried, bootstrapPlatformRole]);
+
+  if (loading || platformConfig === null || sqlAdmin === null || (firestoreIsSuperAdmin && sqlAdmin === false && !bootTried)) {
     return (
       <PlatformLayout>
         <p style={{ color: C.gray500 }}>Cargando...</p>
@@ -149,7 +119,7 @@ export default function SuperAdmin() {
         </h1>
       </div>
 
-      {tab === "cover" && <HeroAdmin config={platformConfig} />}
+      {tab === "cover" && <CoverAdminView />}
 
       {tab === "ads" && <AdsAdmin />}
 
@@ -159,30 +129,14 @@ export default function SuperAdmin() {
 
       {tab === "courts" && <CourtsAdmin />}
 
-      {tab === "competition" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          <SeasonsAdmin
-            seasons={catalog.seasons}
-            tournaments={catalog.tournaments}
-          />
-          <TournamentsAdmin
-            seasons={catalog.seasons}
-            categories={catalog.categories}
-          />
-        </div>
-      )}
+      {tab === "competition" && <CompetitionAdminView />}
 
-      {tab === "clubs" && (
-        <ClubsAdmin
-          catalog={catalog}
-          userId={user.uid}
-          onMembers={setMembersClub}
-        />
-      )}
+      {tab === "clubs" && <ClubsAdmin onMembers={setMembersClub} />}
 
       {membersClub && (
         <ClubProvider clubId={membersClub.id}>
           <MembersModal
+            sql
             clubName={membersClub.name}
             onClose={() => setMembersClub(null)}
           />
@@ -195,15 +149,19 @@ export default function SuperAdmin() {
 const CLUB_PAGE_SIZE = 10;
 
 function ClubsAdmin({
-  catalog,
-  userId,
   onMembers,
 }: {
-  catalog: ReturnType<typeof usePlatformCatalog>;
-  userId: string;
   onMembers: (club: ClubSummary) => void;
 }) {
-  const { clubs, localities } = catalog;
+  const screen = useAdminQuery(loadClubs);
+  const localities = screen.data?.localities ?? [];
+  const clubs: ClubSummary[] = (screen.data?.clubs ?? []).map((club) => ({
+    id: club.id,
+    slug: club.slug,
+    name: club.name,
+    localityId: club.locality?.id,
+    active: club.active,
+  }));
   const [newLocality, setNewLocality] = useState("");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -246,15 +204,34 @@ function ClubsAdmin({
   );
 
   const handleName = (value: string) => {
-    setName(value);
-    if (!slugTouched) setSlug(normalizeSlug(value));
+    const next = lettersAndNumbers(value, 30);
+    setName(next);
+    setError("");
+    if (!slugTouched) setSlug(normalizeSlug(next));
+  };
+
+  const missingClubHint = () => {
+    const missing: string[] = [];
+    if (!name.trim()) missing.push("el nombre");
+    if (normalizeSlug(slug).length < 3) missing.push("la URL");
+    if (!localityId) missing.push("la localidad");
+    if (missing.length === 0) return "";
+    if (missing.length === 1) {
+      return missing[0] === "la localidad"
+        ? "Selecciona la localidad."
+        : `Escribe ${missing[0]}.`;
+    }
+    const last = missing[missing.length - 1];
+    const head = missing.slice(0, -1).join(", ");
+    return `Escribe ${head} y ${last === "la localidad" ? "selecciona la localidad" : last}.`;
   };
 
   const handleAddLocality = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = newLocality.trim();
+    const clean = newLocality.trim().slice(0, 30);
     if (!clean) return;
-    await addDoc(localitiesCol(), { name: clean, createdAt: serverTimestamp() });
+    await addLocality(clean);
+    screen.reload();
     setNewLocality("");
   };
 
@@ -265,46 +242,32 @@ function ClubsAdmin({
     setLastSignupEmail("");
     const cleanName = name.trim();
     const cleanSlug = normalizeSlug(slug);
-    if (!cleanName) return setError("El nombre es obligatorio.");
-    if (cleanSlug.length < 3)
-      return setError("La URL debe tener al menos 3 caracteres.");
+    const hint = missingClubHint();
+    if (hint) return setError(hint);
     if (RESERVED_SLUGS.includes(cleanSlug))
       return setError("Esa URL está reservada.");
-    if (!localityId) return setError("Selecciona una localidad.");
     const cleanEmail = adminEmail.trim().toLowerCase();
-    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    if (cleanEmail && !isEmail(cleanEmail)) {
       return setError("El correo del administrador no es válido.");
     }
     try {
       setBusy(true);
-      if (await findClubBySlug(cleanSlug)) {
+      if (clubs.some((club) => club.slug === cleanSlug)) {
         setError(`Ya existe un club en /${cleanSlug}.`);
         return;
       }
-      const ref = doc(clubsCol());
-      await setDoc(ref, {
+      await addClub({
         slug: cleanSlug,
         name: cleanName,
         localityId,
         location: location.trim() || localityName,
         presidentPhone: presidentPhone.trim(),
         description: DEFAULT_CLUB_DESCRIPTION,
-        heroImages: [DEFAULT_HERO_IMAGE],
-        defaultLineups: {},
-        active: true,
-        createdAt: serverTimestamp(),
-        createdBy: userId,
+        heroUrl: DEFAULT_HERO_IMAGE,
+        adminEmail: cleanEmail,
       });
-      if (cleanEmail) {
-        await setDoc(clubItemRef(ref.id, "invites", emailKey(cleanEmail)), {
-          email: cleanEmail,
-          role: "admin",
-          invitedBy: userId,
-          createdAt: serverTimestamp(),
-        });
-        await markSignupInvite(cleanEmail, { clubId: ref.id });
-        setLastSignupEmail(cleanEmail);
-      }
+      if (cleanEmail) setLastSignupEmail(cleanEmail);
+      screen.reload();
       setSuccess(
         cleanEmail
           ? `Club creado en /${cleanSlug}. Envíale al presidente la URL para crear su cuenta.`
@@ -347,12 +310,11 @@ function ClubsAdmin({
     try {
       setActionBusy(true);
       if (clubAction.type === "delete") {
-        await deleteDoc(clubDocRef(clubAction.club.id));
+        await removeClub(clubAction.club.id);
       } else {
-        await updateDoc(clubDocRef(clubAction.club.id), {
-          active: clubAction.type === "show",
-        });
+        await setClubVisible(clubAction.club.id, clubAction.type === "show");
       }
+      screen.reload();
       setClubAction(null);
       setDeleteSlug("");
     } catch (err) {
@@ -386,9 +348,9 @@ function ClubsAdmin({
               <Field label="Nombre del club">
                 <FormInput
                   value={name}
+                  maxLength={30}
                   onChange={(e) => handleName(e.target.value)}
                   placeholder="Ej. Joga Bonito FC"
-                  required
                 />
               </Field>
               <Field
@@ -400,17 +362,19 @@ function ClubsAdmin({
                   onChange={(e) => {
                     setSlugTouched(true);
                     setSlug(e.target.value);
+                    setError("");
                   }}
                   onBlur={() => setSlug(normalizeSlug(slug))}
                   placeholder="jogabonitofc"
-                  required
                 />
               </Field>
               <Field label="Localidad">
                 <FormSelect
                   value={localityId}
-                  onChange={(e) => setLocalityId(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setLocalityId(e.target.value);
+                    setError("");
+                  }}
                 >
                   <option value="">Selecciona...</option>
                   {localities.map((l) => (
@@ -423,7 +387,8 @@ function ClubsAdmin({
               <Field label="Barrio / escuela (opcional)">
                 <FormInput
                   value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                  maxLength={30}
+                  onChange={(e) => setLocation(lettersAndNumbers(e.target.value, 30))}
                   placeholder="Ej. Col. Centro, CETIS 4"
                 />
               </Field>
@@ -446,9 +411,9 @@ function ClubsAdmin({
               <FormInput
                 type="tel"
                 value={presidentPhone}
-                onChange={(e) => setPresidentPhone(e.target.value)}
-                placeholder="Ej. 622 123 4567"
-                maxLength={29}
+                maxLength={15}
+                onChange={(e) => setPresidentPhone(digitsOnly(e.target.value, 15))}
+                placeholder="Ej. 6221234567"
               />
             </Field>
             {error && (
@@ -494,7 +459,8 @@ function ClubsAdmin({
           >
             <FormInput
               value={newLocality}
-              onChange={(e) => setNewLocality(e.target.value)}
+              maxLength={30}
+              onChange={(e) => setNewLocality(e.target.value.slice(0, 30))}
               placeholder="Ej. Guaymas, Sonora"
             />
             <SecondaryButton

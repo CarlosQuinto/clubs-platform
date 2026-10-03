@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { C } from "../ui";
 import type { Tournament } from "../../lib/types";
 import { footballTypeLabel } from "../../lib/types";
@@ -46,7 +46,7 @@ export function TournamentCard({
     footballTypeLabel(tournament.footballType),
     clubs === 1 ? "1 club" : `${clubs} clubes`,
   ].join(" · ");
-  const joinHref = isSuperAdmin
+  const joinHref = isSuperAdmin || tournament.status === "finished"
     ? ""
     : whatsappUrl(
         platformConfig?.social?.whatsapp || "",
@@ -123,10 +123,12 @@ export function TournamentCard({
       {isSuperAdmin && (
         <div className="tour-card__actions">
           <button type="button" onClick={() => openEdit(tournament.id)}>
+            <Pencil size={16} />
             Editar
           </button>
           {canDelete && (
             <button type="button" className="is-danger" onClick={() => void askDelete()}>
+              <Trash2 size={16} />
               Eliminar
             </button>
           )}

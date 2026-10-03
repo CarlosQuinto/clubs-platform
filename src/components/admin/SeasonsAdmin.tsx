@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { CalendarRange, Trash2 } from "lucide-react";
-import { addDoc, deleteDoc, serverTimestamp, updateDoc } from "firebase/firestore";
-import { seasonRef, seasonsCol } from "../../lib/paths";
+import { addSeason, removeSeason, toggleSeason } from "../../features/admin/commands";
 import type { Season } from "../../lib/types";
+import { seasonLabel } from "../../lib/textLimits";
 import Field from "./Field";
 import {
   Badge,
@@ -17,6 +17,7 @@ import {
 interface Props {
   seasons: Season[];
   tournaments: { seasonId: string }[];
+  onChange: () => void;
 }
 
 function formatSeasonRange(start?: string, end?: string) {
@@ -32,7 +33,7 @@ function formatSeasonRange(start?: string, end?: string) {
   return from || to || "Sin fechas";
 }
 
-export default function SeasonsAdmin({ seasons, tournaments }: Props) {
+export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -52,13 +53,13 @@ export default function SeasonsAdmin({ seasons, tournaments }: Props) {
     e.preventDefault();
     const clean = name.trim();
     if (!clean) return;
-    await addDoc(seasonsCol(), {
+    await addSeason({
       name: clean,
       startDate: startDate || null,
       endDate: endDate || null,
       active: true,
-      createdAt: serverTimestamp(),
     });
+    onChange();
     setName("");
     setStartDate("");
     setEndDate("");
@@ -71,7 +72,8 @@ export default function SeasonsAdmin({ seasons, tournaments }: Props) {
       return;
     }
     if (!window.confirm(`¿Eliminar la temporada ${season.name}?`)) return;
-    await deleteDoc(seasonRef(season.id));
+    await removeSeason(season.id);
+    onChange();
   };
 
   return (
@@ -83,7 +85,8 @@ export default function SeasonsAdmin({ seasons, tournaments }: Props) {
         <Field label="Nombre">
           <FormInput
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            maxLength={11}
+            onChange={(e) => setName(seasonLabel(e.target.value))}
             placeholder="Ej. 2026-2027"
             required
           />
@@ -148,7 +151,7 @@ export default function SeasonsAdmin({ seasons, tournaments }: Props) {
               <div className="season-item__actions">
                 <SecondaryButton
                   onClick={() =>
-                    updateDoc(seasonRef(s.id), { active: !s.active })
+                    void toggleSeason(s.id, !s.active).then(onChange)
                   }
                   style={{
                     padding: "0.45rem 0.7rem",

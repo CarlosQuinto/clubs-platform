@@ -12,7 +12,10 @@ import {
   TrendingUp,
   Star,
 } from "lucide-react";
-import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { savePlayer, deletePlayer } from "../../dataconnect/generated";
+import { dataConnect } from "../lib/sqlConnect";
+import { requestClubRefresh } from "../features/club/useClubScreen";
+import { savedRow } from "../features/club/saved";
 import { useClub } from "../context/ClubContext";
 import { useModalLock } from "../hooks/useModalLock";
 import { C, RADIUS, SHADOWS, SectionCard, FormInput } from "../components/ui";
@@ -407,7 +410,7 @@ const MiniStat = ({ icon, label, value, color = C.navy900 }: any) => (
 // 👆 ========================================= 👆
 
 export default function Players({ players, events, perms, goals }: any) {
-  const { col, item } = useClub();
+  const { clubId } = useClub();
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [playerNumber, setPlayerNumber] = useState("");
@@ -433,27 +436,29 @@ export default function Players({ players, events, perms, goals }: any) {
     e.preventDefault();
     if (!playerName) return;
 
-    const data = {
+    const payload = {
+      id: editingPlayerId || crypto.randomUUID(),
+      clubId,
       name: playerName,
-      number: playerNumber || "S/N",
+      shirtNumber: playerNumber || "S/N",
       position: playerPosition,
-      variant: playerVariant.trim(),
-      birthDate: playerBirthDate || "",
-      imageUrl: playerImageUrl.trim(),
+      isCoach: false,
       active: playerActive,
+      detail: {
+        variant: playerVariant.trim(),
+        birthDate: playerBirthDate || "",
+        imageUrl: playerImageUrl.trim(),
+      },
     };
-
-    if (editingPlayerId) {
-      await updateDoc(item("players", editingPlayerId), data);
-      setEditingPlayerId(null);
-    } else {
-      await addDoc(col("players"), {
-        ...data,
-        amount_paid: 0,
-        timestamp: new Date().toISOString(),
-      });
+    try {
+      const saved = await savePlayer(dataConnect, payload);
+      savedRow(saved.data.player);
+      requestClubRefresh();
+      handleCancelEdit();
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
     }
-    handleCancelEdit();
   };
 
   const handleCancelEdit = () => {
@@ -485,7 +490,14 @@ export default function Players({ players, events, perms, goals }: any) {
         "¿Seguro que deseas eliminar a este jugador? Perderás todo su historial.",
       )
     )
-      await deleteDoc(item("players", id));
+      try {
+        const removed = await deletePlayer(dataConnect, { id, clubId });
+        savedRow(removed.data.deleted);
+        requestClubRefresh();
+      } catch (err) {
+        console.error(err);
+        alert("No se pudo guardar.");
+      }
   };
 
   const { clubPlayerStats, selectedPlayerAchievements } = usePlayerStats(

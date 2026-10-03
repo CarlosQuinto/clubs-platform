@@ -1,0 +1,699 @@
+query TournamentEditor($id: String!) @auth(level: USER) {
+  tournaments(where: { id: { eq: $id } }, limit: 1) {
+    id
+    name
+    legs
+    footballType
+    durationMinutes
+    startDate
+    season { id startDate endDate }
+    category { name }
+    tournamentClubs_on_tournament { club { id } }
+  }
+  clubs(where: { active: { eq: true } }, orderBy: [{ name: ASC }]) {
+    id
+    name
+    active
+  }
+  matches(where: { tournament: { id: { eq: $id } } }) {
+    id
+    status
+    matchDate
+    startTime
+    homeScore
+    awayScore
+    walkover
+    roundLabel
+    homeClub { id }
+    awayClub { id }
+  }
+}
+
+query ScheduleCourts @auth(level: USER) {
+  courts(
+    where: { active: { eq: true }, football: { eq: true } }
+    orderBy: [{ sortOrder: ASC }, { name: ASC }]
+  ) {
+    id
+    name
+  }
+}
+
+query MatchSlotHints(
+  $homeId: String!
+  $awayId: String!
+  $from: Date!
+  $until: Date!
+) @auth(level: USER) {
+  platformSettings(id: "config") {
+    courtSlotMinutes
+  }
+  courtOpenWindows {
+    weekday
+    startTime
+    endTime
+  }
+  courts(
+    where: { active: { eq: true }, football: { eq: true } }
+    orderBy: [{ sortOrder: ASC }, { name: ASC }]
+  ) {
+    id
+    name
+    sortOrder
+  }
+  clubs(where: { id: { in: [$homeId, $awayId] } }) {
+    id
+    clubAvailabilityWindows_on_club(orderBy: [{ weekday: ASC }, { startTime: ASC }]) {
+      weekday
+      startTime
+      endTime
+    }
+  }
+  courtHolds(where: { holdDate: { ge: $from, le: $until } }) {
+    holdDate
+    startTime
+    endTime
+    court { id }
+    match { id }
+  }
+  matches(
+    where: {
+      _and: [
+        { matchDate: { ge: $from, le: $until } }
+        {
+          _or: [
+            { homeClub: { id: { eq: $homeId } } }
+            { awayClub: { id: { eq: $homeId } } }
+            { homeClub: { id: { eq: $awayId } } }
+            { awayClub: { id: { eq: $awayId } } }
+          ]
+        }
+      ]
+    }
+  ) {
+    id
+    matchDate
+    startTime
+    homeClub { id }
+    awayClub { id }
+    tournament { durationMinutes }
+  }
+}
+
+query ClubScreen($slug: String!)
+  @auth(level: PUBLIC, insecureReason: "La página pública del equipo es visible para todos.") {
+  clubs(where: { slug: { eq: $slug } }, limit: 1) {
+    id
+    slug
+    name
+    description
+    location
+    presidentPhone
+    logoUrl
+    active
+    locality { id name }
+    clubHeroImages_on_club(orderBy: [{ position: ASC }]) { url }
+    clubDefaultLineups_on_club { mode formation positions }
+    players_on_club(orderBy: [{ name: ASC }]) {
+      id
+      name
+      shirtNumber
+      position
+      variant
+      birthDate
+      imageUrl
+      isCoach
+      active
+    }
+    clubEvents_on_club(orderBy: [{ eventDate: DESC }, { eventTime: DESC }]) {
+      id
+      eventType
+      matchType
+      title
+      eventDate
+      eventTime
+      location
+      routine
+      lineup
+      scoreOurs
+      scoreTheirs
+      penaltiesOurs
+      penaltiesTheirs
+      mvp { id }
+      clubEventAttendees_on_event(limit: 200) { rawLabel player { id } }
+      clubEventPhotos_on_event(orderBy: [{ position: ASC }], limit: 100) { url }
+      clubEventGoals_on_event(orderBy: [{ sortOrder: ASC }], limit: 50) {
+        isPenalty
+        isOwnGoal
+        scorer { id }
+        assist { id }
+      }
+      clubEventCards_on_event(limit: 80) { color player { id } }
+      clubEventGoalkeepers_on_event(limit: 20) { conceded saves player { id } }
+    }
+    transactions_on_club(orderBy: [{ txnDate: DESC }]) {
+      id
+      type
+      description
+      category
+      amount
+      txnDate
+      source
+      player { id }
+    }
+    financialGoals_on_club {
+      id
+      title
+      amount
+      quotaPerPlayer
+      status
+      createdAt
+      goalContributions_on_goal { amount player { id } }
+    }
+    inventoryItems_on_club(orderBy: [{ name: ASC }]) {
+      id
+      name
+      quantity
+      condition
+    }
+    albums_on_club {
+      id
+      name
+      galleryPhotos_on_album(orderBy: [{ sortOrder: ASC }]) {
+        id
+        url
+        caption
+        sortOrder
+        takenAt
+      }
+    }
+    clubAvailabilityWindows_on_club(orderBy: [{ weekday: ASC }, { startTime: ASC }]) {
+      weekday
+      startTime
+      endTime
+    }
+    clubMembers_on_club {
+      role
+      user { id }
+    }
+  }
+  seasons(orderBy: [{ startDate: DESC }]) {
+    id
+    name
+    active
+    startDate
+  }
+  categories(orderBy: [{ sortOrder: ASC }]) {
+    id
+    name
+    sortOrder
+  }
+  tournaments {
+    id
+    name
+    status
+    legs
+    footballType
+    season { id }
+    category { id }
+    tournamentPodiums_on_tournament(orderBy: [{ place: ASC }]) {
+      place
+      club { id }
+    }
+  }
+  matches(
+    where: {
+      _or: [
+        { homeClub: { slug: { eq: $slug } } }
+        { awayClub: { slug: { eq: $slug } } }
+      ]
+    }
+    orderBy: [{ matchDate: ASC }]
+  ) {
+    id
+    roundLabel
+    matchDate
+    startTime
+    venue
+    status
+    homeScore
+    awayScore
+    walkover
+    homeClub { id name }
+    awayClub { id name }
+    tournament { id name season { id } category { id } }
+    matchClubReports_on_match { lineup club { id } }
+    matchAttendees_on_match(limit: 80) { club { id } player { id } }
+    matchGoals_on_match(orderBy: [{ sortOrder: ASC }], limit: 40) {
+      club { id }
+      scorer { id }
+      assist { id }
+      isPenalty
+      isOwnGoal
+    }
+    matchCards_on_match(limit: 40) { club { id } color player { id } }
+  }
+}
+
+mutation DeleteUnplayedTournament($id: String!) @auth(level: USER) {
+  tournament: _executeReturningFirst(
+    sql: """
+      WITH allowed AS (
+        SELECT 1 FROM platform_admins WHERE user_id = $2
+      ),
+      blocked AS (
+        SELECT 1 FROM matches
+        WHERE tournament_id = $1 AND status::text = 'PLAYED'
+      ),
+      drop_goals AS (
+        DELETE FROM match_goals
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_cards AS (
+        DELETE FROM match_cards
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_attendees AS (
+        DELETE FROM match_attendees
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_keepers AS (
+        DELETE FROM match_goalkeepers
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_reports AS (
+        DELETE FROM match_club_reports
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_holds AS (
+        DELETE FROM court_holds
+        WHERE match_id IN (SELECT id FROM matches WHERE tournament_id = $1)
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_matches AS (
+        DELETE FROM matches
+        WHERE tournament_id = $1
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_clubs AS (
+        DELETE FROM tournament_clubs
+        WHERE tournament_id = $1
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_podium AS (
+        DELETE FROM tournament_podium
+        WHERE tournament_id = $1
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      ),
+      drop_notices AS (
+        DELETE FROM tournament_notices
+        WHERE tournament_id = $1
+          AND NOT EXISTS (SELECT 1 FROM blocked)
+          AND EXISTS (SELECT 1 FROM allowed)
+      )
+      DELETE FROM tournaments
+      WHERE id = $1
+        AND NOT EXISTS (SELECT 1 FROM blocked)
+        AND EXISTS (SELECT 1 FROM allowed)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation UpdateTournamentSettings(
+  $userId: String! = ""
+  $id: String!
+  $legs: Int!
+  $footballType: String!
+  $durationMinutes: Int!
+  $startDate: Date
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  tournament: _executeReturningFirst(
+    sql: """
+      UPDATE tournaments
+      SET legs = $2,
+          football_type = $3::football_type,
+          duration_minutes = $4,
+          start_date = $5
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$id, $legs, $footballType, $durationMinutes, $startDate]
+  )
+}
+
+mutation AddTournamentClub($userId: String! = "" $tournamentId: String! $clubId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  row: _executeReturningFirst(
+    sql: """
+      INSERT INTO tournament_clubs (tournament_id, club_id, created_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (tournament_id, club_id) DO UPDATE SET tournament_id = EXCLUDED.tournament_id
+      RETURNING tournament_id AS id
+    """
+    params: [$tournamentId, $clubId]
+  )
+}
+
+mutation RemoveTournamentClub($userId: String! = "" $tournamentId: String! $clubId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  row: _executeReturningFirst(
+    sql: """
+      DELETE FROM tournament_clubs
+      WHERE tournament_id = $1 AND club_id = $2
+        AND NOT EXISTS (
+          SELECT 1 FROM matches
+          WHERE tournament_id = $1
+            AND status::text = 'PLAYED'
+            AND (home_club_id = $2 OR away_club_id = $2)
+        )
+      RETURNING tournament_id AS id
+    """
+    params: [$tournamentId, $clubId]
+  )
+}
+
+mutation InsertUnplayedMatch(
+  $userId: String! = ""
+  $id: String!
+  $tournamentId: String!
+  $roundLabel: String!
+  $roundNumber: Int!
+  $homeClubId: String!
+  $awayClubId: String!
+  $status: String! = "UNSCHEDULED"
+  $walkover: Boolean!
+  $homeScore: Int @retired
+  $awayScore: Int @retired
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  match: _executeReturningFirst(
+    sql: """
+      INSERT INTO matches (
+        id, tournament_id, round_label, round_number,
+        home_club_id, away_club_id, status, venue, walkover, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::match_status, '', $8, CURRENT_TIMESTAMP)
+      RETURNING id
+    """
+    params: [$id, $tournamentId, $roundLabel, $roundNumber, $homeClubId, $awayClubId, $status, $walkover]
+  )
+}
+
+mutation MarkMatchWalkover(
+  $userId: String! = ""
+  $id: String!
+  $homeScore: Int!
+  $awayScore: Int!
+  $walkover: Boolean!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET status = 'PLAYED'::match_status,
+          walkover = $4,
+          home_score = $2,
+          away_score = $3
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$id, $homeScore, $awayScore, $walkover]
+  )
+}
+
+mutation DeleteUnplayedMatch($userId: String! = "" $id: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  match: _executeReturningFirst(
+    sql: """
+      DELETE FROM matches
+      WHERE id = $1 AND status::text <> 'PLAYED'
+      RETURNING id
+    """
+    params: [$id]
+  )
+}
+
+mutation SaveClubProfile(
+  $id: String!
+  $name: String!
+  $logoUrl: String!
+  $presidentPhone: String!
+) @auth(level: USER) {
+  club: _executeReturningFirst(
+    sql: """
+      UPDATE clubs
+      SET name = $2,
+          logo_url = NULLIF($3, ''),
+          president_phone = $4
+      WHERE id = $1
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $5)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $1 AND user_id = $5 AND role::text = 'ADMIN'
+          )
+        )
+      RETURNING id
+    """
+    params: [$id, $name, $logoUrl, $presidentPhone, { _expr: "auth.uid" }]
+  )
+}
+
+mutation ScheduleOfficialMatch(
+  $id: String!
+  $matchDate: Date!
+  $startTime: String!
+  $venue: String!
+  $courtId: String
+) @auth(level: USER) {
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET match_date = $2,
+          start_time = $3,
+          venue = $4,
+          court_id = NULLIF($5, ''),
+          status = 'SCHEDULED'::match_status
+      WHERE id = $1
+        AND status::text <> 'PLAYED'
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $6)
+      RETURNING id
+    """
+    params: [$id, $matchDate, $startTime, $venue, $courtId, { _expr: "auth.uid" }]
+  )
+}
+
+mutation ClearMatchCourtHolds($userId: String! = "" $matchId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  cleared: _execute(
+    sql: """
+      DELETE FROM court_holds
+      WHERE match_id = $1
+    """
+    params: [$matchId]
+  )
+}
+
+mutation SaveMatchCourtHold(
+  $userId: String! = ""
+  $id: String!
+  $courtId: String!
+  $holdDate: Date!
+  $startTime: String!
+  $endTime: String!
+  $matchId: String!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  courtHold: _executeReturningFirst(
+    sql: """
+      INSERT INTO court_holds (
+        id, court_id, hold_date, start_time, end_time, source, match_id, note
+      )
+      VALUES ($1, $2, $3, $4, $5, 'MATCH'::court_hold_source, $6, '')
+      ON CONFLICT (id) DO UPDATE SET
+        court_id = EXCLUDED.court_id,
+        hold_date = EXCLUDED.hold_date,
+        start_time = EXCLUDED.start_time,
+        end_time = EXCLUDED.end_time,
+        source = EXCLUDED.source,
+        match_id = EXCLUDED.match_id
+      RETURNING id
+    """
+    params: [$id, $courtId, $holdDate, $startTime, $endTime, $matchId]
+  )
+}
+
+mutation SaveMatchScore(
+  $userId: String! = ""
+  $id: String!
+  $homeScore: Int!
+  $awayScore: Int!
+  $walkover: Boolean! = false
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET home_score = $2,
+          away_score = $3,
+          status = 'PLAYED'::match_status,
+          walkover = $4
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$id, $homeScore, $awayScore, $walkover]
+  )
+}
+
+mutation ClearMatchEvents($userId: String! = "" $matchId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  goals: _execute(
+    sql: """
+      DELETE FROM match_goals WHERE match_id = $1
+    """
+    params: [$matchId]
+  )
+  cards: _execute(
+    sql: """
+      DELETE FROM match_cards WHERE match_id = $1
+    """
+    params: [$matchId]
+  )
+}
+
+mutation ActivateTournament($userId: String! = "" $matchId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  tournament: _execute(
+    sql: """
+      UPDATE tournaments
+      SET status = 'ACTIVE'::tournament_status
+      WHERE id = (SELECT tournament_id FROM matches WHERE id = $1)
+        AND status::text = 'UPCOMING'
+    """
+    params: [$matchId]
+  )
+}
+
+mutation InsertMatchGoal(
+  $userId: String! = ""
+  $matchId: String!
+  $clubId: String!
+  $sortOrder: Int!
+  $scorerId: String!
+  $scorerName: String!
+  $assistId: String!
+  $assistName: String!
+  $isPenalty: Boolean!
+  $isOwnGoal: Boolean!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  goal: _executeReturningFirst(
+    sql: """
+      INSERT INTO match_goals (
+        match_id, club_id, sort_order, scorer_id, scorer_name,
+        assist_id, assist_name, is_penalty, is_own_goal
+      )
+      VALUES ($1, $2, $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7, $8, $9)
+      RETURNING id
+    """
+    params: [
+      $matchId
+      $clubId
+      $sortOrder
+      $scorerId
+      $scorerName
+      $assistId
+      $assistName
+      $isPenalty
+      $isOwnGoal
+    ]
+  )
+}
+
+mutation InsertMatchCard(
+  $userId: String! = ""
+  $matchId: String!
+  $clubId: String!
+  $playerId: String!
+  $playerName: String!
+  $color: String!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  card: _executeReturningFirst(
+    sql: """
+      INSERT INTO match_cards (match_id, club_id, player_id, player_name, color)
+      VALUES ($1, $2, NULLIF($3, ''), $4, $5::card_color)
+      RETURNING id
+    """
+    params: [$matchId, $clubId, $playerId, $playerName, $color]
+  )
+}

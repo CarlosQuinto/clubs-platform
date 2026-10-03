@@ -10,7 +10,7 @@ import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../components/ui";
 type Mode = "login" | "reset";
 
 export default function Login() {
-  const { user, loading, login, resetPassword, platformConfig } = useAuth();
+  const { user, loading, login, resetPassword, platformUnclaimed } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -18,7 +18,6 @@ export default function Login() {
     (location.state as { passwordReset?: boolean } | null)?.passwordReset,
   );
   const next = params.get("next") || "/";
-  const platformUnclaimed = platformConfig === undefined;
 
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");

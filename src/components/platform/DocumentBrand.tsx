@@ -1,6 +1,5 @@
 import { useEffect } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { PLATFORM_NAME } from "../../lib/clubDefaults";
+import { usePlatformChrome } from "../../features/shell/usePlatformChrome";
 
 const DEFAULT_ICON = "/icon.svg";
 
@@ -46,13 +45,12 @@ function upsertIcon(href: string) {
 
 /** Título de la pestaña y favicon según el Header guardado en HeroAdmin. */
 export default function DocumentBrand() {
-  const { platformConfig } = useAuth();
+  const chrome = usePlatformChrome(true);
 
   useEffect(() => {
-    if (!platformConfig) return;
-    document.title = platformConfig.name?.trim() || PLATFORM_NAME;
-    upsertIcon(platformConfig.logoUrl?.trim() || DEFAULT_ICON);
-  }, [platformConfig]);
+    document.title = chrome.brandName;
+    upsertIcon(chrome.logoUrl || DEFAULT_ICON);
+  }, [chrome]);
 
   return null;
 }

@@ -25,5 +25,14 @@ export interface Permissions {
 export interface FinancesProps {
   transactions: Transaction[];
   players: Player[];
+  goals?: {
+    id: string;
+    title: string;
+    amount: number;
+    quotaPerPlayer?: number;
+    status: "active" | "completed";
+    contributions: Record<string, number>;
+    createdAt?: string;
+  }[];
   perms: Permissions;
 }

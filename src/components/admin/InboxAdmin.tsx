@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { deleteDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Check, Inbox, Mail, Trash2, UserPlus, X } from "lucide-react";
 import ConfirmModal from "../ConfirmModal";
 import Field from "./Field";
 import { useAuth } from "../../context/AuthContext";
-import { usePlatformCatalog } from "../../hooks/usePlatformCatalog";
+import { emailKey, normalizeSlug } from "../../lib/paths";
 import {
-  inquiryRef,
-  inquiriesCol,
-  teamApplicationsCol,
-} from "../../lib/paths";
+  approveApplication,
+  finishInquiry,
+  rejectApplication,
+  removeInquiry,
+} from "../../features/admin/commands";
+import { useAdminQuery } from "../../features/admin/useAdminQuery";
+import { DEFAULT_CLUB_DESCRIPTION, DEFAULT_HERO_IMAGE } from "../../lib/clubDefaults";
 import { whatsappUrl } from "../../lib/social";
 import { reviewTeamApplication } from "../../lib/teamReview";
 import InviteSignupLink from "../platform/InviteSignupLink";
@@ -24,13 +26,17 @@ import {
   SectionCard,
 } from "../ui";
 
-function asTime(value: Inquiry["createdAt"]) {
-  const date = value && typeof value.toDate === "function" ? value.toDate() : null;
-  return date ? date.getTime() : 0;
+function asDate(value: Inquiry["createdAt"] | string) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return typeof value.toDate === "function" ? value.toDate() : null;
 }
 
-function formatWhen(value: Inquiry["createdAt"]) {
-  const date = value && typeof value.toDate === "function" ? value.toDate() : null;
+function formatWhen(value: Inquiry["createdAt"] | string) {
+  const date = asDate(value);
   if (!date) return "";
   return date.toLocaleString("es-MX", {
     day: "2-digit",
@@ -43,15 +49,35 @@ function formatWhen(value: Inquiry["createdAt"]) {
 
 export default function InboxAdmin() {
   const { user } = useAuth();
-  const { localities } = usePlatformCatalog({
-    localities: true,
-    clubs: false,
-    seasons: false,
-    tournaments: false,
-    categories: false,
-  });
-  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
-  const [applications, setApplications] = useState<TeamApplication[]>([]);
+  const screen = useAdminQuery(loadInbox);
+  const localities = screen.data?.localities ?? [];
+  const inquiries = (screen.data?.inquiries ?? []).map(
+    (item) =>
+      ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        phone: item.phone,
+        topic: item.topic,
+        message: item.message,
+        status: item.status === "DONE" ? "done" : "new",
+        createdAt: item.createdAt,
+      }) as Inquiry,
+  );
+  const applications = (screen.data?.teamApplications ?? []).map(
+    (item) =>
+      ({
+        id: item.id,
+        captainName: item.captainName,
+        captainEmail: item.captainEmail,
+        captainPhone: item.captainPhone,
+        teamName: item.teamName,
+        status: item.status === "APPROVED" ? "approved" : item.status === "REJECTED" ? "rejected" : "pending",
+        slug: item.slug || "",
+        clubId: item.club?.id,
+        createdAt: item.createdAt,
+      }) as TeamApplication,
+  );
   const [busyId, setBusyId] = useState("");
   const [approveId, setApproveId] = useState<string | null>(null);
   const [localityId, setLocalityId] = useState("");
@@ -64,28 +90,6 @@ export default function InboxAdmin() {
     kind: "signup" | "accept";
   } | null>(null);
   const [notice, setNotice] = useState("");
-
-  useEffect(() => {
-    const unsubInq = onSnapshot(inquiriesCol(), (snap) => {
-      const list = snap.docs.map(
-        (d) => ({ id: d.id, status: "new", ...d.data() }) as Inquiry,
-      );
-      list.sort((a, b) => asTime(b.createdAt) - asTime(a.createdAt));
-      setInquiries(list);
-    });
-    const unsubApp = onSnapshot(teamApplicationsCol(), (snap) => {
-      const list = snap.docs.map(
-        (d) =>
-          ({ id: d.id, status: "pending", ...d.data() }) as TeamApplication,
-      );
-      list.sort((a, b) => asTime(b.createdAt) - asTime(a.createdAt));
-      setApplications(list);
-    });
-    return () => {
-      unsubInq();
-      unsubApp();
-    };
-  }, []);
 
   const pending = useMemo(
     () => applications.filter((a) => a.status === "pending"),
@@ -112,17 +116,57 @@ export default function InboxAdmin() {
     try {
       setBusyId(toApprove.id);
       setNotice("");
-      const result = await reviewTeamApplication({
-        applicationId: toApprove.id,
-        action: "approve",
+      const email = toApprove.captainEmail.trim().toLowerCase();
+      const slug = normalizeSlug(toApprove.teamName) || "equipo";
+      const clubId = crypto.randomUUID();
+      const token = crypto.randomUUID().replace(/-/g, "");
+      const key = emailKey(email);
+      const localityName = localities.find((item) => item.id === localityId)?.name || "";
+      await approveApplication({
+        id: toApprove.id,
+        clubId,
+        slug,
+        name: toApprove.teamName,
         localityId,
+        location: localityName,
+        presidentPhone: toApprove.captainPhone,
+        description: DEFAULT_CLUB_DESCRIPTION,
+        heroUrl: DEFAULT_HERO_IMAGE,
+        email,
+        emailKey: key,
+        token,
+        kind: "SIGNUP",
       });
+      let mailed = false;
+      let inviteKind: "signup" | "accept" = "signup";
+      let inviteUrl = "";
+      try {
+        const result = await reviewTeamApplication({
+          applicationId: toApprove.id,
+          action: "approve",
+          localityId,
+          prepared: true,
+          teamName: toApprove.teamName,
+          captainName: toApprove.captainName,
+          captainEmail: email,
+          slug,
+          clubId,
+          token,
+          emailKey: key,
+        });
+        mailed = Boolean(result.mailed);
+        inviteKind = result.kind || "signup";
+        inviteUrl = result.url || "";
+      } catch (err) {
+        console.error(err);
+      }
+      screen.reload();
       setLastApproved({
-        email: toApprove.captainEmail.trim().toLowerCase(),
-        slug: result.slug || "",
-        mailed: result.mailed,
-        url: result.url || "",
-        kind: result.kind || "signup",
+        email,
+        slug,
+        mailed,
+        url: inviteUrl,
+        kind: inviteKind,
       });
       setApproveId(null);
       setLocalityId("");
@@ -139,10 +183,16 @@ export default function InboxAdmin() {
     try {
       setBusyId(toReject.id);
       setLastApproved(null);
+      await rejectApplication(toReject.id);
       const result = await reviewTeamApplication({
         applicationId: toReject.id,
         action: "reject",
+        prepared: true,
+        teamName: toReject.teamName,
+        captainName: toReject.captainName,
+        captainEmail: toReject.captainEmail,
       });
+      screen.reload();
       setNotice(
         result.mailed
           ? `Se avisó a ${toReject.captainEmail} que ${toReject.teamName} no quedó registrado.`
@@ -318,9 +368,9 @@ export default function InboxAdmin() {
                     disabled={busyId === item.id}
                     onClick={() => {
                       setBusyId(item.id);
-                      void updateDoc(inquiryRef(item.id), { status: "done" }).finally(
-                        () => setBusyId(""),
-                      );
+                      void finishInquiry(item.id)
+                        .then(() => screen.reload())
+                        .finally(() => setBusyId(""));
                     }}
                   >
                     Atendido
@@ -331,7 +381,9 @@ export default function InboxAdmin() {
                     disabled={busyId === item.id}
                     onClick={() => {
                       setBusyId(item.id);
-                      void deleteDoc(inquiryRef(item.id)).finally(() => setBusyId(""));
+                      void removeInquiry(item.id)
+                        .then(() => screen.reload())
+                        .finally(() => setBusyId(""));
                     }}
                     style={iconBtn}
                   >

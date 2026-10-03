@@ -14,6 +14,7 @@ export default function ConfirmModal({
   confirmDisabled = false,
   confirmHint,
   dangerAction,
+  readOnly = false,
   onConfirm,
   onCancel,
 }: {
@@ -28,6 +29,8 @@ export default function ConfirmModal({
   confirmDisabled?: boolean;
   /** Aviso junto al botón de confirmar. El botón sigue recibiendo el clic. */
   confirmHint?: string;
+  /** Oculta confirmar y la acción de peligro. Cancelar sigue cerrando. */
+  readOnly?: boolean;
   dangerAction?: { label: string; onClick: () => void };
   onConfirm: () => void;
   onCancel: () => void;
@@ -97,7 +100,7 @@ export default function ConfirmModal({
             marginTop: "1.15rem",
           }}
         >
-          {dangerAction && (
+          {!readOnly && dangerAction && (
             <PrimaryButton
               type="button"
               variant="red"
@@ -111,6 +114,7 @@ export default function ConfirmModal({
           <SecondaryButton type="button" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </SecondaryButton>
+          {!readOnly && (
           <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
             <PrimaryButton
               type="button"
@@ -154,6 +158,7 @@ export default function ConfirmModal({
               </span>
             ) : null}
           </span>
+          )}
         </div>
       </div>
     </div>

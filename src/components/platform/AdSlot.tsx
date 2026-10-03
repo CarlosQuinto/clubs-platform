@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { liveAdsFor, safeAdHref, type AdPlacement } from "../../lib/ads";
-import { useAds } from "../../hooks/useAds";
+import { QueryFetchPolicy } from "firebase/data-connect";
+import { AdPlacementKind, liveAds, type LiveAdsData } from "../../../dataconnect/generated";
+import { dataConnect } from "../../lib/sqlConnect";
+import { safeAdHref, type AdPlacement } from "../../lib/ads";
+import { isoDate } from "../../utils/helpers";
 
 const ROTATE_MS = 5000;
 
@@ -10,10 +13,48 @@ interface Props {
   layout?: "band" | "inset" | "club" | "top";
 }
 
+const PLACEMENT_KIND: Record<AdPlacement, AdPlacementKind> = {
+  home: AdPlacementKind.HOME,
+  tournament: AdPlacementKind.TOURNAMENT,
+  club: AdPlacementKind.CLUB,
+  teams: AdPlacementKind.TEAMS,
+};
+
+function toBanners(data: LiveAdsData) {
+  return data.adPlacements.flatMap((row) => {
+    const imageUrl = row.ad.imageUrl.trim();
+    if (!imageUrl) return [];
+    return [{
+      id: row.ad.id,
+      brand: row.ad.brand,
+      imageUrl,
+      href: row.ad.href,
+    }];
+  });
+}
+
 export default function AdSlot({ placement, layout = "inset" }: Props) {
-  const { ads } = useAds();
-  const live = liveAdsFor(ads, placement);
+  const [live, setLive] = useState<ReturnType<typeof toBanners>>([]);
   const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void liveAds(
+      dataConnect,
+      { today: isoDate(), placement: PLACEMENT_KIND[placement] },
+      { fetchPolicy: QueryFetchPolicy.SERVER_ONLY },
+    )
+      .then((result) => {
+        if (!cancelled) setLive(result.data ? toBanners(result.data) : []);
+      })
+      .catch((err: unknown) => {
+        console.error(err);
+        if (!cancelled) setLive([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [placement]);
   const signature = live.map((ad) => ad.id).join("|");
 
   useEffect(() => {

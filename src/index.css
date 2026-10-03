@@ -2271,8 +2271,10 @@ input[type="time"] {
   gap: 0.4rem;
   min-width: 0;
   border: none;
-  background: transparent;
-  color: #121212;
+  border-radius: 8px;
+  background: #047857;
+  color: #fff;
+  padding: 0.4rem 0.65rem;
   font-size: 0.84rem;
   font-weight: 800;
   text-align: left;
@@ -2281,7 +2283,7 @@ input[type="time"] {
 
 .book-bar__go svg {
   flex-shrink: 0;
-  color: #059669;
+  color: #fff;
 }
 
 .book-bar__clear {
@@ -2307,6 +2309,15 @@ input[type="time"] {
   font-size: 0.85rem;
 }
 
+.book-court-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .book-grid-wrap {
   overflow-x: auto;
 }
@@ -2316,6 +2327,17 @@ input[type="time"] {
   gap: 6px;
   width: max-content;
   min-width: 100%;
+}
+
+@media (min-width: 1421px) {
+  .book-grid {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .book-cell {
+    min-width: 0;
+  }
 }
 
 .book-time {
@@ -2572,29 +2594,33 @@ button.tour-band__head {
   font-weight: 800;
 }
 
-.tour-card__actions button {
-  cursor: pointer;
-}
-
 .tour-card__actions {
   display: flex;
-  gap: 0.85rem;
-  padding: 0 0.9rem 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: auto;
+  padding: 0.75rem 0.9rem 0.9rem;
+  border-top: 1px solid #d7efe4;
 }
 
 .tour-card__actions button {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.9rem;
   border: none;
-  background: transparent;
-  color: #121212;
-  font-size: 0.78rem;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #059669;
+  font-size: 0.84rem;
   font-weight: 800;
+  cursor: pointer;
 }
 
 .tour-card__actions button.is-danger {
+  background: #fef2f2;
   color: #dc2626;
 }
 
@@ -3134,17 +3160,27 @@ button.tour-band__head {
 
   .season-item {
     display: grid;
-    grid-template-columns: minmax(12rem, 1.35fr) 11.25rem 7.5rem 6.85rem 2.5rem;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    column-gap: 0.5rem;
+    column-gap: 0.65rem;
+  }
+
+  .season-item__info {
+    margin-right: 0.6rem;
+  }
+
+  .season-item__meta {
+    display: flex;
+    gap: 0.65rem;
   }
 
   .season-item__actions {
-    display: contents;
+    display: flex;
+    gap: 0.65rem;
   }
 
   .season-item__actions > button {
-    width: 100%;
+    width: auto;
     min-height: 2.25rem;
     display: inline-flex;
     align-items: center;
@@ -4790,6 +4826,39 @@ button {
   gap: 0.45rem;
 }
 
+.court-form__save {
+  position: relative;
+  display: inline-flex;
+}
+
+.court-form__hint {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 2;
+  width: max-content;
+  max-width: 220px;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: #121212;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+.court-form__hint::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: #121212;
+  transform: rotate(45deg);
+}
+
 .court-form__ghost {
   padding: 0.55rem 0.95rem;
   border: 1px solid #d4ccbc;
@@ -4823,7 +4892,8 @@ button {
   }
 
   .court-form__danger button,
-  .court-form__actions button {
+  .court-form__actions button,
+  .court-form__save {
     flex: 1;
     justify-content: center;
   }

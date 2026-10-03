@@ -1,0 +1,1126 @@
+# Operaciones del panel /admin. Cada escritura exige una fila en platform_admins.
+
+query AmIPlatformAdmin @auth(level: USER) {
+  platformAdmins(where: { userId: { eq_expr: "auth.uid" } }, limit: 1) {
+    email
+  }
+}
+
+query PlatformAdminById($id: String!) @auth(level: USER) {
+  platformAdmin(key: { userId: $id }) {
+    email
+  }
+}
+
+query ClubAdminGate($clubId: String!, $userId: String!) @auth(level: USER) {
+  platformAdmin(key: { userId: $userId }) {
+    email
+  }
+  clubMember(key: { clubId: $clubId, userId: $userId }) {
+    role
+  }
+}
+
+query SignupInviteByEmail($emailKey: String!)
+  @auth(level: PUBLIC, insecureReason: "El registro comprueba si ese correo fue invitado.") {
+  signupInvite(key: { emailKey: $emailKey }) {
+    email
+    platform
+    club { id }
+  }
+}
+
+query ClubInviteLookup($clubId: String!, $emailKey: String!, $token: String!)
+  @auth(level: PUBLIC, insecureReason: "La invitación se abre con el enlace que incluye el token.") {
+  clubInvites(
+    where: {
+      club: { id: { eq: $clubId } }
+      emailKey: { eq: $emailKey }
+      token: { eq: $token }
+    }
+    limit: 1
+  ) {
+    email
+    role
+    kind
+    token
+    club { id name slug }
+  }
+}
+
+query AdminClubs
+  @auth(level: USER) {
+  localities(orderBy: [{ name: ASC }]) {
+    id
+    name
+  }
+  clubs(orderBy: [{ name: ASC }]) {
+    id
+    slug
+    name
+    location @retired
+    presidentPhone @retired
+    active
+    locality { id name @retired }
+  }
+}
+
+query AdminClubPeople($clubId: String!) @auth(level: USER) {
+  clubMembers(where: { club: { id: { eq: $clubId } } }) {
+    email
+    displayName
+    role
+    user { id }
+  }
+  clubInvites(where: { club: { id: { eq: $clubId } } }) {
+    emailKey
+    email
+    role
+    token
+    kind
+  }
+}
+
+query AdminCompetition @auth(level: USER) {
+  seasons(orderBy: [{ startDate: DESC }]) {
+    id
+    name
+    startDate
+    endDate
+    active
+  }
+  categories(orderBy: [{ sortOrder: ASC }]) {
+    id
+    name
+    sortOrder
+  }
+  tournaments {
+    id
+    season { id }
+  }
+}
+
+query AdminCover @auth(level: USER) {
+  platformSettings(id: "config") {
+    name
+    motto
+    headline
+    tagline
+    logoUrl
+    instagram
+    facebook
+    x
+    youtube
+    whatsapp
+  }
+  platformHeroImages(orderBy: [{ position: ASC }]) {
+    id
+    position
+    url
+  }
+}
+
+query AdminAds @auth(level: USER) {
+  ads(orderBy: [{ sortOrder: ASC }, { brand: ASC }]) {
+    id
+    brand
+    imageUrl
+    href
+    startsOn
+    endsOn
+    status
+    sortOrder
+    adPlacements_on_ad { placement }
+  }
+}
+
+query AdminInbox @auth(level: USER) {
+  localities(orderBy: [{ name: ASC }]) { id name }
+  inquiries(orderBy: [{ createdAt: DESC }]) {
+    id
+    name
+    email
+    phone
+    topic
+    message
+    status
+    createdAt
+  }
+  teamApplications(orderBy: [{ createdAt: DESC }]) {
+    id
+    captainName
+    captainEmail
+    captainPhone
+    teamName
+    status
+    slug
+    createdAt
+    club { id }
+  }
+}
+
+query AdminAdmins @auth(level: USER) {
+  platformAdmins {
+    email
+    user { id displayName }
+  }
+  platformAdminInvites(orderBy: [{ email: ASC }]) {
+    emailKey
+    email
+  }
+}
+
+query MyPlatformAdminInvite($emailKey: String!) @auth(level: USER) {
+  platformAdminInvite(key: { emailKey: $emailKey }) {
+    email
+  }
+}
+
+query AdminCourts($from: Date @retired) @auth(level: USER) {
+  platformSettings(id: "config") {
+    courtsEnabled
+    courtSlotMinutes
+  }
+  courtOpenWindows(orderBy: [{ weekday: ASC }, { startTime: ASC }]) {
+    id
+    weekday
+    startTime
+    endTime
+  }
+  courts(orderBy: [{ sortOrder: ASC }, { name: ASC }]) {
+    id
+    name
+    description
+    hourlyRate
+    active
+    sortOrder
+    imageUrl
+    football
+  }
+  courtHolds(orderBy: [{ holdDate: ASC }, { startTime: ASC }]) {
+    id
+    holdDate
+    startTime
+    endTime
+    source
+    note
+    guestEmail
+    court { id }
+    match { id homeClub { name } awayClub { name } }
+  }
+}
+
+mutation BootstrapPlatformAdmin($userId: String!, $email: String!, $displayName: String!) @auth(level: USER) {
+  user_upsert(
+    data: {
+      id_expr: "auth.uid"
+      email: $email
+      displayName: $displayName
+      updatedAt_expr: "request.time"
+    }
+  )
+  admin: _executeReturningFirst(
+    sql: """
+      INSERT INTO platform_admins (user_id, email)
+      SELECT u.id, u.email
+      FROM users u
+      WHERE u.id = $1
+        AND NOT EXISTS (SELECT 1 FROM platform_admins)
+      RETURNING user_id
+    """
+    params: [$userId]
+  )
+}
+
+mutation ClaimPlatformAdminInvite($emailKey: String!) @auth(level: USER) {
+  admin: _executeReturningFirst(
+    sql: """
+      WITH mine AS (
+        SELECT email FROM platform_admin_invites
+        WHERE email_key = $2 AND lower(email) = lower($3)
+      ),
+      ensured AS (
+        INSERT INTO users (id, email, display_name, updated_at)
+        SELECT $1, email, '', CURRENT_TIMESTAMP FROM mine
+        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, updated_at = CURRENT_TIMESTAMP
+        RETURNING id
+      ),
+      added AS (
+        INSERT INTO platform_admins (user_id, email)
+        SELECT e.id, m.email FROM ensured e CROSS JOIN mine m
+        ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email
+        RETURNING user_id AS id
+      ),
+      dropped_invite AS (
+        DELETE FROM platform_admin_invites
+        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM mine)
+      ),
+      dropped_signup AS (
+        DELETE FROM signup_invites
+        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM mine)
+      )
+      SELECT id FROM added
+    """
+    params: [{ _expr: "auth.uid" }, $emailKey, { _expr: "auth.token.email" }]
+  )
+}
+
+mutation DeleteLocality($id: String!) @auth(level: USER) {
+  locality: _executeReturningFirst(
+    sql: """
+      DELETE FROM localities
+      WHERE id = $1
+        AND NOT EXISTS (SELECT 1 FROM clubs WHERE locality_id = $1)
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation CreateLocality($userId: String! = "" $id: String! $name: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  locality: _executeReturningFirst(
+    sql: """
+      INSERT INTO localities (id, name, created_at)
+      VALUES ($1, btrim($2), CURRENT_TIMESTAMP)
+      RETURNING id
+    """
+    params: [$id, $name]
+  )
+}
+
+mutation CreateClub(
+  $userId: String! = ""
+  $id: String!
+  $slug: String!
+  $name: String!
+  $localityId: String!
+  $location: String!
+  $presidentPhone: String!
+  $description: String!
+  $heroUrl: String @retired
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  club: _executeReturningFirst(
+    sql: """
+      INSERT INTO clubs (
+        id, slug, name, description, locality_id, location, president_phone, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id
+    """
+    params: [
+      $id
+      $slug
+      $name
+      $description
+      $localityId
+      $location
+      $presidentPhone
+    ]
+  )
+}
+
+mutation InsertClubHero($userId: String! = "", $id: UUID!, $clubId: String!, $url: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  hero: _executeReturningFirst(
+    sql: """
+      INSERT INTO club_hero_images (id, club_id, position, url)
+      VALUES ($1, $2, 0, $3)
+      ON CONFLICT (club_id, position) DO UPDATE SET url = EXCLUDED.url
+      RETURNING club_id AS id
+    """
+    params: [$id, $clubId, $url]
+  )
+}
+
+mutation SetClubActive($userId: String! = "" $id: String! $active: Boolean!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  club: _executeReturningFirst(
+    sql: """
+      UPDATE clubs SET active = $2
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$id, $active]
+  )
+}
+
+mutation DeleteClub($userId: String! = "" $id: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  invites: _executeReturningFirst(
+    sql: "DELETE FROM club_invites WHERE club_id = $1 RETURNING email_key AS id"
+    params: [$id]
+  )
+  heroes: _executeReturningFirst(
+    sql: "DELETE FROM club_hero_images WHERE club_id = $1 RETURNING club_id AS id"
+    params: [$id]
+  )
+  members: _executeReturningFirst(
+    sql: "DELETE FROM club_members WHERE club_id = $1 RETURNING user_id AS id"
+    params: [$id]
+  )
+  windows: _executeReturningFirst(
+    sql: "DELETE FROM club_availability_windows WHERE club_id = $1 RETURNING id::text AS id"
+    params: [$id]
+  )
+  lineups: _executeReturningFirst(
+    sql: "DELETE FROM club_default_lineups WHERE club_id = $1 RETURNING club_id AS id"
+    params: [$id]
+  )
+  club: _executeReturningFirst(
+    sql: "DELETE FROM clubs WHERE id = $1 RETURNING id"
+    params: [$id]
+  )
+}
+
+mutation SaveClubInvite(
+  $clubId: String!
+  $emailKey: String!
+  $email: String!
+  $role: String!
+  $token: String!
+  $kind: String!
+) @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      INSERT INTO club_invites (club_id, email_key, email, role, token, kind, created_at)
+      VALUES ($1, $2, $3, $4::member_role, $5, $6::invite_kind, CURRENT_TIMESTAMP)
+      RETURNING email_key AS id
+    """
+    params: [$clubId, $emailKey, $email, $role, $token, $kind]
+  )
+}
+
+mutation RemoveClubInvite($clubId: String!, $emailKey: String!) @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      DELETE FROM club_invites
+      WHERE club_id = $1 AND email_key = $2
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $1 AND user_id = $3 AND role::text = 'ADMIN'
+          )
+        )
+      RETURNING email_key AS id
+    """
+    params: [$clubId, $emailKey, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SaveSignupInvite($emailKey: String!, $email: String!, $clubId: String, $platform: Boolean!)
+  @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      INSERT INTO signup_invites (email_key, email, club_id, platform, updated_at)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      ON CONFLICT (email_key) DO UPDATE SET
+        email = EXCLUDED.email,
+        club_id = COALESCE(EXCLUDED.club_id, signup_invites.club_id),
+        platform = EXCLUDED.platform OR signup_invites.platform,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING email_key AS id
+    """
+    params: [$emailKey, $email, $clubId, $platform]
+  )
+}
+
+mutation ClearSignupInvite($emailKey: String!) @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      DELETE FROM signup_invites
+      WHERE email_key = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING email_key AS id
+    """
+    params: [$emailKey, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SetClubMemberRole($clubId: String!, $userId: String!, $role: String!) @auth(level: USER) {
+  member: _executeReturningFirst(
+    sql: """
+      UPDATE club_members SET role = $3::member_role
+      WHERE club_id = $1 AND user_id = $2
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $1 AND user_id = $4 AND role::text = 'ADMIN'
+          )
+        )
+      RETURNING user_id AS id
+    """
+    params: [$clubId, $userId, $role, { _expr: "auth.uid" }]
+  )
+}
+
+mutation RemoveClubMember($clubId: String!, $userId: String!) @auth(level: USER) {
+  member: _executeReturningFirst(
+    sql: """
+      DELETE FROM club_members
+      WHERE club_id = $1 AND user_id = $2
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $1 AND user_id = $3 AND role::text = 'ADMIN'
+          )
+        )
+      RETURNING user_id AS id
+    """
+    params: [$clubId, $userId, { _expr: "auth.uid" }]
+  )
+}
+
+mutation AcceptClubInvite($clubId: String!, $emailKey: String!, $token: String!, $displayName: String!)
+  @auth(level: USER) {
+  member: _executeReturningFirst(
+    sql: """
+      WITH invite AS (
+        SELECT email, role FROM club_invites
+        WHERE club_id = $1 AND email_key = $2 AND token = $3
+          AND lower(email) = lower($5)
+      ),
+      ensured AS (
+        INSERT INTO users (id, email, display_name, updated_at)
+        SELECT $4, email, $6, CURRENT_TIMESTAMP FROM invite
+        ON CONFLICT (id) DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING id
+      ),
+      joined AS (
+        INSERT INTO club_members (club_id, user_id, email, display_name, role, joined_at)
+        SELECT $1, e.id, i.email, $6, i.role, CURRENT_TIMESTAMP
+        FROM ensured e CROSS JOIN invite i
+        ON CONFLICT (club_id, user_id) DO UPDATE SET role = EXCLUDED.role
+        RETURNING user_id AS id
+      ),
+      dropped AS (
+        DELETE FROM club_invites
+        WHERE club_id = $1 AND email_key = $2 AND EXISTS (SELECT 1 FROM joined)
+      ),
+      dropped_signup AS (
+        DELETE FROM signup_invites
+        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM joined)
+      )
+      SELECT id FROM joined
+    """
+    params: [
+      $clubId
+      $emailKey
+      $token
+      { _expr: "auth.uid" }
+      { _expr: "auth.token.email" }
+      $displayName
+    ]
+  )
+}
+
+mutation DeclineClubInvite($clubId: String!, $emailKey: String!, $token: String!)
+  @auth(level: PUBLIC, insecureReason: "Rechazar solo funciona con el token del enlace.") {
+  invite: _executeReturningFirst(
+    sql: """
+      WITH dropped AS (
+        DELETE FROM club_invites
+        WHERE club_id = $1 AND email_key = $2 AND token = $3
+        RETURNING email_key
+      )
+      DELETE FROM signup_invites
+      WHERE email_key = $2 AND EXISTS (SELECT 1 FROM dropped)
+      RETURNING email_key AS id
+    """
+    params: [$clubId, $emailKey, $token]
+  )
+}
+
+mutation CreateSeason(
+  $userId: String! = ""
+  $id: String!
+  $name: String!
+  $startDate: Date
+  $endDate: Date
+  $active: Boolean!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  season: _executeReturningFirst(
+    sql: """
+      INSERT INTO seasons (id, name, start_date, end_date, active)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id
+    """
+    params: [$id, $name, $startDate, $endDate, $active]
+  )
+}
+
+mutation SetSeasonActive($userId: String! = "" $id: String! $active: Boolean!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  season: _executeReturningFirst(
+    sql: """
+      UPDATE seasons SET active = $2
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$id, $active]
+  )
+}
+
+mutation DeleteSeason($userId: String! = "" $id: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  season: _executeReturningFirst(
+    sql: """
+      DELETE FROM seasons
+      WHERE id = $1
+        AND NOT EXISTS (SELECT 1 FROM tournaments WHERE season_id = $1)
+      RETURNING id
+    """
+    params: [$id]
+  )
+}
+
+mutation CreateCategory(
+  $userId: String! = ""
+  $id: String!
+  $name: String!
+  $sortOrder: Int!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  category: _executeReturningFirst(
+    sql: """
+      INSERT INTO categories (id, name, sort_order)
+      VALUES ($1, $2, $3)
+      RETURNING id
+    """
+    params: [$id, $name, $sortOrder]
+  )
+}
+
+mutation CreateTournament(
+  $userId: String! = ""
+  $id: String!
+  $name: String!
+  $seasonId: String!
+  $categoryId: String!
+  $groupId: String!
+  $footballType: String!
+  $durationMinutes: Int!
+  $startDate: Date!
+  $description: String!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  grouped: _executeReturningFirst(
+    sql: """
+      INSERT INTO tournament_groups (id, label)
+      VALUES ($1, $2)
+      ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label
+      RETURNING id
+    """
+    params: [$groupId, $name]
+  )
+  tournament: _executeReturningFirst(
+    sql: """
+      INSERT INTO tournaments (
+        id, name, season_id, category_id, group_id, status,
+        legs, football_type, duration_minutes, start_date, description, created_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, 'UPCOMING'::tournament_status,
+        2, $6::football_type, $7, $8, $9, CURRENT_TIMESTAMP
+      )
+      RETURNING id
+    """
+    params: [
+      $id
+      $name
+      $seasonId
+      $categoryId
+      $groupId
+      $footballType
+      $durationMinutes
+      $startDate
+      $description
+    ]
+  )
+}
+
+mutation SavePlatformHeader($userId: String!, $name: String!, $motto: String!, $logoUrl: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  settings: platformSettings_upsert(
+    data: {
+      id: "config"
+      name: $name
+      motto: $motto
+      logoUrl: $logoUrl
+      updatedAt_expr: "request.time"
+    }
+  )
+}
+
+mutation SavePlatformCover($userId: String!, $headline: String!, $tagline: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  settings: platformSettings_upsert(
+    data: {
+      id: "config"
+      headline: $headline
+      tagline: $tagline
+      updatedAt_expr: "request.time"
+    }
+  )
+}
+
+mutation SavePlatformSocial(
+  $userId: String!
+  $instagram: String!
+  $facebook: String!
+  $x: String!
+  $youtube: String!
+  $whatsapp: String!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  settings: platformSettings_upsert(
+    data: {
+      id: "config"
+      instagram: $instagram
+      facebook: $facebook
+      x: $x
+      youtube: $youtube
+      whatsapp: $whatsapp
+      updatedAt_expr: "request.time"
+    }
+  )
+}
+
+mutation ClearHeroImages($userId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  cleared: platformHeroImage_deleteMany(all: true)
+}
+
+mutation SaveHeroImage($userId: String!, $id: UUID!, $position: Int!, $url: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  image: platformHeroImage_upsert(data: { id: $id, position: $position, url: $url })
+}
+
+mutation SaveCourtSettings($userId: String! = "", $enabled: Boolean!, $slotMinutes: Int!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  settings: _executeReturningFirst(
+    sql: """
+      UPDATE platform_settings
+      SET courts_enabled = $1, court_slot_minutes = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = 'config'
+      RETURNING id
+    """
+    params: [$enabled, $slotMinutes]
+  )
+}
+
+mutation ClearCourtWindows($userId: String! = "") @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  cleared: courtOpenWindow_deleteMany(all: true)
+}
+
+mutation SaveCourtWindow(
+  $userId: String! = ""
+  $id: String!
+  $weekday: Int!
+  $startTime: String!
+  $endTime: String!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  window: _executeReturningFirst(
+    sql: """
+      INSERT INTO court_open_windows (id, weekday, start_time, end_time)
+      VALUES ($1::uuid, $2, $3, $4)
+      RETURNING id::text AS id
+    """
+    params: [$id, $weekday, $startTime, $endTime]
+  )
+}
+
+mutation SaveCourt(
+  $userId: String! = ""
+  $id: String!
+  $name: String!
+  $description: String!
+  $hourlyRate: Float!
+  $football: Boolean!
+  $imageUrl: String!
+  $sortOrder: Int!
+  $active: Boolean!
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  court: _executeReturningFirst(
+    sql: """
+      INSERT INTO courts (
+        id, name, description, hourly_rate, football, image_url, sort_order, active
+      )
+      VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        hourly_rate = EXCLUDED.hourly_rate,
+        football = EXCLUDED.football,
+        image_url = EXCLUDED.image_url,
+        sort_order = EXCLUDED.sort_order,
+        active = EXCLUDED.active
+      RETURNING id
+    """
+    params: [
+      $id
+      $name
+      $description
+      $hourlyRate
+      $football
+      $imageUrl
+      $sortOrder
+      $active
+    ]
+  )
+}
+
+mutation DeleteCourt($id: String!) @auth(level: USER) {
+  court: _executeReturningFirst(
+    sql: """
+      WITH allowed AS (
+        SELECT 1 FROM platform_admins WHERE user_id = $2
+      ),
+      unlinked AS (
+        UPDATE matches SET court_id = NULL
+        WHERE court_id = $1 AND EXISTS (SELECT 1 FROM allowed)
+        RETURNING id
+      ),
+      dropped AS (
+        DELETE FROM court_holds
+        WHERE court_id = $1 AND EXISTS (SELECT 1 FROM allowed)
+      )
+      DELETE FROM courts
+      WHERE id = $1 AND EXISTS (SELECT 1 FROM allowed)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SaveCourtHold(
+  $userId: String! = ""
+  $id: String!
+  $courtId: String!
+  $holdDate: Date!
+  $startTime: String!
+  $endTime: String!
+  $note: String!
+  $guestEmail: String! = ""
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  hold: _executeReturningFirst(
+    sql: """
+      INSERT INTO court_holds (
+        id, court_id, hold_date, start_time, end_time, source, note, guest_email
+      )
+      VALUES ($1, $2, $3, $4, $5, 'MANUAL'::court_hold_source, $6, $7)
+      ON CONFLICT (id) DO UPDATE SET
+        court_id = EXCLUDED.court_id,
+        hold_date = EXCLUDED.hold_date,
+        start_time = EXCLUDED.start_time,
+        end_time = EXCLUDED.end_time,
+        note = EXCLUDED.note,
+        guest_email = EXCLUDED.guest_email
+      RETURNING id
+    """
+    params: [$id, $courtId, $holdDate, $startTime, $endTime, $note, $guestEmail]
+  )
+}
+
+mutation DeleteManualCourtHold($id: String!) @auth(level: USER) {
+  hold: _executeReturningFirst(
+    sql: """
+      DELETE FROM court_holds
+      WHERE id = $1
+        AND source::text = 'MANUAL'
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SaveAd(
+  $id: String!
+  $brand: String!
+  $imageUrl: String!
+  $href: String!
+  $startsOn: Date!
+  $endsOn: Date!
+  $status: String!
+  $sortOrder: Int!
+) @auth(level: USER) {
+  ad: _executeReturningFirst(
+    sql: """
+      INSERT INTO ads (
+        id, brand, image_url, href, starts_on, ends_on, status, sort_order, created_at
+      )
+      SELECT $1, $2, $3, $4, $5, $6, $7::ad_status, $8, CURRENT_TIMESTAMP
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $9)
+      ON CONFLICT (id) DO UPDATE SET
+        brand = EXCLUDED.brand,
+        image_url = EXCLUDED.image_url,
+        href = EXCLUDED.href,
+        starts_on = EXCLUDED.starts_on,
+        ends_on = EXCLUDED.ends_on,
+        status = EXCLUDED.status,
+        sort_order = EXCLUDED.sort_order
+      RETURNING id
+    """
+    params: [$id, $brand, $imageUrl, $href, $startsOn, $endsOn, $status, $sortOrder, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SetAdStatus($id: String!, $status: String!) @auth(level: USER) {
+  ad: _executeReturningFirst(
+    sql: """
+      UPDATE ads SET status = $2::ad_status
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+      RETURNING id
+    """
+    params: [$id, $status, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SetAdSortOrder($id: String!, $sortOrder: Int!) @auth(level: USER) {
+  ad: _executeReturningFirst(
+    sql: """
+      UPDATE ads SET sort_order = $2
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+      RETURNING id
+    """
+    params: [$id, $sortOrder, { _expr: "auth.uid" }]
+  )
+}
+
+mutation ClearAdPlacements($adId: String!) @auth(level: USER) {
+  cleared: _execute(
+    sql: """
+      DELETE FROM ad_placements
+      WHERE ad_id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+    """
+    params: [$adId, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SaveAdPlacement($adId: String!, $placement: String!) @auth(level: USER) {
+  placement: _executeReturningFirst(
+    sql: """
+      INSERT INTO ad_placements (ad_id, placement, created_at)
+      SELECT $1, $2::ad_placement_kind, CURRENT_TIMESTAMP
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+      ON CONFLICT (ad_id, placement) DO NOTHING
+      RETURNING ad_id AS id
+    """
+    params: [$adId, $placement, { _expr: "auth.uid" }]
+  )
+}
+
+mutation DeleteAd($id: String!) @auth(level: USER) {
+  ad: _executeReturningFirst(
+    sql: """
+      DELETE FROM ads
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SetInquiryDone($id: String!) @auth(level: USER) {
+  inquiry: _executeReturningFirst(
+    sql: """
+      UPDATE inquiries SET status = 'DONE'
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation DeleteInquiry($id: String!) @auth(level: USER) {
+  inquiry: _executeReturningFirst(
+    sql: """
+      DELETE FROM inquiries
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation RejectTeamApplication($id: String!) @auth(level: USER) {
+  application: _executeReturningFirst(
+    sql: """
+      UPDATE team_applications
+      SET status = 'REJECTED', reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND status::text = 'PENDING'
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING id
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+}
+
+mutation ApproveTeamApplication(
+  $id: String!
+  $clubId: String!
+  $slug: String!
+  $localityId: String @retired
+  $location: String @retired
+  $description: String @retired
+  $heroUrl: String @retired
+  $emailKey: String @retired
+  $token: String @retired
+  $kind: String @retired
+) @auth(level: USER) {
+  application: _executeReturningFirst(
+    sql: """
+      UPDATE team_applications
+      SET status = 'APPROVED', club_id = $2, slug = $3, reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND status::text = 'PENDING'
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+      RETURNING id
+    """
+    params: [$id, $clubId, $slug, { _expr: "auth.uid" }]
+  )
+}
+
+mutation SavePlatformAdminInvite($emailKey: String!, $email: String!) @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      INSERT INTO platform_admin_invites (email_key, email, invited_by, created_at)
+      SELECT $1, $2, $3, CURRENT_TIMESTAMP
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+        AND NOT EXISTS (SELECT 1 FROM platform_admins WHERE lower(email) = lower($2))
+      ON CONFLICT (email_key) DO NOTHING
+      RETURNING email_key AS id
+    """
+    params: [$emailKey, $email, { _expr: "auth.uid" }]
+  )
+}
+
+mutation RemovePlatformAdminInvite($emailKey: String!) @auth(level: USER) {
+  invite: _executeReturningFirst(
+    sql: """
+      WITH dropped AS (
+        DELETE FROM platform_admin_invites
+        WHERE email_key = $1
+          AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+        RETURNING email_key
+      )
+      DELETE FROM signup_invites
+      WHERE email_key = $1 AND platform = true AND EXISTS (SELECT 1 FROM dropped)
+      RETURNING email_key AS id
+    """
+    params: [$emailKey, { _expr: "auth.uid" }]
+  )
+}
+
+mutation RemovePlatformAdmin($userId: String!) @auth(level: USER) {
+  admin: _executeReturningFirst(
+    sql: """
+      DELETE FROM platform_admins
+      WHERE user_id = $1
+        AND user_id <> $2
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+        AND (SELECT count(*) FROM platform_admins) > 1
+      RETURNING user_id AS id
+    """
+    params: [$userId, { _expr: "auth.uid" }]
+  )
+}

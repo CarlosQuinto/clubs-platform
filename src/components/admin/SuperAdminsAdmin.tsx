@@ -1,27 +1,19 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import {
-  arrayRemove,
-  deleteDoc,
-  deleteField,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { useState, type CSSProperties } from "react";
 import { Crown, Trash2, UserPlus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { emailKey } from "../../lib/paths";
 import {
-  emailKey,
-  platformConfigRef,
-  platformInviteRef,
-  platformInvitesCol,
-} from "../../lib/paths";
+  dropPlatformAdmin,
+  dropPlatformInvite,
+  invitePlatformAdmin,
+  loadAdmins,
+} from "../../features/admin/commands";
+import { useAdminQuery } from "../../features/admin/useAdminQuery";
 import Field from "./Field";
 import InviteSignupLink, {
   CopySignupUrlButton,
 } from "../platform/InviteSignupLink";
 import { sendPlatformAdminInvite } from "../../lib/platformAdminInvite";
-import { clearSignupInvite, markSignupInvite } from "../../lib/signupInvite";
 import {
   Badge,
   C,
@@ -37,39 +29,21 @@ interface Invite {
 }
 
 export default function SuperAdminsAdmin() {
-  const { user, platformConfig } = useAuth();
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const { user } = useAuth();
+  const screen = useAdminQuery(loadAdmins);
+  const invites: Invite[] = (screen.data?.platformAdminInvites ?? []).map((invite) => ({
+    id: invite.emailKey,
+    email: invite.email,
+  }));
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [lastInvite, setLastInvite] = useState("");
 
-  const uids = platformConfig?.superAdmins || [];
-  const emails = platformConfig?.superAdminEmails || {};
-
-  useEffect(() => {
-    const unsub = onSnapshot(platformInvitesCol(), (snap) => {
-      const list = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as { email?: string }) }) as Invite,
-      );
-      list.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-      setInvites(list);
-      list.forEach((inv) => {
-        if (inv.email) void markSignupInvite(inv.email, { platform: true }).catch(() => {});
-      });
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!user?.email) return;
-    if (!uids.includes(user.uid)) return;
-    if ((emails[user.uid] || "").toLowerCase() === user.email.toLowerCase()) return;
-    void updateDoc(platformConfigRef(), {
-      [`superAdminEmails.${user.uid}`]: user.email.toLowerCase(),
-    }).catch(() => {});
-  }, [user, uids, emails]);
+  const admins = screen.data?.platformAdmins ?? [];
+  const uids = admins.map((admin) => admin.user.id);
+  const emails = Object.fromEntries(admins.map((admin) => [admin.user.id, admin.email]));
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,12 +68,8 @@ export default function SuperAdminsAdmin() {
     }
     try {
       setBusy(true);
-      await setDoc(platformInviteRef(emailKey(clean)), {
-        email: clean,
-        invitedBy: user?.uid || null,
-        createdAt: serverTimestamp(),
-      });
-      await markSignupInvite(clean, { platform: true });
+      await invitePlatformAdmin(emailKey(clean), clean);
+      screen.reload();
       let mailed = false;
       try {
         const result = await sendPlatformAdminInvite(clean);
@@ -124,8 +94,8 @@ export default function SuperAdminsAdmin() {
 
   const removeInvite = async (inv: Invite) => {
     if (!window.confirm(`¿Cancelar la invitación de ${inv.email}?`)) return;
-    await deleteDoc(platformInviteRef(inv.id));
-    await clearSignupInvite(inv.email).catch(() => {});
+    await dropPlatformInvite(inv.id);
+    screen.reload();
     if (lastInvite === inv.email) setLastInvite("");
   };
 
@@ -141,11 +111,8 @@ export default function SuperAdminsAdmin() {
     if (!window.confirm(msg)) return;
     try {
       setBusy(true);
-      await updateDoc(platformConfigRef(), {
-        superAdmins: arrayRemove(uid),
-        [`superAdminEmails.${uid}`]: deleteField(),
-        updatedAt: serverTimestamp(),
-      });
+      await dropPlatformAdmin(uid);
+      screen.reload();
     } catch (err) {
       console.error(err);
       setError("No se pudo quitar al administrador.");

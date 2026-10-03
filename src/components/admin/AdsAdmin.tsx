@@ -6,31 +6,30 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import {
-  addDoc,
-  deleteDoc,
-  serverTimestamp,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
 import { deleteObject, ref } from "firebase/storage";
-import { db, storage } from "../../lib/firebase";
-import { adRef, adsCol, platformStoragePath } from "../../lib/paths";
+import { storage } from "../../lib/firebase";
+import { platformStoragePath } from "../../lib/paths";
+import { orderAd, removeAd, saveAdStatus, upsertAd } from "../../features/admin/commands";
+import { loadAds } from "../../features/admin/commands";
+import { TO_SQL_PLACEMENT, toAds } from "../../features/admin/ads/adsMapper";
+import { useAdminQuery } from "../../features/admin/useAdminQuery";
 import { uploadImageFile } from "../../lib/uploadImage";
 import {
   AD_PLACEMENTS,
+  AD_STATUS_LABEL,
   addDaysIso,
-  adWindow,
   canonicalPlacements,
   isPlatformAdImageUrl,
   placementLabel,
   safeAdHref,
   safeAdImageUrl,
+  statusForSave,
+  statusOnOpen,
   todayIso,
   type Ad,
   type AdPlacement,
+  type AdStatus,
 } from "../../lib/ads";
-import { useAds } from "../../hooks/useAds";
 import Field from "./Field";
 import {
   Badge,
@@ -53,29 +52,14 @@ interface Draft {
   order: number;
 }
 
-type InventoryStatus = "ended" | "scheduled" | "paused" | "current";
-
-const STATUS_LABEL: Record<InventoryStatus, string> = {
-  ended: "Vencido",
-  scheduled: "Programado",
-  paused: "Pausado",
-  current: "En curso",
-};
+type InventoryStatus = AdStatus;
 
 const STATUS_COLOR: Record<InventoryStatus, "red" | "amber" | "gray" | "green"> = {
-  ended: "red",
-  scheduled: "amber",
-  paused: "gray",
-  current: "green",
+  EXPIRADO: "red",
+  PROGRAMADO: "amber",
+  PAUSADO: "gray",
+  EN_CURSO: "green",
 };
-
-function inventoryStatus(ad: Ad): InventoryStatus {
-  const windowState = adWindow(ad);
-  if (windowState === "ended") return "ended";
-  if (windowState === "scheduled") return "scheduled";
-  if (!ad.active) return "paused";
-  return "current";
-}
 
 function emptyDraft(order: number): Draft {
   return {
@@ -105,7 +89,10 @@ async function removeStoredAdImage(url: string) {
 }
 
 export default function AdsAdmin() {
-  const { ads, loading, error: loadError } = useAds();
+  const screen = useAdminQuery(loadAds);
+  const ads = toAds(screen.data);
+  const loading = screen.loading;
+  const loadError = screen.error;
   const ordered = useMemo(
     () => [...ads].sort((a, b) => a.order - b.order || a.brand.localeCompare(b.brand)),
     [ads],
@@ -118,6 +105,7 @@ export default function AdsAdmin() {
   const [notice, setNotice] = useState("");
   const noticeTimer = useRef<number | null>(null);
   const legacyAttempted = useRef(false);
+  const reconcileKey = useRef("");
 
   const locked = busy || uploading || needsCleanup;
 
@@ -149,15 +137,31 @@ export default function AdsAdmin() {
       setError("No se pudieron retirar ubicaciones que ya no se usan.");
       return;
     }
-    const batch = writeBatch(db);
-    cleaned.forEach((ad) => {
-      batch.update(adRef(ad.id), { placements: ad.placements });
-    });
-    batch.commit().catch((err) => {
-      console.error(err);
-      setError("No se pudieron retirar ubicaciones que ya no se usan.");
-    });
+    void cleaned;
   }, [ads, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    const pending = ads.flatMap((ad) => {
+      const next = statusOnOpen(ad);
+      return next ? [{ id: ad.id, status: next }] : [];
+    });
+    if (pending.length === 0) return;
+    const key = pending.map((item) => `${item.id}:${item.status}`).join("|");
+    if (reconcileKey.current === key) return;
+    reconcileKey.current = key;
+    void (async () => {
+      try {
+        for (const item of pending) {
+          await saveAdStatus(item.id, item.status);
+        }
+        screen.reload();
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo actualizar el estado de los anuncios.");
+      }
+    })();
+  }, [ads, loading, screen.reload]);
 
   const editing = Boolean(draft.id);
 
@@ -246,7 +250,7 @@ export default function AdsAdmin() {
       placements,
       startsAt: draft.startsAt,
       endsAt: draft.endsAt,
-      active: existing ? existing.active : true,
+      status: statusForSave(draft.startsAt, draft.endsAt, existing?.status ?? null),
     };
     const previousImage = draft.id
       ? ads.find((ad) => ad.id === draft.id)?.imageUrl
@@ -254,17 +258,21 @@ export default function AdsAdmin() {
     try {
       setBusy(true);
       setError("");
-      if (draft.id) {
-        await updateDoc(adRef(draft.id), payload);
-      } else {
-        const order =
-          ordered.reduce((max, ad) => Math.max(max, ad.order), -1) + 1;
-        await addDoc(adsCol(), {
-          ...payload,
-          order,
-          createdAt: serverTimestamp(),
-        });
-      }
+      const order = draft.id
+        ? existing?.order ?? 0
+        : ordered.reduce((max, ad) => Math.max(max, ad.order), -1) + 1;
+      await upsertAd({
+        id: draft.id || crypto.randomUUID(),
+        brand: payload.brand,
+        imageUrl: payload.imageUrl,
+        href: payload.href,
+        startsOn: payload.startsAt,
+        endsOn: payload.endsAt,
+        status: payload.status,
+        sortOrder: order,
+        placements: payload.placements.map((placement) => TO_SQL_PLACEMENT[placement]),
+      });
+      screen.reload();
       setDraft(emptyDraft(ordered.length));
       flash("Guardado con éxito.");
     } catch (err) {
@@ -305,7 +313,8 @@ export default function AdsAdmin() {
     try {
       setBusy(true);
       setError("");
-      await deleteDoc(adRef(ad.id));
+      await removeAd(ad.id);
+      screen.reload();
       if (draft.id === ad.id) setDraft(emptyDraft(ordered.length));
     } catch (err) {
       console.error(err);
@@ -333,9 +342,8 @@ export default function AdsAdmin() {
     try {
       setBusy(true);
       setError("");
-      const batch = writeBatch(db);
-      copy.forEach((ad, i) => batch.update(adRef(ad.id), { order: i }));
-      await batch.commit();
+      await Promise.all(copy.map((ad, index) => orderAd(ad.id, index)));
+      screen.reload();
     } catch (err) {
       console.error(err);
       setError("No se pudo cambiar el orden.");
@@ -344,13 +352,13 @@ export default function AdsAdmin() {
     }
   };
 
-  const toggleActive = async (ad: Ad) => {
-    const status = inventoryStatus(ad);
-    if (locked || (status !== "current" && status !== "paused")) return;
+  const setStatus = async (ad: Ad, status: AdStatus) => {
+    if (locked) return;
     try {
       setBusy(true);
       setError("");
-      await updateDoc(adRef(ad.id), { active: !ad.active });
+      await saveAdStatus(ad.id, status);
+      screen.reload();
     } catch (err) {
       console.error(err);
       setError("No se pudo cambiar el estado del anuncio.");
@@ -398,6 +406,7 @@ export default function AdsAdmin() {
               <FormInput
                 type="date"
                 value={draft.startsAt}
+                max={draft.endsAt || undefined}
                 onChange={(e) =>
                   setDraft((current) => ({ ...current, startsAt: e.target.value }))
                 }
@@ -409,6 +418,7 @@ export default function AdsAdmin() {
               <FormInput
                 type="date"
                 value={draft.endsAt}
+                min={draft.startsAt || undefined}
                 onChange={(e) =>
                   setDraft((current) => ({ ...current, endsAt: e.target.value }))
                 }
@@ -550,8 +560,7 @@ export default function AdsAdmin() {
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
           {ordered.map((ad, index) => {
-            const status = inventoryStatus(ad);
-            const muted = status === "paused" || status === "ended";
+            const muted = ad.status === "PAUSADO" || ad.status === "EXPIRADO";
             return (
               <div
                 key={ad.id}
@@ -616,8 +625,8 @@ export default function AdsAdmin() {
                         {placementLabel(id)}
                       </Badge>
                     ))}
-                    <Badge color={STATUS_COLOR[status]}>
-                      {STATUS_LABEL[status]}
+                    <Badge color={STATUS_COLOR[ad.status]}>
+                      {AD_STATUS_LABEL[ad.status]}
                     </Badge>
                   </div>
                 </div>
@@ -629,13 +638,15 @@ export default function AdsAdmin() {
                   >
                     Editar
                   </SecondaryButton>
-                  {(status === "current" || status === "paused") && (
+                  {(ad.status === "EN_CURSO" || ad.status === "PAUSADO") && (
                     <SecondaryButton
                       type="button"
                       disabled={locked}
-                      onClick={() => void toggleActive(ad)}
+                      onClick={() =>
+                        void setStatus(ad, ad.status === "EN_CURSO" ? "PAUSADO" : "EN_CURSO")
+                      }
                     >
-                      {status === "current" ? "Pausar" : "Reanudar"}
+                      {ad.status === "EN_CURSO" ? "Pausar" : "Reanudar"}
                     </SecondaryButton>
                   )}
                   <SecondaryButton

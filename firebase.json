@@ -37,5 +37,8 @@
     "providers": {
       "emailPassword": true
     }
+  },
+  "dataconnect": {
+    "source": "dataconnect"
   }
 }

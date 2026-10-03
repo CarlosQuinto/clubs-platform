@@ -23,7 +23,10 @@ import {
   LayoutTemplate,
   Timer,
 } from "lucide-react";
-import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { deleteInventoryItem, saveInventoryItem } from "../../dataconnect/generated";
+import { savedRow } from "../features/club/saved";
+import { dataConnect } from "../lib/sqlConnect";
+import { requestClubRefresh } from "../features/club/useClubScreen";
 import { useClub } from "../context/ClubContext";
 import { useModalLock } from "../hooks/useModalLock";
 import {
@@ -397,7 +400,23 @@ const InventorySummaryModal = ({ category, inventory, onClose }: any) => {
 // 👆 ========================================= 👆
 
 export default function Inventory({ inventory, perms }: any) {
-  const { col, item: itemRef } = useClub();
+  const { clubId } = useClub();
+  const persistInventory = async (
+    id: string,
+    name: string,
+    quantity: number,
+    condition: string,
+  ) => {
+    const value = condition.toLowerCase();
+    const saved = await saveInventoryItem(dataConnect, {
+      id,
+      clubId,
+      name,
+      quantity,
+      condition: value === "perdido" ? "PERDIDO" : value === "malo" ? "MALO" : "BUENO",
+    });
+    savedRow(saved.data.item);
+  };
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState(1);
   const [itemCondition, setItemCondition] = useState("Bueno");
@@ -436,22 +455,25 @@ export default function Inventory({ inventory, perms }: any) {
         i.condition === itemCondition,
     );
 
-    if (existingItem) {
-      await updateDoc(itemRef("inventory", existingItem.id), {
-        quantity: existingItem.quantity + itemQty,
-      });
-    } else {
-      await addDoc(col("inventory"), {
-        name: itemName.trim(),
-        quantity: itemQty,
-        condition: itemCondition,
-        timestamp: new Date().toISOString(),
-      });
+    try {
+      if (existingItem) {
+        await persistInventory(
+          existingItem.id,
+          existingItem.name,
+          existingItem.quantity + itemQty,
+          existingItem.condition,
+        );
+      } else {
+        await persistInventory(crypto.randomUUID(), itemName.trim(), itemQty, itemCondition);
+      }
+      requestClubRefresh();
+      setItemName("");
+      setItemQty(1);
+      setItemCondition("Bueno");
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
     }
-
-    setItemName("");
-    setItemQty(1);
-    setItemCondition("Bueno");
   };
 
   const handleUpdateQty = async (
@@ -462,9 +484,15 @@ export default function Inventory({ inventory, perms }: any) {
     if (currentQty + change < 0) return;
     setAnimatingId(id);
     setTimeout(() => setAnimatingId(null), 300);
-    await updateDoc(itemRef("inventory", id), {
-      quantity: currentQty + change,
-    });
+    const current = inventory.find((entry: any) => entry.id === id);
+    if (!current) return;
+    try {
+      await persistInventory(id, current.name, currentQty + change, current.condition);
+      requestClubRefresh();
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
+    }
   };
 
   const handleConfirmConditionChange = async (e: React.FormEvent) => {
@@ -485,38 +513,41 @@ export default function Inventory({ inventory, perms }: any) {
     try {
       if (isFullTransfer) {
         if (targetItem) {
-          await updateDoc(itemRef("inventory", targetItem.id), {
-            quantity: targetItem.quantity + condQty,
-          });
-          await deleteDoc(itemRef("inventory", condItem.id));
+          await persistInventory(
+            targetItem.id,
+            targetItem.name,
+            targetItem.quantity + condQty,
+            targetItem.condition,
+          );
+          const removed = await deleteInventoryItem(dataConnect, { id: condItem.id, clubId });
+          savedRow(removed.data.deleted);
         } else {
-          await updateDoc(itemRef("inventory", condItem.id), {
-            condition: condNew,
-          });
+          await persistInventory(condItem.id, condItem.name, condItem.quantity, condNew);
         }
       } else {
-        await updateDoc(itemRef("inventory", condItem.id), {
-          quantity: condItem.quantity - condQty,
-        });
+        await persistInventory(
+          condItem.id,
+          condItem.name,
+          condItem.quantity - condQty,
+          condItem.condition,
+        );
         if (targetItem) {
-          await updateDoc(itemRef("inventory", targetItem.id), {
-            quantity: targetItem.quantity + condQty,
-          });
+          await persistInventory(
+            targetItem.id,
+            targetItem.name,
+            targetItem.quantity + condQty,
+            targetItem.condition,
+          );
         } else {
-          await addDoc(col("inventory"), {
-            name: condItem.name,
-            quantity: condQty,
-            condition: condNew,
-            timestamp: new Date().toISOString(),
-          });
+          await persistInventory(crypto.randomUUID(), condItem.name, condQty, condNew);
         }
       }
+      requestClubRefresh();
+      setCondItem(null);
     } catch (err) {
       console.error(err);
       alert("Hubo un error al actualizar el inventario.");
     }
-
-    setCondItem(null);
   };
 
   const sortedInventory = [...inventory].sort((a, b) => {
@@ -1009,7 +1040,7 @@ export default function Inventory({ inventory, perms }: any) {
                               setCondItem(item);
                               setCondQty(1);
                               setCondNew(
-                                item.condition === "Bueno" ? "Regular" : "Malo",
+                                item.condition === "Bueno" ? "Malo" : "Perdido",
                               );
                             }}
                             style={{
@@ -1053,11 +1084,20 @@ export default function Inventory({ inventory, perms }: any) {
                       <button
                         onClick={async () => {
                           if (
-                            window.confirm(
+                            !window.confirm(
                               `¿Borrar "${item.name}" del inventario?`,
                             )
-                          )
-                            await deleteDoc(itemRef("inventory", item.id));
+                          ) {
+                            return;
+                          }
+                          try {
+                            const removed = await deleteInventoryItem(dataConnect, { id: item.id, clubId });
+                            savedRow(removed.data.deleted);
+                            requestClubRefresh();
+                          } catch (err) {
+                            console.error(err);
+                            alert("No se pudo guardar.");
+                          }
                         }}
                         style={{
                           background: "none",
@@ -1378,7 +1418,7 @@ export default function Inventory({ inventory, perms }: any) {
                       onChange={(e) => setCondNew(e.target.value)}
                       style={{ width: "100%", height: "42px" }}
                     >
-                      {["Bueno", "Regular", "Malo", "Perdido"].map((estado) => (
+                      {["Bueno", "Malo", "Perdido"].map((estado) => (
                         <option
                           key={estado}
                           value={estado}

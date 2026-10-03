@@ -12,8 +12,17 @@ import {
   X,
   Star,
 } from "lucide-react";
-import { addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { getStorage, ref, deleteObject } from "firebase/storage";
+import {
+  deleteGalleryAlbum,
+  deleteGalleryPhoto,
+  promoteGalleryPhoto,
+  saveGalleryPhoto,
+  swapGalleryPhotos,
+} from "../../../dataconnect/generated";
+import { dataConnect } from "../../lib/sqlConnect";
+import { requestClubRefresh } from "../../features/club/useClubScreen";
+import { savedRow } from "../../features/club/saved";
 import { useClub } from "../../context/ClubContext";
 import { uploadImageFile } from "../../lib/uploadImage";
 import {
@@ -41,7 +50,27 @@ export default function GallerySection({
   perms,
   setLightboxData,
 }: GallerySectionProps) {
-  const { col, item, storagePath } = useClub();
+  const { clubId, storagePath } = useClub();
+  const savePhoto = async (
+    albumName: string,
+    url: string,
+    caption: string,
+    takenAt: string,
+  ) => {
+    const existing = gallery.find(
+      (photo) => (photo.albumName || "📸 Galería General") === albumName,
+    );
+    const saved = await saveGalleryPhoto(dataConnect, {
+      albumId: existing?.albumId || crypto.randomUUID(),
+      clubId,
+      albumName,
+      photoId: crypto.randomUUID(),
+      url,
+      caption,
+      takenAt,
+    });
+    savedRow(saved.data.photo);
+  };
   // ── ESTADOS DEL ÁREA DE PREPARACIÓN PRINCIPAL ──
   const [albumName, setAlbumName] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -162,13 +191,9 @@ export default function GallerySection({
     for (let i = 0; i < stagingPhotos.length; i++) {
       const p = stagingPhotos[i];
       const d = new Date(baseTime - i * 1000);
-      await addDoc(col("gallery"), {
-        url: p.url,
-        caption: p.caption,
-        albumName: finalAlbumName,
-        timestamp: d.toISOString(),
-      });
+      await savePhoto(finalAlbumName, p.url, p.caption, d.toISOString());
     }
+    requestClubRefresh();
     setStagingPhotos([]);
     setAlbumName("");
   };
@@ -270,16 +295,18 @@ export default function GallerySection({
       baseTime = oldestTime - 1000;
     }
 
-    for (let i = 0; i < validPhotos.length; i++) {
-      const p = validPhotos[i];
-      const d = new Date(baseTime - i * 1000);
-      await addDoc(col("gallery"), {
-        url: p.url.trim(),
-        caption: p.caption.trim(),
-        albumName: modalAlbumName,
-        timestamp: d.toISOString(),
-      });
+    try {
+      for (let i = 0; i < validPhotos.length; i++) {
+        const p = validPhotos[i];
+        const d = new Date(baseTime - i * 1000);
+        await savePhoto(modalAlbumName, p.url.trim(), p.caption.trim(), d.toISOString());
+      }
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
+      return;
     }
+    requestClubRefresh();
 
     // Como sí guardó, vaciamos el rastreador para que NO las borre al cerrar
     setNewlyUploadedModal([]);
@@ -300,7 +327,9 @@ export default function GallerySection({
     if (
       window.confirm("¿Seguro que deseas eliminar esta foto de la galería?")
     ) {
-      await deleteDoc(item(collectionName as "gallery", id));
+      const removed = await deleteGalleryPhoto(dataConnect, { clubId, photoId: id });
+      savedRow(removed.data.deleted);
+      requestClubRefresh();
 
       // Borrar de Storage si pertenece a Firebase
       if (photoUrl && photoUrl.includes("firebasestorage.googleapis.com")) {
@@ -321,9 +350,11 @@ export default function GallerySection({
         `¿Seguro que deseas eliminar el álbum "${aName}" y TODAS sus fotos (${photos.length})? Esta acción no se puede deshacer.`,
       )
     ) {
+      const removed = await deleteGalleryAlbum(dataConnect, { clubId, albumName: aName });
+      savedRow(removed.data.deleted);
+      requestClubRefresh();
       await Promise.all(
         photos.map(async (p) => {
-          await deleteDoc(item("gallery", p.id));
           if (p.url && p.url.includes("firebasestorage.googleapis.com")) {
             try {
               await deleteObject(ref(getStorage(), p.url));
@@ -342,36 +373,31 @@ export default function GallerySection({
     if (direction === "left" && index > 0) {
       const current = photos[index];
       const previous = photos[index - 1];
-      await Promise.all([
-        updateDoc(item("gallery", current.id), {
-          timestamp: previous.timestamp,
-        }),
-        updateDoc(item("gallery", previous.id), {
-          timestamp: current.timestamp,
-        }),
-      ]);
+      const swapped = await swapGalleryPhotos(dataConnect, {
+        clubId,
+        firstId: current.id,
+        secondId: previous.id,
+      });
+      savedRow(swapped.data.swapped);
+      requestClubRefresh();
     } else if (direction === "right" && index < photos.length - 1) {
       const current = photos[index];
       const next = photos[index + 1];
-      await Promise.all([
-        updateDoc(item("gallery", current.id), {
-          timestamp: next.timestamp,
-        }),
-        updateDoc(item("gallery", next.id), {
-          timestamp: current.timestamp,
-        }),
-      ]);
+      const swapped = await swapGalleryPhotos(dataConnect, {
+        clubId,
+        firstId: current.id,
+        secondId: next.id,
+      });
+      savedRow(swapped.data.swapped);
+      requestClubRefresh();
     }
   };
 
   const handleMakeCover = async (photos: any[], index: number) => {
     if (index === 0) return;
-    const currentCover = photos[0];
-    const targetPhoto = photos[index];
-    const newTime = new Date(
-      new Date(currentCover.timestamp).getTime() + 1000,
-    ).toISOString();
-    await updateDoc(item("gallery", targetPhoto.id), { timestamp: newTime });
+    const saved = await promoteGalleryPhoto(dataConnect, { clubId, photoId: photos[index].id });
+    savedRow(saved.data.photo);
+    requestClubRefresh();
   };
 
   const scrollAlbums = (direction: "left" | "right") => {

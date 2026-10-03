@@ -14,6 +14,10 @@ export async function sendClubInvite(params: {
   clubId: string;
   email: string;
   role: Role;
+  mailOnly?: boolean;
+  token?: string;
+  slug?: string;
+  clubName?: string;
 }) {
   const fn = httpsCallable<typeof params, SendClubInviteResult>(
     functions,

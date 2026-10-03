@@ -1,0 +1,576 @@
+query ClubBySlug($slug: String!) @auth(level: PUBLIC) {
+  clubs(where: { slug: { eq: $slug } }, limit: 1) {
+    id
+    slug
+    name
+    description
+    location
+    presidentPhone
+    logoUrl
+    active
+    locality { id name }
+  }
+}
+
+query TeamsPage
+  @auth(level: PUBLIC, insecureReason: "El directorio y el ranking de equipos son públicos.") {
+  clubs(where: { active: { eq: true } }, orderBy: [{ name: ASC }]) {
+    name
+    slug
+    logoUrl
+    location
+    presidentPhone
+    locality { name }
+  }
+  seasons(orderBy: [{ startDate: DESC }]) {
+    id
+    name
+    active
+    startDate
+  }
+  categories(orderBy: [{ sortOrder: ASC }]) {
+    id
+    name
+    sortOrder
+  }
+  tournaments {
+    season { id }
+    category { id }
+    tournamentClubs_on_tournament {
+      club { name slug }
+    }
+  }
+  matches(where: { status: { eq: PLAYED } }) {
+    homeScore
+    awayScore
+    homeClub { name slug }
+    awayClub { name slug }
+    tournament {
+      season { id }
+      category { id }
+    }
+  }
+}
+
+query ContactPage
+  @auth(level: PUBLIC, insecureReason: "El WhatsApp de contacto es público.") {
+  platformSettings(id: "config") {
+    whatsapp
+  }
+}
+
+query PlatformClaimOpen
+  @auth(level: PUBLIC, insecureReason: "Solo indica si la plataforma ya tiene un administrador, sin nombres ni correos.") {
+  platformClaimStates(limit: 1) {
+    open
+  }
+}
+
+query PlatformChrome
+  @auth(level: PUBLIC, insecureReason: "El nombre, el logo y las redes del sitio son públicos.") {
+  platformSettings(id: "config") {
+    name
+    motto
+    logoUrl
+    instagram
+    facebook
+    x
+    youtube
+    whatsapp
+    courtsEnabled
+  }
+}
+
+query HomePage($today: Date!)
+  @auth(level: PUBLIC, insecureReason: "La portada, los próximos partidos y los torneos vigentes son públicos.") {
+  platformSettings(id: "config") {
+    headline
+    tagline
+    courtsEnabled
+    whatsapp
+  }
+  platformHeroImages(orderBy: [{ position: ASC }]) {
+    url
+  }
+  tournaments(
+    where: {
+      _or: [{ status: { eq: ACTIVE } }, { status: { eq: UPCOMING } }]
+    }
+  ) {
+    id
+    name
+    status
+    footballType
+    startDate
+    season { name startDate }
+    category { name sortOrder }
+    tournamentClubs_on_tournament { _count }
+    matches_on_tournament(where: { status: { eq: PLAYED } }) { _count }
+  }
+  matches(
+    where: {
+      status: { eq: SCHEDULED }
+      matchDate: { ge: $today }
+      tournament: {
+        _or: [{ status: { eq: ACTIVE } }, { status: { eq: UPCOMING } }]
+      }
+    }
+    orderBy: [{ matchDate: ASC }, { startTime: ASC }]
+    limit: 30
+  ) {
+    matchDate
+    startTime
+    venue
+    homeClub { name logoUrl }
+    awayClub { name logoUrl }
+    tournament {
+      id
+      name
+      status
+      category { name }
+    }
+  }
+  adPlacements(
+    where: {
+      placement: { eq: HOME }
+      ad: {
+        status: { eq: EN_CURSO }
+        startsOn: { le: $today }
+        endsOn: { ge: $today }
+      }
+    }
+  ) {
+    ad {
+      brand
+      imageUrl
+      href
+      startsOn
+      endsOn
+      status
+      sortOrder
+    }
+  }
+}
+
+query RegisterTeamPage
+  @auth(level: PUBLIC, insecureReason: "El directorio de la solicitud de equipo es público.") {
+  clubs(where: { active: { eq: true } }, orderBy: [{ name: ASC }], limit: 10) {
+    name
+    slug
+    logoUrl
+    location
+    presidentPhone
+    locality { name }
+  }
+}
+
+query MatchesPage
+  @auth(level: PUBLIC, insecureReason: "Los próximos partidos son públicos.") {
+  tournaments(
+    where: {
+      _or: [{ status: { eq: ACTIVE } }, { status: { eq: UPCOMING } }]
+    }
+  ) {
+    id
+    name
+    category { name }
+  }
+  matches(
+    where: {
+      _or: [{ status: { eq: SCHEDULED } }, { status: { eq: UNSCHEDULED } }]
+    }
+    orderBy: [{ matchDate: ASC }, { startTime: ASC }]
+  ) {
+    id
+    matchDate
+    startTime
+    venue
+    homeClub { name slug logoUrl }
+    awayClub { name slug logoUrl }
+    court { id name }
+    tournament {
+      id
+      name
+      status
+      category { name }
+    }
+  }
+}
+
+query ActiveClubs @auth(level: PUBLIC) {
+  clubs(where: { active: { eq: true } }, orderBy: [{ name: ASC }]) {
+    id
+    slug
+    name
+    logoUrl
+    location
+    active
+  }
+}
+
+query Categories @auth(level: PUBLIC) {
+  categories(orderBy: [{ sortOrder: ASC }]) {
+    id
+    name
+    sortOrder
+  }
+}
+
+query Seasons @auth(level: PUBLIC) {
+  seasons(orderBy: [{ startDate: DESC }]) {
+    id
+    name
+    startDate
+    endDate
+    active
+  }
+}
+
+query TournamentArchive
+  @auth(level: PUBLIC, insecureReason: "El archivo de torneos es público.") {
+  tournaments {
+    id
+    name
+    status
+    footballType
+    startDate
+    season {
+      name
+      active
+      startDate
+    }
+    category {
+      name
+      sortOrder
+    }
+    tournamentClubs_on_tournament {
+      _count
+    }
+    matches_on_tournament(where: { status: { eq: PLAYED } }) {
+      _count
+    }
+  }
+  platformSettings(id: "config") {
+    whatsapp
+  }
+}
+
+query TournamentsBySeason($seasonId: String!) @auth(level: PUBLIC) {
+  tournaments(where: { season: { id: { eq: $seasonId } } }) {
+    id
+    name
+    status
+    legs
+    footballType
+    durationMinutes
+    startDate
+    season { id name }
+    category { id name sortOrder }
+  }
+}
+
+query TournamentScreen($id: String!)
+  @auth(level: PUBLIC, insecureReason: "La ficha del torneo es pública.") {
+  tournaments(where: { id: { eq: $id } }, limit: 1) {
+    name
+    status
+    footballType
+    startDate
+    durationMinutes
+    season { name }
+    category { name }
+    tournamentPodiums_on_tournament(orderBy: [{ place: ASC }]) {
+      place
+      club { name slug }
+    }
+  }
+  matches(
+    where: { tournament: { id: { eq: $id } } }
+    orderBy: [{ roundNumber: ASC }, { matchDate: ASC }]
+  ) {
+    id
+    roundLabel
+    matchDate
+    startTime
+    venue
+    status
+    homeScore
+    awayScore
+    walkover
+    homeClub { id name slug logoUrl }
+    awayClub { id name slug logoUrl }
+    court { id name }
+  }
+  tournamentStandings(
+    where: { tournament: { id: { eq: $id } } }
+    orderBy: [{ standingRank: ASC }]
+  ) {
+    standingRank
+    pj
+    g
+    e
+    p
+    gf
+    gc
+    dg
+    pts
+    club { id name slug logoUrl }
+  }
+  tournamentScorers(
+    where: { tournament: { id: { eq: $id } } }
+    orderBy: [{ goals: DESC }, { assists: DESC }, { playerName: ASC }]
+  ) {
+    playerName
+    goals
+    assists
+    player { id imageUrl }
+    club { id name logoUrl }
+  }
+}
+
+query MatchSummary($matchId: String!)
+  @auth(level: PUBLIC, insecureReason: "El resumen de un partido del torneo es público.") {
+  matches(where: { id: { eq: $matchId } }, limit: 1) {
+    matchGoals_on_match(orderBy: [{ sortOrder: ASC }]) {
+      club { id }
+      scorerName
+      assistName
+      scorer { name }
+      assist { name }
+      isPenalty
+      isOwnGoal
+    }
+    matchCards_on_match {
+      club { id }
+      color
+      playerName
+      player { name }
+    }
+  }
+}
+
+query MatchScoreSheet($matchId: String!) @auth(level: USER) {
+  matches(where: { id: { eq: $matchId } }, limit: 1) {
+    homeScore
+    awayScore
+    homeClub {
+      id
+      name
+      players_on_club(where: { active: { eq: true } }, orderBy: [{ name: ASC }]) {
+        id
+        name
+      }
+    }
+    awayClub {
+      id
+      name
+      players_on_club(where: { active: { eq: true } }, orderBy: [{ name: ASC }]) {
+        id
+        name
+      }
+    }
+    matchGoals_on_match(orderBy: [{ sortOrder: ASC }]) {
+      club { id }
+      scorer { id }
+      assist { id }
+      isPenalty
+      isOwnGoal
+    }
+    matchCards_on_match {
+      club { id }
+      color
+      player { id }
+    }
+  }
+}
+
+query CourtBusyOnDate($date: Date!) @auth(level: USER) {
+  courtHolds(where: { holdDate: { eq: $date } }) {
+    startTime
+    endTime
+    court { id }
+    match { id }
+  }
+}
+
+query MatchesByTournament($tournamentId: String!) @auth(level: PUBLIC) {
+  matches(
+    where: { tournament: { id: { eq: $tournamentId } } }
+    orderBy: [{ roundNumber: ASC }, { matchDate: ASC }]
+  ) {
+    id
+    roundLabel
+    roundNumber
+    matchDate
+    startTime
+    venue
+    status
+    homeScore
+    awayScore
+    walkover
+    homeClub { id name slug }
+    awayClub { id name slug }
+    court { id name }
+  }
+}
+
+query ClubScopedMatches(
+  $clubId: String!
+  $seasonId: String!
+  $categoryId: String!
+) @auth(level: PUBLIC) {
+  matches(
+    where: {
+      _and: [
+        {
+          _or: [
+            { homeClub: { id: { eq: $clubId } } }
+            { awayClub: { id: { eq: $clubId } } }
+          ]
+        }
+        { tournament: { season: { id: { eq: $seasonId } } } }
+        { tournament: { category: { id: { eq: $categoryId } } } }
+      ]
+    }
+    orderBy: [{ matchDate: ASC }, { startTime: ASC }]
+  ) {
+    id
+    roundLabel
+    matchDate
+    startTime
+    status
+    homeScore
+    awayScore
+    homeClub { id name }
+    awayClub { id name }
+    tournament { id name season { id } category { id } }
+  }
+}
+
+query UpcomingMatches($from: String!, $limit: Int!) @auth(level: PUBLIC) {
+  matchListings(
+    where: { startsAt: { ge: $from } }
+    orderBy: [{ startsAt: ASC }]
+    limit: $limit
+  ) {
+    startsAt
+    matchDate
+    startTime
+    venue
+    homeClub { id name slug }
+    awayClub { id name slug }
+    tournament { id name }
+    category { id name }
+    match { id }
+  }
+}
+
+query TournamentStandings($tournamentId: String!) @auth(level: PUBLIC) {
+  tournamentStandings(
+    where: { tournament: { id: { eq: $tournamentId } } }
+    orderBy: [{ standingRank: ASC }]
+  ) {
+    standingRank
+    pj
+    g
+    e
+    p
+    gf
+    gc
+    dg
+    pts
+    club { id name slug }
+  }
+}
+
+query TournamentScorers($tournamentId: String!) @auth(level: PUBLIC) {
+  tournamentScorers(
+    where: { tournament: { id: { eq: $tournamentId } } }
+    orderBy: [{ goals: DESC }, { assists: DESC }, { playerName: ASC }]
+  ) {
+    playerName
+    goals
+    assists
+    club { id name }
+    player { id name }
+  }
+}
+
+query CourtsPage($date: Date!)
+  @auth(level: PUBLIC, insecureReason: "El apartado de canchas es público.") {
+  platformSettings(id: "config") {
+    courtsEnabled
+    courtSlotMinutes
+    whatsapp
+  }
+  courtOpenWindows {
+    weekday
+    startTime
+    endTime
+  }
+  courts(where: { active: { eq: true } }, orderBy: [{ sortOrder: ASC }]) {
+    id
+    name
+    description
+    hourlyRate
+    imageUrl
+  }
+  courtHolds(where: { holdDate: { eq: $date } }) {
+    startTime
+    endTime
+    court { id }
+  }
+}
+
+query CourtHoldsOnDate($date: Date!) @auth(level: PUBLIC) {
+  courtHolds(where: { holdDate: { eq: $date } }, orderBy: [{ startTime: ASC }]) {
+    id
+    holdDate
+    startTime
+    endTime
+    source
+    note
+    court { id name }
+    match { id }
+  }
+}
+
+query LiveAds($today: Date!, $placement: AdPlacementKind!) @auth(level: PUBLIC) {
+  adPlacements(
+    where: {
+      placement: { eq: $placement }
+      ad: {
+        status: { eq: EN_CURSO }
+        startsOn: { le: $today }
+        endsOn: { ge: $today }
+      }
+    }
+    orderBy: [{ ad: { sortOrder: ASC } }]
+  ) {
+    placement
+    ad { id brand imageUrl href sortOrder startsOn endsOn }
+  }
+}
+
+query MyMemberships($userId: String!) @auth(level: USER) {
+  clubMembers(where: { user: { id: { eq: $userId } } }) {
+    role
+    email
+    club { id slug name logoUrl }
+  }
+}
+
+query MyOpenClubInvites($emailKey: String!) @auth(level: USER) {
+  clubInvites(where: { emailKey: { eq: $emailKey }, kind: { ne: ACCEPT } }) {
+    token
+    role
+    club { id slug name logoUrl }
+  }
+}
+
+query PlayerContributionTotals($clubId: String!) @auth(level: USER) {
+  playerContributionTotals(where: { club: { id: { eq: $clubId } } }) {
+    total
+    player { id name }
+  }
+}

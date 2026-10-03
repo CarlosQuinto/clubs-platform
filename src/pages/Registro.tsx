@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getDoc } from "firebase/firestore";
 import { UserPlus } from "lucide-react";
 import { authErrorMessage, useAuth } from "../context/AuthContext";
 import { usePostLoginRedirect } from "../hooks/usePostLoginRedirect";
@@ -8,15 +7,14 @@ import PlatformLayout from "../components/platform/PlatformLayout";
 import DestinationPicker from "../components/platform/DestinationPicker";
 import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../components/ui";
 import { emailKey } from "../lib/paths";
-import { signupInviteRef } from "../lib/signupInvite";
+import { signupInviteExists } from "../features/admin/commands";
 
 export default function Registro() {
-  const { user, loading, register, platformConfig } = useAuth();
+  const { user, loading, register, platformUnclaimed } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const invitedEmail = (params.get("email") || "").trim().toLowerCase();
-  const platformUnclaimed = platformConfig === undefined;
-  const configReady = platformConfig !== null;
+  const configReady = platformUnclaimed !== null;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState(invitedEmail);
@@ -49,8 +47,8 @@ export default function Registro() {
         return;
       }
       if (!platformUnclaimed) {
-        const invite = await getDoc(signupInviteRef(emailKey(clean)));
-        if (!invite.exists()) {
+        const invited = await signupInviteExists(emailKey(clean));
+        if (!invited) {
           setError("No hay una invitación para este correo. Pide el acceso a un administrador.");
           return;
         }

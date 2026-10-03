@@ -11,9 +11,22 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { addDoc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
+import {
+  deleteClubEvent,
+  replaceClubEventAlbum,
+  replaceClubEventAttendees,
+  replaceClubEventStats,
+  replaceMatchAttendees,
+  saveClubDefaultLineup,
+  saveClubEvent,
+  setClubEventLineup,
+  setClubEventScore,
+  setMatchClubLineup,
+} from "../../dataconnect/generated";
+import { dataConnect } from "../lib/sqlConnect";
+import { requestClubRefresh } from "../features/club/useClubScreen";
+import { savedRow } from "../features/club/saved";
 import { useClub } from "../context/ClubContext";
-import { matchRef } from "../lib/paths";
 import OfficialMatchCard from "../components/agenda/OfficialMatchCard";
 import { C, StatBox, SectionCard } from "../components/ui";
 import { useAgendaData } from "../hooks/useAgendaData";
@@ -39,7 +52,7 @@ export default function Agenda({
   perms,
   highlightedEventId = null,
 }: any) {
-  const { clubId, col, item, clubRef } = useClub();
+  const { clubId } = useClub();
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventType, setEventType] = useState<"Partido" | "Entrenamiento">(
     "Partido",
@@ -111,40 +124,34 @@ export default function Agenda({
     return () => observer.disconnect();
   }, [historyOpen, historyCount, pastSorted.length]);
 
-  /** Guarda datos del lado del club en un partido oficial (matches/{id}.sides.{clubId}). */
-  const saveOfficialSide = async (ev: any, patch: Record<string, any>) => {
-    const updates: Record<string, any> = {};
-    Object.entries(patch).forEach(([k, v]) => {
-      updates[`sides.${clubId}.${k}`] = v;
-    });
-    await updateDoc(matchRef(ev.matchId), updates);
-  };
+  const refresh = () => requestClubRefresh();
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = {
-      eventType,
-      // Los clubes solo organizan entrenamientos y amistosos; lo oficial viene de torneos.
-      matchType: eventType === "Partido" ? "Amistoso" : null,
+    try {
+    const saved = await saveClubEvent(dataConnect, {
+      id: editingEventId || crypto.randomUUID(),
+      clubId,
+      eventType: eventType === "Entrenamiento" ? "ENTRENAMIENTO" : "PARTIDO",
+      matchType: eventType === "Partido" ? "AMISTOSO" : null,
       title: eventTitle,
-      routine: eventType === "Entrenamiento" ? eventRoutine : [],
       eventDate,
       eventTime,
-      location: eventLocation || "Por definir",
-    };
-    if (editingEventId) {
-      await updateDoc(item("events", editingEventId), data);
-      setEditingEventId(null);
-    } else {
-      await addDoc(col("events"), {
-        ...data,
-        attendees: [],
-        timestamp: new Date().toISOString(),
-      });
-    }
+      detail: {
+        location: eventLocation || "Por definir",
+        routine: eventType === "Entrenamiento" ? eventRoutine : [],
+      },
+    });
+    savedRow(saved.data.event);
+    requestClubRefresh();
+    if (editingEventId) setEditingEventId(null);
     setEventTitle("");
     setEventLocation("");
     setEventRoutine([]);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
+    }
   };
 
   const handleStartEdit = (ev: any) => {
@@ -171,8 +178,9 @@ export default function Agenda({
 
   const handleDelete = async (id: string) => {
     if (window.confirm("¿Seguro que deseas eliminar este evento?")) {
-      await deleteDoc(item("events", id));
-      await deleteDoc(item("transactions", `arb_${id}`)).catch(() => {});
+      const removed = await deleteClubEvent(dataConnect, { id, clubId });
+      savedRow(removed.data.deleted);
+      requestClubRefresh();
     }
   };
 
@@ -210,12 +218,16 @@ export default function Agenda({
         }
       }
 
-      await updateDoc(item("events", eventId), {
+      const scored = await setClubEventScore(dataConnect, {
+        id: eventId,
+        clubId,
         scoreOurs,
         scoreTheirs,
         penaltiesOurs,
         penaltiesTheirs,
       });
+      savedRow(scored.data.event);
+      refresh();
     } else alert("Formato incorrecto.");
   };
 
@@ -502,10 +514,21 @@ export default function Agenda({
           onClose={() => setAttendanceModalEvent(null)}
           onSave={async (id: string, att: string[]) => {
             if (attendanceModalEvent.isOfficial) {
-              await saveOfficialSide(attendanceModalEvent, { attendees: att });
+              const saved = await replaceMatchAttendees(dataConnect, {
+                matchId: attendanceModalEvent.matchId,
+                clubId,
+                labels: att,
+              });
+              savedRow(saved.data.report);
             } else {
-              await updateDoc(item("events", id), { attendees: att });
+              const saved = await replaceClubEventAttendees(dataConnect, {
+                id,
+                clubId,
+                labels: att,
+              });
+              savedRow(saved.data.event);
             }
+            refresh();
             setAttendanceModalEvent(null);
           }}
         />
@@ -520,20 +543,23 @@ export default function Agenda({
           onClose={() => setLineupModalEvent(null)}
           onSave={async (id: string, lineup: any) => {
             if (lineupModalEvent.isOfficial) {
-              await saveOfficialSide(lineupModalEvent, { lineup });
+              const saved = await setMatchClubLineup(dataConnect, {
+                matchId: lineupModalEvent.matchId,
+                clubId,
+                lineup,
+              });
+              savedRow(saved.data.report);
             } else {
-              await updateDoc(item("events", id), { lineup });
+              const saved = await setClubEventLineup(dataConnect, { id, clubId, lineup });
+              savedRow(saved.data.event);
             }
+            refresh();
             setLineupModalEvent(null);
           }}
           onSaveBase={async (mode: string, lineup: any) => {
-            await setDoc(
-              clubRef,
-              {
-                defaultLineups: { ...clubInfo.defaultLineups, [mode]: lineup },
-              },
-              { merge: true },
-            );
+            const saved = await saveClubDefaultLineup(dataConnect, { clubId, mode, lineup });
+            savedRow(saved.data.lineup);
+            refresh();
             alert("Alineación base guardada.");
           }}
         />
@@ -544,10 +570,13 @@ export default function Agenda({
           ev={albumModalEvent}
           onClose={() => setAlbumModalEvent(null)}
           onSave={async (cleanUrls: string[]) => {
-            await updateDoc(item("events", albumModalEvent.id), {
-              photoUrls: cleanUrls,
-              photoUrl: cleanUrls.length > 0 ? cleanUrls[0] : null,
+            const saved = await replaceClubEventAlbum(dataConnect, {
+              id: albumModalEvent.id,
+              clubId,
+              urls: cleanUrls,
             });
+            savedRow(saved.data.event);
+            refresh();
             setAlbumModalEvent(null);
           }}
         />
@@ -563,7 +592,19 @@ export default function Agenda({
               setStatsModalEvent(null);
               return;
             }
-            await updateDoc(item("events", statsModalEvent.id), statsData);
+            const saved = await replaceClubEventStats(dataConnect, {
+              id: statsModalEvent.id,
+              clubId,
+              stats: {
+                mvp: statsData.mvp || "",
+                goals: statsData.stats || [],
+                yellowCards: statsData.yellowCards || [],
+                redCards: statsData.redCards || [],
+                goalkeepers: statsData.goalkeepers || [],
+              },
+            });
+            savedRow(saved.data.event);
+            refresh();
             setStatsModalEvent(null);
           }}
         />

@@ -19,7 +19,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useModalLock } from "../../hooks/useModalLock";
 import { C } from "../ui";
-import { PLATFORM_NAME } from "../../lib/clubDefaults";
+import { usePlatformChrome } from "../../features/shell/usePlatformChrome";
 import { hasAnySocial } from "../../lib/social";
 import SocialLinks from "./SocialLinks";
 
@@ -45,13 +45,16 @@ export default function PlatformLayout({
   landing?: boolean;
   flush?: boolean;
 }) {
-  const { user, isSuperAdmin, logout, platformConfig } = useAuth();
+  const { user, isSuperAdmin, logout } = useAuth();
+  const chrome = usePlatformChrome(true);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const brandName = platformConfig?.name?.trim() || PLATFORM_NAME;
-  const logoUrl = platformConfig?.logoUrl?.trim();
-  const motto = platformConfig?.motto?.trim() || "";
+  const brandName = chrome.brandName;
+  const logoUrl = chrome.logoUrl || "";
+  const motto = chrome.motto;
+  const showCourts = chrome.courtsEnabled;
+  const social = chrome.social;
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
     return tab === "competition" ||
@@ -202,7 +205,7 @@ export default function PlatformLayout({
           pathname === "/equipos",
           true,
         )}
-        {platformConfig?.courtsEnabled &&
+        {showCourts &&
           navLink(
             "/canchas",
             "Renta una cancha",
@@ -367,7 +370,7 @@ export default function PlatformLayout({
               <Link to="/equipos" onClick={() => onDestinationClick("/equipos")}>
                 <Shield size={16} /> Equipos
               </Link>
-              {platformConfig?.courtsEnabled && (
+              {showCourts && (
                 <Link to="/canchas" onClick={() => onDestinationClick("/canchas")}>
                   <MapPin size={16} /> Renta una cancha
                 </Link>
@@ -385,10 +388,10 @@ export default function PlatformLayout({
                 <Mail size={16} /> Contacto
               </Link>
             </nav>
-            {hasAnySocial(platformConfig?.social) && (
+            {hasAnySocial(social) && (
               <div className="platform-footer__social">
                 <p className="platform-footer__label">Síguenos</p>
-                <SocialLinks social={platformConfig?.social} tone="dark" />
+                <SocialLinks social={social} tone="dark" />
               </div>
             )}
           </div>

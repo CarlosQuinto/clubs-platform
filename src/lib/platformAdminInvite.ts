@@ -9,10 +9,10 @@ export type SendPlatformAdminInviteResult = {
 };
 
 export async function sendPlatformAdminInvite(email: string) {
-  const fn = httpsCallable<{ email: string }, SendPlatformAdminInviteResult>(
+  const fn = httpsCallable<{ email: string; mailOnly: boolean }, SendPlatformAdminInviteResult>(
     functions,
     "sendPlatformAdminInvite",
   );
-  const res = await fn({ email });
+  const res = await fn({ email, mailOnly: true });
   return res.data;
 }

@@ -18,7 +18,7 @@ interface TransactionFormProps {
     category: string;
     amount: number;
     date: string;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 export function TransactionForm({ onSubmit }: TransactionFormProps) {
@@ -28,21 +28,24 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
   const [category, setCategory] = useState("Cuotas");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount || isNaN(parseFloat(amount))) return;
 
-    onSubmit({
-      type,
-      description,
-      category,
-      amount: parseFloat(amount),
-      date,
-    });
-
-    // Reseteo rápido
-    setDescription("");
-    setAmount("");
+    try {
+      await onSubmit({
+        type,
+        description,
+        category,
+        amount: parseFloat(amount),
+        date,
+      });
+      setDescription("");
+      setAmount("");
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar.");
+    }
   };
 
   // Color dinámico según el tipo de movimiento

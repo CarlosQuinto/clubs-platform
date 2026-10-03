@@ -253,9 +253,10 @@ export function suggestSlots(opts: {
   courts: Court[];
   holds: CourtHold[];
   ignoreMatchId?: string;
+  clubBusy?: Array<{ date: string; start: number; end: number }>;
 }): SlotSuggestion[] {
   const active = opts.courts
-    .filter((court) => court.active)
+    .filter((court) => court.active && court.football !== false)
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   const found: SlotSuggestion[] = [];
   for (let offset = 0; offset < opts.days && found.length < 3; offset += 1) {
@@ -272,6 +273,10 @@ export function suggestSlots(opts: {
     const starts = slotStartsIn(shared, opts.slotMinutes, opts.duration);
     for (const start of starts) {
       const end = start + opts.duration;
+      const clubTaken = opts.clubBusy?.some(
+        (busy) => busy.date === date && rangesOverlap(start, end, busy.start, busy.end),
+      );
+      if (clubTaken) continue;
       const court = active.find((item) =>
         isRangeFree(opts.holds, item.id, date, start, end, opts.ignoreMatchId),
       );

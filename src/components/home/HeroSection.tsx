@@ -10,8 +10,10 @@ import {
   Link as LinkIcon,
   LayoutTemplate,
 } from "lucide-react";
-import { setDoc } from "firebase/firestore";
 import { getStorage, ref, deleteObject } from "firebase/storage";
+import { clearClubHeroes, insertClubHeroes, saveClubPortada } from "../../../dataconnect/generated";
+import { dataConnect } from "../../lib/sqlConnect";
+import { requestClubRefresh } from "../../features/club/useClubScreen";
 import { useClub } from "../../context/ClubContext";
 import { uploadImageFile } from "../../lib/uploadImage";
 import {
@@ -42,8 +44,10 @@ export default function HeroSection({
   perms,
   setLightboxData,
 }: HeroSectionProps) {
-  const { clubRef, storagePath } = useClub();
+  const { storagePath } = useClub();
   const [isEditingClubInfo, setIsEditingClubInfo] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [editClubName, setEditClubName] = useState(clubInfo.name || "");
   const [editClubDesc, setEditClubDesc] = useState(clubInfo.description || "");
 
@@ -180,48 +184,61 @@ export default function HeroSection({
 
   const handleSaveClubInfo = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError("");
 
     const validImages = editHeroImages
       .map((url) => url.trim())
       .filter((url) => url !== "");
+    const images = validImages.length > 0 ? validImages : [DEFAULT_HERO_IMAGE];
 
-    const oldImages = clubInfo.heroImages || [];
-    const allTrackedImages = [...oldImages, ...newlyUploadedImages];
+    setSaving(true);
+    try {
+      const result = await saveClubPortada(dataConnect, {
+        id: clubInfo.id,
+        name: editClubName.trim().slice(0, 160),
+        description: editClubDesc.trim(),
+        location: editLocation.trim().slice(0, 160),
+      });
+      if (result.data.club == null) {
+        setSaveError("No se pudo guardar la portada.");
+        return;
+      }
+      await clearClubHeroes(dataConnect, { id: clubInfo.id });
+      const heroes = await insertClubHeroes(dataConnect, { id: clubInfo.id, urls: images });
+      if (heroes.data.hero == null) {
+        setSaveError("No se pudo guardar la portada.");
+        return;
+      }
 
-    const imagesToDelete = allTrackedImages.filter((trackedUrl: string) => {
-      return (
-        !validImages.includes(trackedUrl) &&
-        trackedUrl.includes("firebasestorage.googleapis.com")
-      );
-    });
-
-    if (imagesToDelete.length > 0) {
-      const storage = getStorage();
-      for (const urlToDelete of imagesToDelete) {
-        try {
-          await deleteObject(ref(storage, urlToDelete));
-          console.log("Archivo huérfano eliminado con éxito:", urlToDelete);
-        } catch (error) {
-          console.error("No se pudo eliminar el archivo huérfano:", error);
+      const oldImages = clubInfo.heroImages || [];
+      const allTrackedImages = [...oldImages, ...newlyUploadedImages];
+      const imagesToDelete = allTrackedImages.filter((trackedUrl: string) => {
+        return (
+          !images.includes(trackedUrl) &&
+          trackedUrl.includes("firebasestorage.googleapis.com")
+        );
+      });
+      if (imagesToDelete.length > 0) {
+        const storage = getStorage();
+        for (const urlToDelete of imagesToDelete) {
+          try {
+            await deleteObject(ref(storage, urlToDelete));
+          } catch (error) {
+            console.error("No se pudo eliminar el archivo huérfano:", error);
+          }
         }
       }
+
+      requestClubRefresh();
+      setNewlyUploadedImages([]);
+      setCurrentHeroIndex(0);
+      setIsEditingClubInfo(false);
+    } catch (error) {
+      console.error(error);
+      setSaveError("No se pudo guardar la portada.");
+    } finally {
+      setSaving(false);
     }
-
-    await setDoc(
-      clubRef,
-      {
-        name: editClubName.trim(),
-        description: editClubDesc.trim(),
-        location: editLocation.trim(),
-        heroImages:
-          validImages.length > 0 ? validImages : [DEFAULT_HERO_IMAGE],
-      },
-      { merge: true },
-    );
-
-    setNewlyUploadedImages([]);
-    setCurrentHeroIndex(0);
-    setIsEditingClubInfo(false);
   };
 
   return (
@@ -655,6 +672,11 @@ export default function HeroSection({
               </button>
             </div>
 
+            {saveError ? (
+              <p style={{ margin: 0, color: C.red, fontSize: "0.75rem", fontWeight: 700 }}>
+                {saveError}
+              </p>
+            ) : null}
             <div style={{ display: "flex", gap: "0.4rem" }}>
               <SecondaryButton
                 type="button"
@@ -671,9 +693,9 @@ export default function HeroSection({
                   fontSize: "0.75rem",
                   opacity: uploadingIndex !== null ? 0.7 : 1,
                 }}
-                disabled={uploadingIndex !== null}
+                disabled={uploadingIndex !== null || saving}
               >
-                {uploadingIndex !== null ? "Procesando..." : "Guardar Cambios"}
+                {uploadingIndex !== null || saving ? "Procesando..." : "Guardar Cambios"}
               </PrimaryButton>
             </div>
           </form>

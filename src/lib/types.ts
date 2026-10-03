@@ -232,7 +232,10 @@ export interface CourtHold {
   endTime: string;
   source: CourtHoldSource;
   matchId?: string;
+  homeClubName?: string;
+  awayClubName?: string;
   note?: string;
+  guestEmail?: string;
 }
 
 export type InquiryStatus = "new" | "done";

@@ -220,6 +220,96 @@ export function passwordResetEmailText(opts: {
   ].join("\n");
 }
 
+export type CourtBookingKind = "created" | "updated" | "cancelled";
+
+export type CourtBookingSlot = {
+  courtName: string;
+  startLabel: string;
+  endLabel: string;
+  durationLabel: string;
+  priceLabel: string;
+};
+
+const BOOKING_LEAD: Record<CourtBookingKind, string> = {
+  created: "Tu renta de cancha quedó confirmada.",
+  updated: "Tu renta de cancha fue modificada.",
+  cancelled: "Tu renta de cancha fue cancelada.",
+};
+
+export function courtBookingSubject(kind: CourtBookingKind, platformName: string) {
+  if (kind === "updated") return `Tu renta en ${platformName} fue modificada`;
+  if (kind === "cancelled") return `Tu renta en ${platformName} fue cancelada`;
+  return `Tu renta en ${platformName} quedó confirmada`;
+}
+
+function bookingSlotLines(slot: CourtBookingSlot, dateLabel: string) {
+  return [
+    `Cancha: ${slot.courtName}`,
+    `Día: ${dateLabel}`,
+    `Horario: ${slot.startLabel} a ${slot.endLabel}`,
+    `Duración: ${slot.durationLabel}`,
+    `Precio: ${slot.priceLabel}`,
+  ];
+}
+
+export function courtBookingEmailHtml(opts: {
+  platformName: string;
+  kind: CourtBookingKind;
+  dateLabel: string;
+  note: string;
+  slots: CourtBookingSlot[];
+}) {
+  const platformName = escapeHtml(opts.platformName);
+  const slots = opts.slots
+    .map(
+      (slot) => `
+      <p>
+        <strong>${escapeHtml(slot.courtName)}</strong><br>
+        ${escapeHtml(opts.dateLabel)}<br>
+        ${escapeHtml(slot.startLabel)} a ${escapeHtml(slot.endLabel)}<br>
+        Duración: ${escapeHtml(slot.durationLabel)}<br>
+        Precio: ${escapeHtml(slot.priceLabel)}
+      </p>`,
+    )
+    .join("");
+  const note = opts.note.trim()
+    ? `<p>Nota: ${escapeHtml(opts.note.trim())}</p>`
+    : "";
+  return `
+    <div style="font-family:Inter,system-ui,sans-serif;color:#292621;line-height:1.5;max-width:520px">
+      <p>Hola:</p>
+      <p>${escapeHtml(BOOKING_LEAD[opts.kind])}</p>
+      ${slots}
+      ${note}
+      ${mailClose(platformName)}
+    </div>
+  `;
+}
+
+export function courtBookingEmailText(opts: {
+  platformName: string;
+  kind: CourtBookingKind;
+  dateLabel: string;
+  note: string;
+  slots: CourtBookingSlot[];
+}) {
+  const slots = opts.slots.flatMap((slot) => ["", ...bookingSlotLines(slot, opts.dateLabel)]);
+  const note = opts.note.trim() ? ["", `Nota: ${opts.note.trim()}`] : [];
+  return [
+    "Hola:",
+    "",
+    BOOKING_LEAD[opts.kind],
+    ...slots,
+    ...note,
+    "",
+    "Si no esperabas este correo, puedes ignorarlo.",
+    "",
+    "Gracias,",
+    "",
+    `El equipo de ${opts.platformName}`,
+  ].join("\n");
+}
+
 export function teamApprovedEmailHtml(opts: {
   kind: "signup" | "accept";
   platformName: string;

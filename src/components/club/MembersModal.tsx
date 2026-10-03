@@ -9,6 +9,16 @@ import { X, UserPlus, Mail, Trash2, UserCog } from "lucide-react";
 import { useClub } from "../../context/ClubContext";
 import { useAuth } from "../../context/AuthContext";
 import {
+  changeMemberRole,
+  dropClubInvite,
+  dropMember,
+  inviteClubAdmin,
+  loadClubPeople,
+} from "../../features/admin/commands";
+import { MemberRole } from "../../../dataconnect/generated";
+import { emailKey } from "../../lib/paths";
+import { isEmail } from "../../lib/textLimits";
+import {
   inviteRespondPath,
   sendClubInvite,
   type InviteKind,
@@ -48,12 +58,30 @@ interface Invite {
  * Gestión de miembros e invitaciones de un club.
  * Visible para el rol `admin` del club y para super administradores.
  */
+const ROLE_SQL: Record<Role, MemberRole> = {
+  admin: MemberRole.ADMIN,
+  dt: MemberRole.DT,
+  prensa: MemberRole.PRENSA,
+  tesorero: MemberRole.TESORERO,
+};
+
+const SQL_ROLE: Record<MemberRole, Role> = {
+  [MemberRole.ADMIN]: "admin",
+  [MemberRole.DT]: "dt",
+  [MemberRole.PRENSA]: "prensa",
+  [MemberRole.TESORERO]: "tesorero",
+};
+
 export default function MembersModal({
   clubName,
   onClose,
+  sql = false,
+  slug,
 }: {
   clubName: string;
   onClose: () => void;
+  sql?: boolean;
+  slug?: string;
 }) {
   const { clubId, col, item } = useClub();
   const { user } = useAuth();
@@ -70,7 +98,36 @@ export default function MembersModal({
 
   useModalLock(onClose);
 
+  const reloadSql = async () => {
+    const data = await loadClubPeople(clubId);
+    setMembers(
+      data.clubMembers
+        .map((member) => ({
+          id: member.user.id,
+          email: member.email,
+          displayName: member.displayName,
+          role: SQL_ROLE[member.role],
+        }))
+        .sort((a, b) => a.email.localeCompare(b.email)),
+    );
+    setInvites(
+      data.clubInvites
+        .map((invite) => ({
+          id: invite.emailKey,
+          email: invite.email,
+          role: SQL_ROLE[invite.role],
+          kind: invite.kind === "ACCEPT" ? "accept" as const : "signup" as const,
+          token: invite.token || "",
+        }))
+        .sort((a, b) => a.email.localeCompare(b.email)),
+    );
+  };
+
   useEffect(() => {
+    if (sql) {
+      void reloadSql().catch((err: unknown) => console.error(err));
+      return;
+    }
     const unsubM = onSnapshot(col("members"), (snap) => {
       const list = snap.docs.map(
         (d) => ({ id: d.id, ...d.data() }) as Member,
@@ -93,13 +150,13 @@ export default function MembersModal({
       unsubM();
       unsubI();
     };
-  }, [col]);
+  }, [col, sql, clubId]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     const clean = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    if (!isEmail(clean)) {
       setError("Escribe un correo válido.");
       return;
     }
@@ -109,12 +166,43 @@ export default function MembersModal({
     }
     try {
       setBusy(true);
-      const result = await sendClubInvite({ clubId, email: clean, role });
+      const result = sql
+        ? await (async () => {
+            const token = crypto.randomUUID().replace(/-/g, "");
+            const key = emailKey(clean);
+            const sent = await sendClubInvite({
+              clubId,
+              email: clean,
+              role,
+              mailOnly: true,
+              token,
+              clubName,
+              slug: slug || clubId,
+            }).catch(() => null);
+            const kind = sent?.kind === "accept" ? "ACCEPT" : "SIGNUP";
+            await inviteClubAdmin({
+              clubId,
+              emailKey: key,
+              email: clean,
+              role: ROLE_SQL[role],
+              token,
+              kind,
+              platform: false,
+            });
+            await reloadSql();
+            return {
+              url: sent?.url || inviteRespondPath(clubId, key, token),
+              kind: sent?.kind || "signup",
+              mailed: sent?.mailed ?? false,
+            };
+          })()
+        : await sendClubInvite({ clubId, email: clean, role });
       setLastInvite(clean);
       setLastInviteUrl(result.url);
       setLastInviteKind(result.kind);
       setLastMailed(result.mailed);
       setEmail("");
+      setRole("admin");
     } catch (err) {
       console.error(err);
       const code = (err as { code?: string }).code || "";
@@ -133,6 +221,11 @@ export default function MembersModal({
   };
 
   const changeRole = async (m: Member, newRole: Role) => {
+    if (sql) {
+      await changeMemberRole(clubId, m.id, ROLE_SQL[newRole]);
+      await reloadSql();
+      return;
+    }
     await updateDoc(item("members", m.id), { role: newRole });
   };
 
@@ -142,13 +235,23 @@ export default function MembersModal({
       ? "Vas a quitarte a ti mismo del club y perderás el acceso de gestión. ¿Continuar?"
       : `¿Quitar a ${m.email} del club?`;
     if (window.confirm(msg)) {
-      await deleteDoc(item("members", m.id));
+      if (sql) {
+        await dropMember(clubId, m.id);
+        await reloadSql();
+      } else {
+        await deleteDoc(item("members", m.id));
+      }
     }
   };
 
   const removeInvite = async (inv: Invite) => {
-    await deleteDoc(item("invites", inv.id));
-    await clearSignupInvite(inv.email).catch(() => {});
+    if (sql) {
+      await dropClubInvite(clubId, inv.id);
+      await reloadSql();
+    } else {
+      await deleteDoc(item("invites", inv.id));
+      await clearSignupInvite(inv.email).catch(() => {});
+    }
     if (lastInvite === inv.email) setLastInvite("");
   };
 
@@ -213,8 +316,10 @@ export default function MembersModal({
             type="email"
             placeholder="correo@ejemplo.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError("");
+            }}
           />
           <div className="members-invite__row">
             <FormSelect
@@ -229,7 +334,7 @@ export default function MembersModal({
             </FormSelect>
             <PrimaryButton
               type="submit"
-              disabled={busy}
+              disabled={busy || !isEmail(email.trim())}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -243,9 +348,9 @@ export default function MembersModal({
             </PrimaryButton>
           </div>
         </form>
-        {error && (
+        {(error || (email.trim() && !isEmail(email.trim()))) && (
           <p style={{ color: C.red, fontSize: "0.72rem", margin: "0.35rem 0 0" }}>
-            {error}
+            {error || "Escribe un correo válido."}
           </p>
         )}
         {lastInvite && (

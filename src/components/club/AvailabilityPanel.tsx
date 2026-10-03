@@ -1,43 +1,41 @@
 import { useEffect, useState } from "react";
-import { onSnapshot, setDoc } from "firebase/firestore";
 import { Calendar } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { clearClubAvailability, insertClubAvailability } from "../../../dataconnect/generated";
+import { dataConnect } from "../../lib/sqlConnect";
+import { requestClubRefresh } from "../../features/club/useClubScreen";
+import { savedRow } from "../../features/club/saved";
 import WindowsEditor from "../courts/WindowsEditor";
 import { C, PrimaryButton, SectionCard } from "../ui";
 import { readWindows } from "../../lib/courts";
-import { availabilityRef } from "../../lib/paths";
 import type { TimeWindow } from "../../lib/types";
 
-export default function AvailabilityPanel({ clubId }: { clubId: string }) {
-  const { user } = useAuth();
-  const [windows, setWindows] = useState<TimeWindow[]>([]);
-  const [ready, setReady] = useState(false);
+export default function AvailabilityPanel({
+  clubId,
+  windows,
+}: {
+  clubId: string;
+  windows: TimeWindow[];
+}) {
+  const [draft, setDraft] = useState<TimeWindow[]>(windows);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setReady(false);
-    const unsub = onSnapshot(
-      availabilityRef(clubId),
-      (snap) => {
-        setWindows(readWindows(snap.data()?.windows));
-        setReady(true);
-      },
-      (err) => {
-        console.error(err);
-        setReady(true);
-      },
-    );
-    return () => unsub();
-  }, [clubId]);
+    setDraft(windows);
+  }, [windows]);
 
   const save = async () => {
     setBusy(true);
     try {
-      await setDoc(availabilityRef(clubId), {
-        windows: readWindows(windows),
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.uid || "",
-      });
+      const next = readWindows(draft);
+      await clearClubAvailability(dataConnect, { clubId });
+      if (next.length > 0) {
+        const saved = await insertClubAvailability(dataConnect, {
+          clubId,
+          windows: next,
+        });
+        savedRow(saved.data.window);
+      }
+      requestClubRefresh();
     } catch (err) {
       console.error(err);
       alert("No se pudo guardar la disponibilidad.");
@@ -53,16 +51,10 @@ export default function AvailabilityPanel({ clubId }: { clubId: string }) {
           <p style={{ margin: 0, color: C.gray500, fontSize: "0.8rem" }}>
             Días y horas en que el equipo puede jugar. Puedes poner más de un rango por día.
           </p>
-          {!ready ? (
-            <p style={{ margin: 0, color: C.gray400, fontSize: "0.8rem" }}>Cargando…</p>
-          ) : (
-            <>
-              <WindowsEditor windows={windows} onChange={setWindows} />
-              <PrimaryButton type="button" disabled={busy} onClick={() => void save()}>
-                {busy ? "Guardando…" : "Guardar disponibilidad"}
-              </PrimaryButton>
-            </>
-          )}
+          <WindowsEditor windows={draft} onChange={setDraft} />
+          <PrimaryButton type="button" disabled={busy} onClick={() => void save()}>
+            {busy ? "Guardando…" : "Guardar disponibilidad"}
+          </PrimaryButton>
         </div>
       </SectionCard>
     </div>

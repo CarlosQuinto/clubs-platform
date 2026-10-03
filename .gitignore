@@ -12,6 +12,9 @@ dist-ssr/
 
 # Caché de Firebase
 .firebase/
+dataconnect-debug.log
+firebase-debug.log
+firebase-debug.*.log
 
 # Variables de entorno locales (usa .env.example como plantilla)
 .env
@@ -21,5 +24,6 @@ functions/.env
 
 .agents/
 serviceAccountKey.json
+exports/
 firestore.rules.prod.bak
 firestore.rules.seed

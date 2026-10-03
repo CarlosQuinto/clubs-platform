@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { getDocs } from "firebase/firestore";
 import { ChevronRight, Goal, Trophy } from "lucide-react";
-import { clubCol } from "../../lib/paths";
 import type { ClubSummary, ScorerRow, StandingRow } from "../../lib/types";
 import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
 import { C, RADIUS, SHADOWS, SectionCard } from "../ui";
@@ -168,12 +166,11 @@ export function ScorersTable({
   clubsById,
   clubNames,
 }: {
-  scorers: ScorerRow[];
+  scorers: Array<ScorerRow & { imageUrl?: string }>;
   clubsById: Record<string, ClubSummary>;
   clubNames: Record<string, string>;
 }) {
   const top = scorers.slice(0, 5);
-  const photos = usePlayerPhotos(top);
 
   return (
     <SectionCard
@@ -190,7 +187,7 @@ export function ScorersTable({
           {top.map((s, i) => {
             const club = clubsById[s.clubId];
             const key = `${s.clubId}:${s.playerId}`;
-            const photo = photos[key];
+            const photo = s.imageUrl;
             const gold = i === 0;
             return (
               <div
@@ -418,63 +415,4 @@ function avatarFallback(name: string) {
 
 function playerPhotoSrc(name: string, imageUrl?: string) {
   return imageUrl || avatarFallback(name);
-}
-
-function usePlayerPhotos(rows: ScorerRow[]) {
-  const [photos, setPhotos] = useState<Record<string, string>>({});
-  const keys = rows.map((r) => `${r.clubId}:${r.playerId}`).join("|");
-
-  useEffect(() => {
-    if (rows.length === 0) {
-      setPhotos({});
-      return;
-    }
-    let cancelled = false;
-    const clubIds = [...new Set(rows.map((r) => r.clubId))];
-    void Promise.all(
-      clubIds.map(async (clubId) => {
-        const snap = await getDocs(clubCol(clubId, "players"));
-        return snap.docs.map((d) => {
-          const data = d.data() as { name?: string; imageUrl?: string };
-          return {
-            clubId,
-            id: d.id,
-            name: data.name || "",
-            imageUrl: data.imageUrl || "",
-          };
-        });
-      }),
-    )
-      .then((groups) => {
-        if (cancelled) return;
-        const players = groups.flat();
-        const next: Record<string, string> = {};
-        for (const r of rows) {
-          const key = `${r.clubId}:${r.playerId}`;
-          const found =
-            players.find((p) => p.clubId === r.clubId && p.id === r.playerId) ||
-            players.find(
-              (p) =>
-                p.clubId === r.clubId &&
-                p.name.toLowerCase() === r.name.toLowerCase(),
-            ) ||
-            players.find(
-              (p) =>
-                p.clubId === r.clubId &&
-                p.name.toLowerCase() === r.playerId.toLowerCase(),
-            );
-          next[key] = found?.imageUrl || "";
-        }
-        setPhotos(next);
-      })
-      .catch(() => {
-        if (!cancelled) setPhotos({});
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keys]);
-
-  return photos;
 }

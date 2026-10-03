@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { onSnapshot, type DocumentData } from "firebase/firestore";
-import { isAdPlacement, type Ad } from "../lib/ads";
+import { isAdPlacement, statusFromDates, type Ad, type AdStatus } from "../lib/ads";
 import { adsCol } from "../lib/paths";
 
 function asAd(id: string, data: DocumentData): Ad | null {
@@ -9,15 +9,19 @@ function asAd(id: string, data: DocumentData): Ad | null {
   }
   const rawPlacements = Array.isArray(data.placements) ? data.placements : [];
   const placements = rawPlacements.filter(isAdPlacement);
+  const startsAt = typeof data.startsAt === "string" ? data.startsAt : "";
+  const endsAt = typeof data.endsAt === "string" ? data.endsAt : "";
+  const status: AdStatus =
+    data.active === true ? statusFromDates(startsAt, endsAt) : "PAUSADO";
   return {
     id,
     brand: data.brand,
     imageUrl: data.imageUrl,
     href: typeof data.href === "string" ? data.href : "",
     placements,
-    startsAt: typeof data.startsAt === "string" ? data.startsAt : "",
-    endsAt: typeof data.endsAt === "string" ? data.endsAt : "",
-    active: data.active === true,
+    startsAt,
+    endsAt,
+    status,
     order: typeof data.order === "number" ? data.order : 0,
     hasLegacyPlacement: rawPlacements.some((item) => !isAdPlacement(item)),
   };

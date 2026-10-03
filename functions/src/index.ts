@@ -11,6 +11,11 @@ import {
   platformAdminInviteEmailText,
   passwordResetEmailHtml,
   passwordResetEmailText,
+  courtBookingEmailHtml,
+  courtBookingEmailText,
+  courtBookingSubject,
+  type CourtBookingKind,
+  type CourtBookingSlot,
   roleLabel,
   sendGmail,
   teamApprovedEmailHtml,
@@ -22,6 +27,15 @@ import {
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
+
+async function sqlAdmin() {
+  const { getDataConnect } = await import("firebase-admin/data-connect");
+  return getDataConnect({
+    location: "us-east4",
+    serviceId: "clubs-platform-aem9u-service",
+    connector: "app",
+  });
+}
 
 const APP_URL = process.env.APP_URL || "https://clubs-platform-aem9u.web.app";
 const ROLES = ["admin", "dt", "prensa", "tesorero"] as const;
@@ -42,12 +56,28 @@ async function userExists(email: string) {
   }
 }
 
+async function assertSuperAdmin(uid: string) {
+  const sql = await sqlAdmin();
+  const result = await sql.executeQuery<{ platformAdmin?: { email: string } | null }, { id: string }>(
+    "PlatformAdminById",
+    { id: uid },
+  );
+  if (!result.data.platformAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Solo un superadmin puede revisar solicitudes.",
+    );
+  }
+}
+
 async function assertClubAdmin(uid: string, clubId: string) {
-  const config = await db.doc("platform/config").get();
-  const superAdmins = (config.data()?.superAdmins || []) as string[];
-  if (superAdmins.includes(uid)) return;
-  const member = await db.doc(`clubs/${clubId}/members/${uid}`).get();
-  if (member.data()?.role === "admin") return;
+  const sql = await sqlAdmin();
+  const result = await sql.executeQuery<
+    { platformAdmin?: { email: string } | null; clubMember?: { role: string } | null },
+    { clubId: string; userId: string }
+  >("ClubAdminGate", { clubId, userId: uid });
+  if (result.data.platformAdmin) return;
+  if (result.data.clubMember?.role === "ADMIN") return;
   throw new HttpsError(
     "permission-denied",
     "Solo el presidente o un superadmin puede invitar.",
@@ -95,6 +125,35 @@ export const sendClubInvite = onCall(CALLABLE, async (request) => {
   }
 
   await assertClubAdmin(request.auth.uid, clubId);
+
+  if (request.data?.mailOnly) {
+    const token = String(request.data.token || "").trim();
+    const slug = String(request.data.slug || clubId);
+    const clubName = String(request.data.clubName || clubId);
+    const key = emailKey(email);
+    const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
+    const urls = inviteUrls(clubId, email, key, token, kind, slug);
+    const platformName = await platformDisplayName();
+    const content = {
+      kind,
+      platformName,
+      clubName,
+      role,
+      actionUrl: urls.actionUrl,
+      declineUrl: urls.declineUrl,
+    };
+    const mailed = await sendGmail({
+      to: email,
+      subject:
+        kind === "signup"
+          ? `Te invitaron a ${clubName} en ${platformName}`
+          : `¿Aceptas ser ${roleLabel(role)} de ${clubName}?`,
+      html: inviteEmailHtml(content),
+      text: inviteEmailText(content),
+      fromName: platformName,
+    });
+    return { kind, mailed, url: urls.copyUrl };
+  }
 
   const club = await db.doc(`clubs/${clubId}`).get();
   if (!club.exists) {
@@ -211,16 +270,6 @@ function normalizeSlug(input: string) {
     .slice(0, 40);
 }
 
-async function assertSuperAdmin(uid: string) {
-  const config = await db.doc("platform/config").get();
-  const superAdmins = (config.data()?.superAdmins || []) as string[];
-  if (!superAdmins.includes(uid)) {
-    throw new HttpsError(
-      "permission-denied",
-      "Solo un superadmin puede revisar solicitudes.",
-    );
-  }
-}
 
 async function slugTaken(slug: string) {
   if (RESERVED_SLUGS.includes(slug)) return true;
@@ -257,6 +306,55 @@ export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
   const action = String(request.data?.action || "").trim();
   if (!applicationId || !["approve", "reject"].includes(action)) {
     throw new HttpsError("invalid-argument", "La revisión no es válida.");
+  }
+
+  if (request.data?.prepared) {
+    const teamName = String(request.data.teamName || "").trim();
+    const captainName = String(request.data.captainName || "").trim();
+    const captainEmail = String(request.data.captainEmail || "").trim().toLowerCase();
+    if (!teamName || !captainEmail) {
+      throw new HttpsError("invalid-argument", "Faltan los datos del correo.");
+    }
+    const brand = await platformContact();
+    const kind: InviteKind = (await userExists(captainEmail)) ? "accept" : "signup";
+    if (action === "reject") {
+      const actionUrl = `${APP_URL}/registrar-equipo`;
+      const content = {
+        platformName: brand.name,
+        teamName,
+        captainName,
+        actionUrl,
+        whatsapp: brand.whatsapp,
+      };
+      const mailed = await sendGmail({
+        to: captainEmail,
+        subject: `No registramos a ${teamName}`,
+        html: teamRejectedEmailHtml(content),
+        text: teamRejectedEmailText(content),
+        fromName: brand.name,
+      });
+      return { ok: true, action, mailed };
+    }
+    const clubId = String(request.data.clubId || "").trim();
+    const slug = String(request.data.slug || "").trim();
+    const token = String(request.data.token || "").trim();
+    const key = String(request.data.emailKey || emailKey(captainEmail));
+    const urls = inviteUrls(clubId, captainEmail, key, token, kind, slug);
+    const content = {
+      kind,
+      platformName: brand.name,
+      teamName,
+      captainName,
+      actionUrl: urls.actionUrl,
+    };
+    const mailed = await sendGmail({
+      to: captainEmail,
+      subject: `${teamName} ya está en ${brand.name}`,
+      html: teamApprovedEmailHtml(content),
+      text: teamApprovedEmailText(content),
+      fromName: brand.name,
+    });
+    return { ok: true, action, mailed, clubId, slug, kind, url: urls.copyUrl };
   }
 
   const appRef = db.doc(`teamApplications/${applicationId}`);
@@ -482,6 +580,30 @@ export const sendPlatformAdminInvite = onCall(CALLABLE, async (request) => {
   await assertSuperAdmin(request.auth.uid);
 
   const email = String(request.data?.email || "").trim().toLowerCase();
+  if (request.data?.mailOnly) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "El correo no es válido.");
+    }
+    const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
+    const actionUrl =
+      kind === "signup"
+        ? `${APP_URL}/registro?email=${encodeURIComponent(email)}`
+        : `${APP_URL}/login`;
+    const platformName = await platformDisplayName();
+    const content = { kind, platformName, actionUrl };
+    const subject =
+      kind === "signup"
+        ? `Te invitaron a administrar ${platformName}`
+        : `Acepta administrar ${platformName}`;
+    const mailed = await sendGmail({
+      to: email,
+      subject,
+      html: platformAdminInviteEmailHtml(content),
+      text: platformAdminInviteEmailText(content),
+      fromName: platformName,
+    });
+    return { kind, mailed, url: actionUrl };
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
   }
@@ -603,6 +725,48 @@ export { notifyTournamentEnrollment, scheduleMatch } from "./scheduling";
 export { backfillMatchListings, syncMatchListing } from "./matchListings";
 
 export { migrateClubAvailability } from "./availability";
+
+/** Avisa por correo una renta de cancha: alta, cambio o cancelación. */
+export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Inicia sesión para avisar la renta.");
+  }
+  const to = String(request.data?.to || "").trim().toLowerCase();
+  const kind = String(request.data?.kind || "") as CourtBookingKind;
+  const dateLabel = String(request.data?.dateLabel || "").trim();
+  const note = String(request.data?.note || "");
+  const rawSlots = Array.isArray(request.data?.slots) ? request.data.slots : [];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    throw new HttpsError("invalid-argument", "El correo no es válido.");
+  }
+  if (kind !== "created" && kind !== "updated" && kind !== "cancelled") {
+    throw new HttpsError("invalid-argument", "El aviso no es válido.");
+  }
+  const slots: CourtBookingSlot[] = rawSlots.flatMap((item: unknown) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const courtName = String(row.courtName || "").trim();
+    const startLabel = String(row.startLabel || "").trim();
+    const endLabel = String(row.endLabel || "").trim();
+    const durationLabel = String(row.durationLabel || "").trim();
+    const priceLabel = String(row.priceLabel || "").trim();
+    if (!courtName || !startLabel || !endLabel) return [];
+    return [{ courtName, startLabel, endLabel, durationLabel, priceLabel }];
+  });
+  if (!slots.length || !dateLabel) {
+    throw new HttpsError("invalid-argument", "Faltan los datos de la renta.");
+  }
+  const platformName = await platformDisplayName();
+  const content = { platformName, kind, dateLabel, note, slots };
+  const mailed = await sendGmail({
+    to,
+    subject: courtBookingSubject(kind, platformName),
+    html: courtBookingEmailHtml(content),
+    text: courtBookingEmailText(content),
+    fromName: platformName,
+  });
+  return { mailed };
+});
 
 /** Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios. */
 export const requestPasswordReset = onCall(CALLABLE, async (request) => {

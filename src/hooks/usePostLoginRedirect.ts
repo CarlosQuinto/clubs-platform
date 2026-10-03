@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { usePlatformCatalog } from "./usePlatformCatalog";
 import {
   resolveUserDestinations,
   type LoginDestination,
@@ -15,19 +14,14 @@ export function usePostLoginRedirect({
   enabled: boolean;
   fallback?: string;
 }) {
-  const { user, loading, platformConfig } = useAuth();
-  const catalog = usePlatformCatalog();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [choices, setChoices] = useState<LoginDestination[] | null>(null);
   const [resolving, setResolving] = useState(false);
   const userRef = useRef(user);
-  const clubsRef = useRef(catalog.clubs);
   userRef.current = user;
-  clubsRef.current = catalog.clubs;
 
   const uid = user?.uid ?? null;
-  const configReady = platformConfig !== null;
-  const catalogReady = !catalog.loading;
 
   useEffect(() => {
     if (!uid) {
@@ -38,13 +32,11 @@ export function usePostLoginRedirect({
 
   useEffect(() => {
     const current = userRef.current;
-    if (!enabled || loading || !current || !catalogReady || !configReady) {
-      return;
-    }
+    if (!enabled || loading || !current) return;
 
     let cancelled = false;
     setResolving(true);
-    void resolveUserDestinations(current, clubsRef.current)
+    void resolveUserDestinations(current)
       .then((dests) => {
         if (cancelled) return;
         if (fallback.startsWith("/invitar")) {
@@ -66,7 +58,7 @@ export function usePostLoginRedirect({
     return () => {
       cancelled = true;
     };
-  }, [enabled, loading, uid, catalogReady, configReady, fallback, navigate]);
+  }, [enabled, loading, uid, fallback, navigate]);
 
   const go = (path: string) => {
     setChoices(null);

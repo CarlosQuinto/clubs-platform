@@ -11,6 +11,17 @@ export type AdPlacement = (typeof AD_PLACEMENTS)[number]["id"];
 
 const PLACEMENT_IDS = new Set<string>(AD_PLACEMENTS.map((item) => item.id));
 
+export const AD_STATUSES = ["PROGRAMADO", "EN_CURSO", "PAUSADO", "EXPIRADO"] as const;
+
+export type AdStatus = (typeof AD_STATUSES)[number];
+
+export const AD_STATUS_LABEL: Record<AdStatus, string> = {
+  PROGRAMADO: "Programado",
+  EN_CURSO: "En curso",
+  PAUSADO: "Pausado",
+  EXPIRADO: "Expirado",
+};
+
 export interface Ad {
   id: string;
   brand: string;
@@ -19,13 +30,11 @@ export interface Ad {
   placements: AdPlacement[];
   startsAt: string;
   endsAt: string;
-  active: boolean;
+  status: AdStatus;
   order: number;
   /** El documento guardaba una ubicación que la app ya no ofrece. */
   hasLegacyPlacement: boolean;
 }
-
-export type AdWindow = "scheduled" | "current" | "ended";
 
 /** Ubicaciones conocidas, sin duplicados, en el orden del inventario. */
 export function canonicalPlacements(ids: readonly AdPlacement[]): AdPlacement[] {
@@ -33,13 +42,49 @@ export function canonicalPlacements(ids: readonly AdPlacement[]): AdPlacement[] 
   return AD_PLACEMENTS.map((item) => item.id).filter((id) => selected.has(id));
 }
 
-export function adWindow(
-  ad: Pick<Ad, "startsAt" | "endsAt">,
+/** Fecha de calendario YYYY-MM-DD, aunque el valor traiga hora. */
+export function calendarDay(value: string) {
+  return value.slice(0, 10);
+}
+
+/** Estado que marcan las fechas. Pausado no sale de aquí. */
+export function statusFromDates(
+  startsAt: string,
+  endsAt: string,
   today = todayIso(),
-): AdWindow {
-  if (ad.startsAt && today < ad.startsAt) return "scheduled";
-  if (ad.endsAt && today > ad.endsAt) return "ended";
-  return "current";
+): Exclude<AdStatus, "PAUSADO"> {
+  const start = calendarDay(startsAt);
+  const end = calendarDay(endsAt);
+  if (end && today > end) return "EXPIRADO";
+  if (start && today < start) return "PROGRAMADO";
+  return "EN_CURSO";
+}
+
+/** Al crear o guardar fechas, un pausado vigente sigue pausado. */
+export function statusForSave(
+  startsAt: string,
+  endsAt: string,
+  current: AdStatus | null,
+  today = todayIso(),
+): AdStatus {
+  const fromDates = statusFromDates(startsAt, endsAt, today);
+  if (current === "PAUSADO" && fromDates === "EN_CURSO") return "PAUSADO";
+  return fromDates;
+}
+
+/**
+ * Al abrir el inventario, un programado ya iniciado pasa a en curso
+ * y uno cuyo fin ya pasó pasa a expirado. Null si no hay que escribir.
+ */
+export function statusOnOpen(
+  ad: Pick<Ad, "status" | "startsAt" | "endsAt">,
+  today = todayIso(),
+): AdStatus | null {
+  const end = calendarDay(ad.endsAt);
+  const start = calendarDay(ad.startsAt);
+  if (end && today > end && ad.status !== "EXPIRADO") return "EXPIRADO";
+  if (ad.status === "PROGRAMADO" && start <= today && today <= end) return "EN_CURSO";
+  return null;
 }
 
 export function isAdPlacement(value: unknown): value is AdPlacement {
@@ -102,12 +147,14 @@ export function isPlatformAdImageUrl(url: string) {
 }
 
 export function isAdLive(ad: Ad, placement: AdPlacement, today = todayIso()) {
+  const start = calendarDay(ad.startsAt);
+  const end = calendarDay(ad.endsAt);
   return (
-    ad.active &&
+    ad.status === "EN_CURSO" &&
     ad.placements.includes(placement) &&
     ad.imageUrl.trim().length > 0 &&
-    ad.startsAt <= today &&
-    today <= ad.endsAt
+    start <= today &&
+    today <= end
   );
 }
 
