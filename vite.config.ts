@@ -5,7 +5,7 @@ import {
   PLATFORM_NAME,
   PLATFORM_SHORT_NAME,
   PLATFORM_DESCRIPTION,
-} from "./src/lib/clubDefaults";
+} from "./src/domains/clubs/clubDefaults";
 
 export default defineConfig({
   plugins: [
@@ -14,7 +14,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        // Personaliza estos valores en src/lib/clubDefaults.ts
+        // Personaliza estos valores en src/domains/clubs/clubDefaults.ts
         name: PLATFORM_NAME,
         short_name: PLATFORM_SHORT_NAME,
         description: PLATFORM_DESCRIPTION,

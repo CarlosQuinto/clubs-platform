@@ -206,7 +206,7 @@ query AdminCourts($from: Date @retired) @auth(level: USER) {
     note
     guestEmail
     court { id }
-    match { id homeClub { name } awayClub { name } }
+    match { id homeClub { name } awayClub { name } tournament { durationMinutes } }
   }
 }
 
@@ -233,35 +233,47 @@ mutation BootstrapPlatformAdmin($userId: String!, $email: String!, $displayName:
 }
 
 mutation ClaimPlatformAdminInvite($emailKey: String!) @auth(level: USER) {
+  query @redact {
+    platformAdminInvite(key: { emailKey: $emailKey })
+      @check(expr: "this == null || this.email == auth.token.email", message: "La sesión no es del correo invitado.") {
+      email
+    }
+  }
+  ensured: _execute(
+    sql: """
+      INSERT INTO users (id, email, display_name, updated_at)
+      SELECT $1, email, '', CURRENT_TIMESTAMP
+      FROM platform_admin_invites
+      WHERE email_key = $2
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, updated_at = CURRENT_TIMESTAMP
+    """
+    params: [{ _expr: "auth.uid" }, $emailKey]
+  )
   admin: _executeReturningFirst(
     sql: """
-      WITH mine AS (
-        SELECT email FROM platform_admin_invites
-        WHERE email_key = $2 AND lower(email) = lower($3)
-      ),
-      ensured AS (
-        INSERT INTO users (id, email, display_name, updated_at)
-        SELECT $1, email, '', CURRENT_TIMESTAMP FROM mine
-        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, updated_at = CURRENT_TIMESTAMP
-        RETURNING id
-      ),
-      added AS (
-        INSERT INTO platform_admins (user_id, email)
-        SELECT e.id, m.email FROM ensured e CROSS JOIN mine m
-        ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email
-        RETURNING user_id AS id
-      ),
-      dropped_invite AS (
-        DELETE FROM platform_admin_invites
-        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM mine)
-      ),
-      dropped_signup AS (
-        DELETE FROM signup_invites
-        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM mine)
-      )
-      SELECT id FROM added
+      INSERT INTO platform_admins (user_id, email)
+      SELECT $1, email
+      FROM platform_admin_invites
+      WHERE email_key = $2
+      ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email
+      RETURNING user_id AS id
     """
-    params: [{ _expr: "auth.uid" }, $emailKey, { _expr: "auth.token.email" }]
+    params: [{ _expr: "auth.uid" }, $emailKey]
+  )
+  droppedSignup: _execute(
+    sql: """
+      DELETE FROM signup_invites
+      WHERE email_key = $1
+        AND EXISTS (SELECT 1 FROM platform_admin_invites WHERE email_key = $1)
+    """
+    params: [$emailKey]
+  )
+  droppedInvite: _execute(
+    sql: """
+      DELETE FROM platform_admin_invites
+      WHERE email_key = $1
+    """
+    params: [$emailKey]
   )
 }
 
@@ -499,60 +511,72 @@ mutation RemoveClubMember($clubId: String!, $userId: String!) @auth(level: USER)
 
 mutation AcceptClubInvite($clubId: String!, $emailKey: String!, $token: String!, $displayName: String!)
   @auth(level: USER) {
+  query @redact {
+    clubInvite(key: { clubId: $clubId, emailKey: $emailKey })
+      @check(expr: "this == null || this.email == auth.token.email", message: "La sesión no es del correo invitado.") {
+      email
+    }
+  }
+  ensured: _execute(
+    sql: """
+      INSERT INTO users (id, email, display_name, updated_at)
+      SELECT $4, email, $5, CURRENT_TIMESTAMP
+      FROM club_invites
+      WHERE club_id = $1 AND email_key = $2 AND token = $3
+      ON CONFLICT (id) DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        updated_at = CURRENT_TIMESTAMP
+    """
+    params: [$clubId, $emailKey, $token, { _expr: "auth.uid" }, $displayName]
+  )
   member: _executeReturningFirst(
     sql: """
-      WITH invite AS (
-        SELECT email, role FROM club_invites
-        WHERE club_id = $1 AND email_key = $2 AND token = $3
-          AND lower(email) = lower($5)
-      ),
-      ensured AS (
-        INSERT INTO users (id, email, display_name, updated_at)
-        SELECT $4, email, $6, CURRENT_TIMESTAMP FROM invite
-        ON CONFLICT (id) DO UPDATE SET
-          display_name = EXCLUDED.display_name,
-          updated_at = CURRENT_TIMESTAMP
-        RETURNING id
-      ),
-      joined AS (
-        INSERT INTO club_members (club_id, user_id, email, display_name, role, joined_at)
-        SELECT $1, e.id, i.email, $6, i.role, CURRENT_TIMESTAMP
-        FROM ensured e CROSS JOIN invite i
-        ON CONFLICT (club_id, user_id) DO UPDATE SET role = EXCLUDED.role
-        RETURNING user_id AS id
-      ),
-      dropped AS (
-        DELETE FROM club_invites
-        WHERE club_id = $1 AND email_key = $2 AND EXISTS (SELECT 1 FROM joined)
-      ),
-      dropped_signup AS (
-        DELETE FROM signup_invites
-        WHERE email_key = $2 AND EXISTS (SELECT 1 FROM joined)
-      )
-      SELECT id FROM joined
+      INSERT INTO club_members (club_id, user_id, email, display_name, role, joined_at)
+      SELECT $1, $4, email, $5, role, CURRENT_TIMESTAMP
+      FROM club_invites
+      WHERE club_id = $1 AND email_key = $2 AND token = $3
+      ON CONFLICT (club_id, user_id) DO UPDATE SET role = EXCLUDED.role
+      RETURNING user_id AS id
     """
-    params: [
-      $clubId
-      $emailKey
-      $token
-      { _expr: "auth.uid" }
-      { _expr: "auth.token.email" }
-      $displayName
-    ]
+    params: [$clubId, $emailKey, $token, { _expr: "auth.uid" }, $displayName]
+  )
+  droppedSignup: _execute(
+    sql: """
+      DELETE FROM signup_invites
+      WHERE email_key = $2
+        AND EXISTS (
+          SELECT 1 FROM club_invites
+          WHERE club_id = $1 AND email_key = $2 AND token = $3
+        )
+    """
+    params: [$clubId, $emailKey, $token]
+  )
+  droppedInvite: _execute(
+    sql: """
+      DELETE FROM club_invites
+      WHERE club_id = $1 AND email_key = $2 AND token = $3
+    """
+    params: [$clubId, $emailKey, $token]
   )
 }
 
 mutation DeclineClubInvite($clubId: String!, $emailKey: String!, $token: String!)
   @auth(level: PUBLIC, insecureReason: "Rechazar solo funciona con el token del enlace.") {
+  droppedSignup: _execute(
+    sql: """
+      DELETE FROM signup_invites
+      WHERE email_key = $2
+        AND EXISTS (
+          SELECT 1 FROM club_invites
+          WHERE club_id = $1 AND email_key = $2 AND token = $3
+        )
+    """
+    params: [$clubId, $emailKey, $token]
+  )
   invite: _executeReturningFirst(
     sql: """
-      WITH dropped AS (
-        DELETE FROM club_invites
-        WHERE club_id = $1 AND email_key = $2 AND token = $3
-        RETURNING email_key
-      )
-      DELETE FROM signup_invites
-      WHERE email_key = $2 AND EXISTS (SELECT 1 FROM dropped)
+      DELETE FROM club_invites
+      WHERE club_id = $1 AND email_key = $2 AND token = $3
       RETURNING email_key AS id
     """
     params: [$clubId, $emailKey, $token]
@@ -773,9 +797,15 @@ mutation SaveCourtSettings($userId: String! = "", $enabled: Boolean!, $slotMinut
   }
   settings: _executeReturningFirst(
     sql: """
-      UPDATE platform_settings
-      SET courts_enabled = $1, court_slot_minutes = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = 'config'
+      INSERT INTO platform_settings (
+        id, name, motto, headline, tagline,
+        courts_enabled, court_slot_minutes, created_at, updated_at
+      )
+      VALUES ('config', '', '', '', '', $1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (id) DO UPDATE SET
+        courts_enabled = EXCLUDED.courts_enabled,
+        court_slot_minutes = EXCLUDED.court_slot_minutes,
+        updated_at = CURRENT_TIMESTAMP
       RETURNING id
     """
     params: [$enabled, $slotMinutes]
@@ -859,22 +889,27 @@ mutation SaveCourt(
 }
 
 mutation DeleteCourt($id: String!) @auth(level: USER) {
+  unlinked: _execute(
+    sql: """
+      UPDATE matches SET court_id = NULL
+      WHERE court_id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+  dropped: _execute(
+    sql: """
+      DELETE FROM court_holds
+      WHERE court_id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
   court: _executeReturningFirst(
     sql: """
-      WITH allowed AS (
-        SELECT 1 FROM platform_admins WHERE user_id = $2
-      ),
-      unlinked AS (
-        UPDATE matches SET court_id = NULL
-        WHERE court_id = $1 AND EXISTS (SELECT 1 FROM allowed)
-        RETURNING id
-      ),
-      dropped AS (
-        DELETE FROM court_holds
-        WHERE court_id = $1 AND EXISTS (SELECT 1 FROM allowed)
-      )
       DELETE FROM courts
-      WHERE id = $1 AND EXISTS (SELECT 1 FROM allowed)
+      WHERE id = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
       RETURNING id
     """
     params: [$id, { _expr: "auth.uid" }]
@@ -1083,7 +1118,7 @@ mutation ApproveTeamApplication(
 mutation SavePlatformAdminInvite($emailKey: String!, $email: String!) @auth(level: USER) {
   invite: _executeReturningFirst(
     sql: """
-      INSERT INTO platform_admin_invites (email_key, email, invited_by, created_at)
+      INSERT INTO platform_admin_invites (email_key, email, invited_by_id, created_at)
       SELECT $1, $2, $3, CURRENT_TIMESTAMP
       WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
         AND NOT EXISTS (SELECT 1 FROM platform_admins WHERE lower(email) = lower($2))
@@ -1095,16 +1130,21 @@ mutation SavePlatformAdminInvite($emailKey: String!, $email: String!) @auth(leve
 }
 
 mutation RemovePlatformAdminInvite($emailKey: String!) @auth(level: USER) {
+  droppedSignup: _execute(
+    sql: """
+      DELETE FROM signup_invites
+      WHERE email_key = $1
+        AND platform
+        AND EXISTS (SELECT 1 FROM platform_admin_invites WHERE email_key = $1)
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+    """
+    params: [$emailKey, { _expr: "auth.uid" }]
+  )
   invite: _executeReturningFirst(
     sql: """
-      WITH dropped AS (
-        DELETE FROM platform_admin_invites
-        WHERE email_key = $1
-          AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
-        RETURNING email_key
-      )
-      DELETE FROM signup_invites
-      WHERE email_key = $1 AND platform = true AND EXISTS (SELECT 1 FROM dropped)
+      DELETE FROM platform_admin_invites
+      WHERE email_key = $1
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
       RETURNING email_key AS id
     """
     params: [$emailKey, { _expr: "auth.uid" }]

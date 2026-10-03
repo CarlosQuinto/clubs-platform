@@ -575,36 +575,3 @@ export async function sendGmail(opts: {
   }
   return false;
 }
-
-export async function sendMail(opts: {
-  to: string;
-  subject: string;
-  html: string;
-}): Promise<boolean> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.warn("RESEND_API_KEY no está configurada; el correo no se envió.");
-    return false;
-  }
-  const from =
-    process.env.MAIL_FROM || "Orínco Futbol 7 <beth.t@example.com>";
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    console.error("Resend error:", res.status, body);
-    return false;
-  }
-  return true;
-}

@@ -1,6 +1,5 @@
 # Esquema de Clubs Platform para Firebase SQL Connect.
-# Los id String conservan el id del documento de Firestore.
-# Las filas que no tenían documento usan UUID.
+# Los id String conservan los ids históricos; las filas nuevas usan UUID.
 # Las horas HH:mm son String: SQL Connect no tiene escalar Time.
 
 enum MemberRole {

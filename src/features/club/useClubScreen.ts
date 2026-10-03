@@ -1,10 +1,10 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
 import {
   clubScreen,
   type ClubScreenData,
-} from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+  dataConnect,
+  QueryFetchPolicy,
+} from "../../infrastructure/dataconnect";
 import { toClubScreen } from "./clubMapper";
 
 export const CLUB_REFRESH = "club-sql-refresh";

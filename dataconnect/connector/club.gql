@@ -76,7 +76,28 @@ mutation SaveClubDefaultLineup($clubId: String!, $mode: String!, $lineup: Any) @
 }
 
 mutation ReplaceClubEventAttendees($id: String!, $clubId: String!, $labels: Any) @auth(level: USER) {
-  event: _executeReturningFirst(
+  cleared: _execute(
+    sql: """
+      WITH allowed AS (
+        SELECT e.id
+        FROM club_events e
+        WHERE e.id = $1
+          AND e.club_id = $2
+          AND (
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+            OR EXISTS (
+              SELECT 1 FROM club_members
+              WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+            )
+          )
+      )
+      DELETE FROM club_event_attendees a
+      USING allowed
+      WHERE a.event_id = allowed.id
+    """
+    params: [$id, $clubId, { _expr: "auth.uid" }]
+  )
+  added: _execute(
     sql: """
       WITH allowed AS (
         SELECT e.id
@@ -90,11 +111,6 @@ mutation ReplaceClubEventAttendees($id: String!, $clubId: String!, $labels: Any)
               WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
             )
           )
-      ),
-      cleared AS (
-        DELETE FROM club_event_attendees a
-        USING allowed
-        WHERE a.event_id = allowed.id
       )
       INSERT INTO club_event_attendees (event_id, player_id, raw_label)
       SELECT allowed.id,
@@ -103,14 +119,50 @@ mutation ReplaceClubEventAttendees($id: String!, $clubId: String!, $labels: Any)
       FROM allowed
       CROSS JOIN jsonb_array_elements_text(($3)::jsonb) AS elem
       WHERE elem <> ''
-      RETURNING event_id
     """
     params: [$id, $clubId, $labels, { _expr: "auth.uid" }]
+  )
+  event: _executeReturningFirst(
+    sql: """
+      SELECT e.id AS event_id
+      FROM club_events e
+      WHERE e.id = $1
+        AND e.club_id = $2
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+          )
+        )
+    """
+    params: [$id, $clubId, { _expr: "auth.uid" }]
   )
 }
 
 mutation ReplaceClubEventAlbum($id: String!, $clubId: String!, $urls: Any) @auth(level: USER) {
-  event: _executeReturningFirst(
+  cleared: _execute(
+    sql: """
+      WITH allowed AS (
+        SELECT e.id
+        FROM club_events e
+        WHERE e.id = $1
+          AND e.club_id = $2
+          AND (
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+            OR EXISTS (
+              SELECT 1 FROM club_members
+              WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+            )
+          )
+      )
+      DELETE FROM club_event_photos p
+      USING allowed
+      WHERE p.event_id = allowed.id
+    """
+    params: [$id, $clubId, { _expr: "auth.uid" }]
+  )
+  added: _execute(
     sql: """
       WITH allowed AS (
         SELECT e.id
@@ -124,25 +176,35 @@ mutation ReplaceClubEventAlbum($id: String!, $clubId: String!, $urls: Any) @auth
               WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
             )
           )
-      ),
-      cleared AS (
-        DELETE FROM club_event_photos p
-        USING allowed
-        WHERE p.event_id = allowed.id
       )
       INSERT INTO club_event_photos (event_id, position, url)
       SELECT allowed.id, (ord - 1)::int, url
       FROM allowed
       CROSS JOIN jsonb_array_elements_text(($3)::jsonb) WITH ORDINALITY AS photo(url, ord)
       WHERE url <> ''
-      RETURNING event_id
     """
     params: [$id, $clubId, $urls, { _expr: "auth.uid" }]
+  )
+  event: _executeReturningFirst(
+    sql: """
+      SELECT e.id AS event_id
+      FROM club_events e
+      WHERE e.id = $1
+        AND e.club_id = $2
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+          )
+        )
+    """
+    params: [$id, $clubId, { _expr: "auth.uid" }]
   )
 }
 
 mutation ReplaceClubEventStats($id: String!, $clubId: String!, $stats: Any) @auth(level: USER) {
-  event: _executeReturningFirst(
+  cleared: _execute(
     sql: """
       WITH allowed AS (
         SELECT e.id
@@ -150,10 +212,10 @@ mutation ReplaceClubEventStats($id: String!, $clubId: String!, $stats: Any) @aut
         WHERE e.id = $1
           AND e.club_id = $2
           AND (
-            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
             OR EXISTS (
               SELECT 1 FROM club_members
-              WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
+              WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
             )
           )
       ),
@@ -162,9 +224,25 @@ mutation ReplaceClubEventStats($id: String!, $clubId: String!, $stats: Any) @aut
       ),
       drop_cards AS (
         DELETE FROM club_event_cards c USING allowed WHERE c.event_id = allowed.id
-      ),
-      drop_keepers AS (
-        DELETE FROM club_event_goalkeepers k USING allowed WHERE k.event_id = allowed.id
+      )
+      DELETE FROM club_event_goalkeepers k USING allowed WHERE k.event_id = allowed.id
+    """
+    params: [$id, $clubId, { _expr: "auth.uid" }]
+  )
+  added: _execute(
+    sql: """
+      WITH allowed AS (
+        SELECT e.id
+        FROM club_events e
+        WHERE e.id = $1
+          AND e.club_id = $2
+          AND (
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+            OR EXISTS (
+              SELECT 1 FROM club_members
+              WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
+            )
+          )
       ),
       add_goals AS (
         INSERT INTO club_event_goals (
@@ -193,16 +271,32 @@ mutation ReplaceClubEventStats($id: String!, $clubId: String!, $stats: Any) @aut
         FROM allowed
         CROSS JOIN jsonb_array_elements_text(COALESCE(($3)::jsonb->'redCards', '[]'::jsonb)) AS card(pid)
         JOIN players p ON p.id = card.pid AND p.club_id = $2
-      ),
-      add_keepers AS (
-        INSERT INTO club_event_goalkeepers (event_id, player_id, conceded, saves)
-        SELECT allowed.id,
-          p.id,
-          COALESCE((gk->>'conceded')::int, 0),
-          COALESCE((gk->>'saves')::int, 0)
-        FROM allowed
-        CROSS JOIN jsonb_array_elements(COALESCE(($3)::jsonb->'goalkeepers', '[]'::jsonb)) AS row(gk)
-        JOIN players p ON p.id = gk->>'id' AND p.club_id = $2
+      )
+      INSERT INTO club_event_goalkeepers (event_id, player_id, conceded, saves)
+      SELECT allowed.id,
+        p.id,
+        COALESCE((gk->>'conceded')::int, 0),
+        COALESCE((gk->>'saves')::int, 0)
+      FROM allowed
+      CROSS JOIN jsonb_array_elements(COALESCE(($3)::jsonb->'goalkeepers', '[]'::jsonb)) AS row(gk)
+      JOIN players p ON p.id = gk->>'id' AND p.club_id = $2
+    """
+    params: [$id, $clubId, $stats, { _expr: "auth.uid" }]
+  )
+  event: _executeReturningFirst(
+    sql: """
+      WITH allowed AS (
+        SELECT e.id
+        FROM club_events e
+        WHERE e.id = $1
+          AND e.club_id = $2
+          AND (
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+            OR EXISTS (
+              SELECT 1 FROM club_members
+              WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
+            )
+          )
       )
       UPDATE club_events e
       SET mvp_id = (
@@ -240,7 +334,28 @@ mutation SetMatchClubLineup($matchId: String!, $clubId: String!, $lineup: Any) @
 }
 
 mutation ReplaceMatchAttendees($matchId: String!, $clubId: String!, $labels: Any) @auth(level: USER) {
-  report: _executeReturningFirst(
+  cleared: _execute(
+    sql: """
+      WITH allowed AS (
+        SELECT m.id
+        FROM matches m
+        WHERE m.id = $1
+          AND (m.home_club_id = $2 OR m.away_club_id = $2)
+          AND (
+            EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+            OR EXISTS (
+              SELECT 1 FROM club_members
+              WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+            )
+          )
+      )
+      DELETE FROM match_attendees a
+      USING allowed
+      WHERE a.match_id = allowed.id AND a.club_id = $2
+    """
+    params: [$matchId, $clubId, { _expr: "auth.uid" }]
+  )
+  added: _execute(
     sql: """
       WITH allowed AS (
         SELECT m.id
@@ -254,21 +369,31 @@ mutation ReplaceMatchAttendees($matchId: String!, $clubId: String!, $labels: Any
               WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
             )
           )
-      ),
-      cleared AS (
-        DELETE FROM match_attendees a
-        USING allowed
-        WHERE a.match_id = allowed.id AND a.club_id = $2
       )
-      INSERT INTO match_attendees (match_id, club_id, player_id)
-      SELECT allowed.id, $2, p.id
+      INSERT INTO match_attendees (match_id, club_id, player_id, created_at)
+      SELECT allowed.id, $2, p.id, CURRENT_TIMESTAMP
       FROM allowed
       JOIN players p
         ON p.club_id = $2
        AND p.id IN (SELECT jsonb_array_elements_text(($3)::jsonb))
-      RETURNING match_id
     """
     params: [$matchId, $clubId, $labels, { _expr: "auth.uid" }]
+  )
+  report: _executeReturningFirst(
+    sql: """
+      SELECT m.id AS match_id
+      FROM matches m
+      WHERE m.id = $1
+        AND (m.home_club_id = $2 OR m.away_club_id = $2)
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $2 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
+          )
+        )
+    """
+    params: [$matchId, $clubId, { _expr: "auth.uid" }]
   )
 }
 
@@ -393,35 +518,46 @@ mutation SaveGalleryPhoto(
   $caption: String!
   $takenAt: Timestamp!
 ) @auth(level: USER) {
-  photo: _executeReturningFirst(
+  album: _execute(
     sql: """
       WITH allowed AS (
         SELECT $2::varchar AS club_id
-        WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $8)
+        WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
            OR EXISTS (
              SELECT 1 FROM club_members
-             WHERE club_id = $2 AND user_id = $8 AND role::text IN ('ADMIN', 'DT')
+             WHERE club_id = $2 AND user_id = $4 AND role::text IN ('ADMIN', 'DT')
            )
-      ),
-      album AS (
-        INSERT INTO albums (id, club_id, name)
-        SELECT $1, allowed.club_id, $3
-        FROM allowed
-        ON CONFLICT (club_id, name) DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
+      )
+      INSERT INTO albums (id, club_id, name)
+      SELECT $1, allowed.club_id, $3
+      FROM allowed
+      ON CONFLICT (club_id, name) DO UPDATE SET name = EXCLUDED.name
+    """
+    params: [$albumId, $clubId, $albumName, { _expr: "auth.uid" }]
+  )
+  photo: _executeReturningFirst(
+    sql: """
+      WITH allowed AS (
+        SELECT $1::varchar AS club_id
+        WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $7)
+           OR EXISTS (
+             SELECT 1 FROM club_members
+             WHERE club_id = $1 AND user_id = $7 AND role::text IN ('ADMIN', 'DT')
+           )
       )
       INSERT INTO gallery_photos (id, album_id, url, caption, sort_order, taken_at)
-      SELECT $4,
-        album.id,
+      SELECT $3,
+        a.id,
+        $4,
         $5,
-        $6,
-        COALESCE((SELECT MAX(sort_order) + 1 FROM gallery_photos WHERE album_id = album.id), 0),
-        $7
-      FROM album
+        COALESCE((SELECT MAX(sort_order) + 1 FROM gallery_photos WHERE album_id = a.id), 0),
+        $6
+      FROM albums a
+      JOIN allowed ON allowed.club_id = a.club_id
+      WHERE a.name = $2
       RETURNING id
     """
     params: [
-      $albumId
       $clubId
       $albumName
       $photoId
@@ -543,37 +679,6 @@ mutation InsertClubAvailability($clubId: String!, $windows: Any) @auth(level: US
             WHERE club_id = $1 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
           )
         )
-      RETURNING club_id
-    """
-    params: [$clubId, $windows, { _expr: "auth.uid" }]
-  )
-}
-
-mutation ReplaceClubAvailability($clubId: String!, $windows: Any) @auth(level: USER) {
-  window: _executeReturningFirst(
-    sql: """
-      WITH allowed AS (
-        SELECT $1::varchar AS club_id
-        WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
-           OR EXISTS (
-             SELECT 1 FROM club_members
-             WHERE club_id = $1 AND user_id = $3 AND role::text IN ('ADMIN', 'DT')
-           )
-      ),
-      cleared AS (
-        DELETE FROM club_availability_windows AS slot
-        USING allowed
-        WHERE slot.club_id = allowed.club_id
-      )
-      INSERT INTO club_availability_windows (club_id, weekday, start_time, end_time)
-      SELECT allowed.club_id,
-        (row->>'day')::int,
-        row->>'start',
-        row->>'end'
-      FROM allowed
-      CROSS JOIN jsonb_array_elements(COALESCE(($2)::jsonb, '[]'::jsonb)) AS row
-      WHERE (row->>'day')::int BETWEEN 1 AND 7
-        AND COALESCE(row->>'start', '') < COALESCE(row->>'end', '')
       RETURNING club_id
     """
     params: [$clubId, $windows, { _expr: "auth.uid" }]

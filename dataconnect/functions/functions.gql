@@ -1,0 +1,111 @@
+# Operaciones de Cloud Functions. NO_ACCESS: solo el Admin SDK puede ejecutarlas.
+
+query FunctionsAdminGate($userId: String!, $clubId: String!) @auth(level: NO_ACCESS) {
+  platformAdmin(key: { userId: $userId }) {
+    email
+  }
+  clubMember(key: { clubId: $clubId, userId: $userId }) {
+    role
+  }
+}
+
+query MailBrand @auth(level: NO_ACCESS) {
+  platformSettings(id: "config") {
+    name
+    whatsapp
+  }
+}
+
+query ClubMailInfo($clubId: String!) @auth(level: NO_ACCESS) {
+  club(id: $clubId) {
+    id
+    name
+    slug
+  }
+}
+
+query TeamApplicationMail($id: String!) @auth(level: NO_ACCESS) {
+  teamApplication(id: $id) {
+    teamName
+    captainName
+    captainEmail
+    status
+    slug
+    club { id slug }
+  }
+}
+
+query PlatformAdminInviteMail($emailKey: String!) @auth(level: NO_ACCESS) {
+  platformAdminInvite(key: { emailKey: $emailKey }) {
+    email
+  }
+}
+
+query MatchScheduleNotice($matchId: String!) @auth(level: NO_ACCESS) {
+  match(id: $matchId) {
+    id
+    matchDate
+    startTime
+    venue
+    status
+    scheduleNoticeKey
+    court { id name }
+    tournament { name }
+    homeClub {
+      id
+      name
+      clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
+      clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
+    }
+    awayClub {
+      id
+      name
+      clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
+      clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
+    }
+  }
+  courts {
+    id
+    name
+  }
+}
+
+mutation MarkMatchScheduleNotice($matchId: String!, $key: String!) @auth(level: NO_ACCESS) {
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET schedule_notice_key = NULLIF($2, '')
+      WHERE id = $1
+      RETURNING id
+    """
+    params: [$matchId, $key]
+  )
+}
+
+query TournamentEnrollmentNotice($tournamentId: String!) @auth(level: NO_ACCESS) {
+  tournament(id: $tournamentId) {
+    name
+    startDate
+    tournamentClubs_on_tournament {
+      club {
+        id
+        name
+        slug
+        clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
+        clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
+      }
+    }
+  }
+}
+
+mutation RecordTournamentNotice($tournamentId: String!, $clubId: String!) @auth(level: NO_ACCESS) {
+  notice: _executeReturningFirst(
+    sql: """
+      INSERT INTO tournament_notices (tournament_id, club_id, sent_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (tournament_id, club_id) DO NOTHING
+      RETURNING club_id AS id
+    """
+    params: [$tournamentId, $clubId]
+  )
+}

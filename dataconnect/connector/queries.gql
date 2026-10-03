@@ -81,6 +81,17 @@ query PlatformChrome
   }
 }
 
+query PlatformBanner
+  @auth(level: PUBLIC, insecureReason: "La portada de las páginas públicas es pública.") {
+  platformSettings(id: "config") {
+    headline
+    tagline
+  }
+  platformHeroImages(orderBy: [{ position: ASC }]) {
+    url
+  }
+}
+
 query HomePage($today: Date!)
   @auth(level: PUBLIC, insecureReason: "La portada, los próximos partidos y los torneos vigentes son públicos.") {
   platformSettings(id: "config") {

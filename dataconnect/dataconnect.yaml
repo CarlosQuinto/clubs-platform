@@ -9,4 +9,4 @@ schema:
       cloudSql:
         instanceId: "clubs-platform-aem9u-instance"
         schemaValidation: "COMPATIBLE"
-connectorDirs: ["./connector"]
+connectorDirs: ["./connector", "./functions"]

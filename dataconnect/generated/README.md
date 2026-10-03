@@ -31,6 +31,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*ContactPage*](#contactpage)
   - [*PlatformClaimOpen*](#platformclaimopen)
   - [*PlatformChrome*](#platformchrome)
+  - [*PlatformBanner*](#platformbanner)
   - [*HomePage*](#homepage)
   - [*RegisterTeamPage*](#registerteampage)
   - [*MatchesPage*](#matchespage)
@@ -120,7 +121,6 @@ This README will guide you through the process of using the generated JavaScript
   - [*DeleteGalleryPhoto*](#deletegalleryphoto)
   - [*ClearClubAvailability*](#clearclubavailability)
   - [*InsertClubAvailability*](#insertclubavailability)
-  - [*ReplaceClubAvailability*](#replaceclubavailability)
   - [*SaveClubPortada*](#saveclubportada)
   - [*ClearClubHeroes*](#clearclubheroes)
   - [*InsertClubHeroes*](#insertclubheroes)
@@ -1745,6 +1745,9 @@ export interface AdminCourtsData {
       awayClub: {
         name: string;
       };
+      tournament: {
+        durationMinutes: number;
+      };
     } & Match_Key;
   } & CourtHold_Key)[];
 }
@@ -3170,6 +3173,107 @@ console.log(data.platformSettings);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.platformSettings);
+});
+```
+
+## PlatformBanner
+You can execute the `PlatformBanner` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+platformBanner(options?: ExecuteQueryOptions): QueryPromise<PlatformBannerData, undefined>;
+
+interface PlatformBannerRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<PlatformBannerData, undefined>;
+}
+export const platformBannerRef: PlatformBannerRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+platformBanner(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<PlatformBannerData, undefined>;
+
+interface PlatformBannerRef {
+  ...
+  (dc: DataConnect): QueryRef<PlatformBannerData, undefined>;
+}
+export const platformBannerRef: PlatformBannerRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the platformBannerRef:
+```typescript
+const name = platformBannerRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `PlatformBanner` query has no variables.
+### Return Type
+Recall that executing the `PlatformBanner` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `PlatformBannerData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface PlatformBannerData {
+  platformSettings?: {
+    headline: string;
+    tagline: string;
+  };
+  platformHeroImages: ({
+    url: string;
+  })[];
+}
+```
+### Using `PlatformBanner`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, platformBanner } from '@clubs-platform/dataconnect';
+
+
+// Call the `platformBanner()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await platformBanner();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await platformBanner(dataConnect);
+
+console.log(data.platformSettings);
+console.log(data.platformHeroImages);
+
+// Or, you can use the `Promise` API.
+platformBanner().then((response) => {
+  const data = response.data;
+  console.log(data.platformSettings);
+  console.log(data.platformHeroImages);
+});
+```
+
+### Using `PlatformBanner`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, platformBannerRef } from '@clubs-platform/dataconnect';
+
+
+// Call the `platformBannerRef()` function to get a reference to the query.
+const ref = platformBannerRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = platformBannerRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.platformSettings);
+console.log(data.platformHeroImages);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.platformSettings);
+  console.log(data.platformHeroImages);
 });
 ```
 
@@ -6301,7 +6405,10 @@ Recall that executing the `ClaimPlatformAdminInvite` mutation returns a `Mutatio
 The `data` property is an object of type `ClaimPlatformAdminInviteData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface ClaimPlatformAdminInviteData {
+  ensured?: number | null;
   admin?: unknown | null;
+  droppedSignup?: number | null;
+  droppedInvite?: number | null;
 }
 ```
 ### Using `ClaimPlatformAdminInvite`'s action shortcut function
@@ -6325,12 +6432,18 @@ const { data } = await claimPlatformAdminInvite({ emailKey: ..., });
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await claimPlatformAdminInvite(dataConnect, claimPlatformAdminInviteVars);
 
+console.log(data.ensured);
 console.log(data.admin);
+console.log(data.droppedSignup);
+console.log(data.droppedInvite);
 
 // Or, you can use the `Promise` API.
 claimPlatformAdminInvite(claimPlatformAdminInviteVars).then((response) => {
   const data = response.data;
+  console.log(data.ensured);
   console.log(data.admin);
+  console.log(data.droppedSignup);
+  console.log(data.droppedInvite);
 });
 ```
 
@@ -6358,12 +6471,18 @@ const ref = claimPlatformAdminInviteRef(dataConnect, claimPlatformAdminInviteVar
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.ensured);
 console.log(data.admin);
+console.log(data.droppedSignup);
+console.log(data.droppedInvite);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.ensured);
   console.log(data.admin);
+  console.log(data.droppedSignup);
+  console.log(data.droppedInvite);
 });
 ```
 
@@ -7882,7 +8001,10 @@ Recall that executing the `AcceptClubInvite` mutation returns a `MutationPromise
 The `data` property is an object of type `AcceptClubInviteData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface AcceptClubInviteData {
+  ensured?: number | null;
   member?: unknown | null;
+  droppedSignup?: number | null;
+  droppedInvite?: number | null;
 }
 ```
 ### Using `AcceptClubInvite`'s action shortcut function
@@ -7909,12 +8031,18 @@ const { data } = await acceptClubInvite({ clubId: ..., emailKey: ..., token: ...
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await acceptClubInvite(dataConnect, acceptClubInviteVars);
 
+console.log(data.ensured);
 console.log(data.member);
+console.log(data.droppedSignup);
+console.log(data.droppedInvite);
 
 // Or, you can use the `Promise` API.
 acceptClubInvite(acceptClubInviteVars).then((response) => {
   const data = response.data;
+  console.log(data.ensured);
   console.log(data.member);
+  console.log(data.droppedSignup);
+  console.log(data.droppedInvite);
 });
 ```
 
@@ -7945,12 +8073,18 @@ const ref = acceptClubInviteRef(dataConnect, acceptClubInviteVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.ensured);
 console.log(data.member);
+console.log(data.droppedSignup);
+console.log(data.droppedInvite);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.ensured);
   console.log(data.member);
+  console.log(data.droppedSignup);
+  console.log(data.droppedInvite);
 });
 ```
 
@@ -7999,6 +8133,7 @@ Recall that executing the `DeclineClubInvite` mutation returns a `MutationPromis
 The `data` property is an object of type `DeclineClubInviteData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface DeclineClubInviteData {
+  droppedSignup?: number | null;
   invite?: unknown | null;
 }
 ```
@@ -8025,11 +8160,13 @@ const { data } = await declineClubInvite({ clubId: ..., emailKey: ..., token: ..
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await declineClubInvite(dataConnect, declineClubInviteVars);
 
+console.log(data.droppedSignup);
 console.log(data.invite);
 
 // Or, you can use the `Promise` API.
 declineClubInvite(declineClubInviteVars).then((response) => {
   const data = response.data;
+  console.log(data.droppedSignup);
   console.log(data.invite);
 });
 ```
@@ -8060,11 +8197,13 @@ const ref = declineClubInviteRef(dataConnect, declineClubInviteVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.droppedSignup);
 console.log(data.invite);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.droppedSignup);
   console.log(data.invite);
 });
 ```
@@ -9942,6 +10081,8 @@ Recall that executing the `DeleteCourt` mutation returns a `MutationPromise` tha
 The `data` property is an object of type `DeleteCourtData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface DeleteCourtData {
+  unlinked?: number | null;
+  dropped?: number | null;
   court?: unknown | null;
 }
 ```
@@ -9966,11 +10107,15 @@ const { data } = await deleteCourt({ id: ..., });
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await deleteCourt(dataConnect, deleteCourtVars);
 
+console.log(data.unlinked);
+console.log(data.dropped);
 console.log(data.court);
 
 // Or, you can use the `Promise` API.
 deleteCourt(deleteCourtVars).then((response) => {
   const data = response.data;
+  console.log(data.unlinked);
+  console.log(data.dropped);
   console.log(data.court);
 });
 ```
@@ -9999,11 +10144,15 @@ const ref = deleteCourtRef(dataConnect, deleteCourtVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.unlinked);
+console.log(data.dropped);
 console.log(data.court);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.unlinked);
+  console.log(data.dropped);
   console.log(data.court);
 });
 ```
@@ -11539,6 +11688,7 @@ Recall that executing the `RemovePlatformAdminInvite` mutation returns a `Mutati
 The `data` property is an object of type `RemovePlatformAdminInviteData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface RemovePlatformAdminInviteData {
+  droppedSignup?: number | null;
   invite?: unknown | null;
 }
 ```
@@ -11563,11 +11713,13 @@ const { data } = await removePlatformAdminInvite({ emailKey: ..., });
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await removePlatformAdminInvite(dataConnect, removePlatformAdminInviteVars);
 
+console.log(data.droppedSignup);
 console.log(data.invite);
 
 // Or, you can use the `Promise` API.
 removePlatformAdminInvite(removePlatformAdminInviteVars).then((response) => {
   const data = response.data;
+  console.log(data.droppedSignup);
   console.log(data.invite);
 });
 ```
@@ -11596,11 +11748,13 @@ const ref = removePlatformAdminInviteRef(dataConnect, removePlatformAdminInviteV
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.droppedSignup);
 console.log(data.invite);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.droppedSignup);
   console.log(data.invite);
 });
 ```
@@ -12113,6 +12267,8 @@ Recall that executing the `ReplaceClubEventAttendees` mutation returns a `Mutati
 The `data` property is an object of type `ReplaceClubEventAttendeesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface ReplaceClubEventAttendeesData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 ```
@@ -12139,11 +12295,15 @@ const { data } = await replaceClubEventAttendees({ id: ..., clubId: ..., labels:
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await replaceClubEventAttendees(dataConnect, replaceClubEventAttendeesVars);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 replaceClubEventAttendees(replaceClubEventAttendeesVars).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12174,11 +12334,15 @@ const ref = replaceClubEventAttendeesRef(dataConnect, replaceClubEventAttendeesV
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12228,6 +12392,8 @@ Recall that executing the `ReplaceClubEventAlbum` mutation returns a `MutationPr
 The `data` property is an object of type `ReplaceClubEventAlbumData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface ReplaceClubEventAlbumData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 ```
@@ -12254,11 +12420,15 @@ const { data } = await replaceClubEventAlbum({ id: ..., clubId: ..., urls: ..., 
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await replaceClubEventAlbum(dataConnect, replaceClubEventAlbumVars);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 replaceClubEventAlbum(replaceClubEventAlbumVars).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12289,11 +12459,15 @@ const ref = replaceClubEventAlbumRef(dataConnect, replaceClubEventAlbumVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12343,6 +12517,8 @@ Recall that executing the `ReplaceClubEventStats` mutation returns a `MutationPr
 The `data` property is an object of type `ReplaceClubEventStatsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface ReplaceClubEventStatsData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 ```
@@ -12369,11 +12545,15 @@ const { data } = await replaceClubEventStats({ id: ..., clubId: ..., stats: ...,
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await replaceClubEventStats(dataConnect, replaceClubEventStatsVars);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 replaceClubEventStats(replaceClubEventStatsVars).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12404,11 +12584,15 @@ const ref = replaceClubEventStatsRef(dataConnect, replaceClubEventStatsVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.event);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.event);
 });
 ```
@@ -12573,6 +12757,8 @@ Recall that executing the `ReplaceMatchAttendees` mutation returns a `MutationPr
 The `data` property is an object of type `ReplaceMatchAttendeesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface ReplaceMatchAttendeesData {
+  cleared?: number | null;
+  added?: number | null;
   report?: unknown | null;
 }
 ```
@@ -12599,11 +12785,15 @@ const { data } = await replaceMatchAttendees({ matchId: ..., clubId: ..., labels
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await replaceMatchAttendees(dataConnect, replaceMatchAttendeesVars);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.report);
 
 // Or, you can use the `Promise` API.
 replaceMatchAttendees(replaceMatchAttendeesVars).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.report);
 });
 ```
@@ -12634,11 +12824,15 @@ const ref = replaceMatchAttendeesRef(dataConnect, replaceMatchAttendeesVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.cleared);
+console.log(data.added);
 console.log(data.report);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.cleared);
+  console.log(data.added);
   console.log(data.report);
 });
 ```
@@ -13264,6 +13458,7 @@ Recall that executing the `SaveGalleryPhoto` mutation returns a `MutationPromise
 The `data` property is an object of type `SaveGalleryPhotoData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface SaveGalleryPhotoData {
+  album?: number | null;
   photo?: unknown | null;
 }
 ```
@@ -13294,11 +13489,13 @@ const { data } = await saveGalleryPhoto({ albumId: ..., clubId: ..., albumName: 
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await saveGalleryPhoto(dataConnect, saveGalleryPhotoVars);
 
+console.log(data.album);
 console.log(data.photo);
 
 // Or, you can use the `Promise` API.
 saveGalleryPhoto(saveGalleryPhotoVars).then((response) => {
   const data = response.data;
+  console.log(data.album);
   console.log(data.photo);
 });
 ```
@@ -13333,11 +13530,13 @@ const ref = saveGalleryPhotoRef(dataConnect, saveGalleryPhotoVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.album);
 console.log(data.photo);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.album);
   console.log(data.photo);
 });
 ```
@@ -13902,118 +14101,6 @@ executeMutation(ref).then((response) => {
 });
 ```
 
-## ReplaceClubAvailability
-You can execute the `ReplaceClubAvailability` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
-```typescript
-replaceClubAvailability(vars: ReplaceClubAvailabilityVariables): MutationPromise<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-
-interface ReplaceClubAvailabilityRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: ReplaceClubAvailabilityVariables): MutationRef<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-}
-export const replaceClubAvailabilityRef: ReplaceClubAvailabilityRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-replaceClubAvailability(dc: DataConnect, vars: ReplaceClubAvailabilityVariables): MutationPromise<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-
-interface ReplaceClubAvailabilityRef {
-  ...
-  (dc: DataConnect, vars: ReplaceClubAvailabilityVariables): MutationRef<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-}
-export const replaceClubAvailabilityRef: ReplaceClubAvailabilityRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the replaceClubAvailabilityRef:
-```typescript
-const name = replaceClubAvailabilityRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `ReplaceClubAvailability` mutation requires an argument of type `ReplaceClubAvailabilityVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface ReplaceClubAvailabilityVariables {
-  clubId: string;
-  windows?: unknown | null;
-}
-```
-### Return Type
-Recall that executing the `ReplaceClubAvailability` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `ReplaceClubAvailabilityData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface ReplaceClubAvailabilityData {
-  window?: unknown | null;
-}
-```
-### Using `ReplaceClubAvailability`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, replaceClubAvailability, ReplaceClubAvailabilityVariables } from '@clubs-platform/dataconnect';
-
-// The `ReplaceClubAvailability` mutation requires an argument of type `ReplaceClubAvailabilityVariables`:
-const replaceClubAvailabilityVars: ReplaceClubAvailabilityVariables = {
-  clubId: ..., 
-  windows: ..., // optional
-};
-
-// Call the `replaceClubAvailability()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await replaceClubAvailability(replaceClubAvailabilityVars);
-// Variables can be defined inline as well.
-const { data } = await replaceClubAvailability({ clubId: ..., windows: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await replaceClubAvailability(dataConnect, replaceClubAvailabilityVars);
-
-console.log(data.window);
-
-// Or, you can use the `Promise` API.
-replaceClubAvailability(replaceClubAvailabilityVars).then((response) => {
-  const data = response.data;
-  console.log(data.window);
-});
-```
-
-### Using `ReplaceClubAvailability`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, replaceClubAvailabilityRef, ReplaceClubAvailabilityVariables } from '@clubs-platform/dataconnect';
-
-// The `ReplaceClubAvailability` mutation requires an argument of type `ReplaceClubAvailabilityVariables`:
-const replaceClubAvailabilityVars: ReplaceClubAvailabilityVariables = {
-  clubId: ..., 
-  windows: ..., // optional
-};
-
-// Call the `replaceClubAvailabilityRef()` function to get a reference to the mutation.
-const ref = replaceClubAvailabilityRef(replaceClubAvailabilityVars);
-// Variables can be defined inline as well.
-const ref = replaceClubAvailabilityRef({ clubId: ..., windows: ..., });
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = replaceClubAvailabilityRef(dataConnect, replaceClubAvailabilityVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.window);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.window);
-});
-```
-
 ## SaveClubPortada
 You can execute the `SaveClubPortada` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
@@ -14508,6 +14595,7 @@ Recall that executing the `DeleteUnplayedTournament` mutation returns a `Mutatio
 The `data` property is an object of type `DeleteUnplayedTournamentData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface DeleteUnplayedTournamentData {
+  children?: number | null;
   tournament?: unknown | null;
 }
 ```
@@ -14532,11 +14620,13 @@ const { data } = await deleteUnplayedTournament({ id: ..., });
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await deleteUnplayedTournament(dataConnect, deleteUnplayedTournamentVars);
 
+console.log(data.children);
 console.log(data.tournament);
 
 // Or, you can use the `Promise` API.
 deleteUnplayedTournament(deleteUnplayedTournamentVars).then((response) => {
   const data = response.data;
+  console.log(data.children);
   console.log(data.tournament);
 });
 ```
@@ -14565,11 +14655,13 @@ const ref = deleteUnplayedTournamentRef(dataConnect, deleteUnplayedTournamentVar
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
+console.log(data.children);
 console.log(data.tournament);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
+  console.log(data.children);
   console.log(data.tournament);
 });
 ```

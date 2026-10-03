@@ -71,7 +71,10 @@ export enum TournamentStatus {
 
 
 export interface AcceptClubInviteData {
+  ensured?: number | null;
   member?: unknown | null;
+  droppedSignup?: number | null;
+  droppedInvite?: number | null;
 }
 
 export interface AcceptClubInviteVariables {
@@ -279,6 +282,9 @@ export interface AdminCourtsData {
       awayClub: {
         name: string;
       };
+      tournament: {
+        durationMinutes: number;
+      };
     } & Match_Key;
   } & CourtHold_Key)[];
 }
@@ -379,7 +385,10 @@ export interface Category_Key {
 }
 
 export interface ClaimPlatformAdminInviteData {
+  ensured?: number | null;
   admin?: unknown | null;
+  droppedSignup?: number | null;
+  droppedInvite?: number | null;
 }
 
 export interface ClaimPlatformAdminInviteVariables {
@@ -1082,6 +1091,7 @@ export interface CreateTournamentVariables {
 }
 
 export interface DeclineClubInviteData {
+  droppedSignup?: number | null;
   invite?: unknown | null;
 }
 
@@ -1130,6 +1140,8 @@ export interface DeleteClubVariables {
 }
 
 export interface DeleteCourtData {
+  unlinked?: number | null;
+  dropped?: number | null;
   court?: unknown | null;
 }
 
@@ -1256,6 +1268,7 @@ export interface DeleteUnplayedMatchVariables {
 }
 
 export interface DeleteUnplayedTournamentData {
+  children?: number | null;
   tournament?: unknown | null;
 }
 
@@ -1828,6 +1841,16 @@ export interface PlatformAdmin_Key {
   __typename?: 'PlatformAdmin_Key';
 }
 
+export interface PlatformBannerData {
+  platformSettings?: {
+    headline: string;
+    tagline: string;
+  };
+  platformHeroImages: ({
+    url: string;
+  })[];
+}
+
 export interface PlatformChromeData {
   platformSettings?: {
     name: string;
@@ -1930,6 +1953,7 @@ export interface RemovePlatformAdminData {
 }
 
 export interface RemovePlatformAdminInviteData {
+  droppedSignup?: number | null;
   invite?: unknown | null;
 }
 
@@ -1958,16 +1982,9 @@ export interface RemoveTournamentClubVariables {
   clubId: string;
 }
 
-export interface ReplaceClubAvailabilityData {
-  window?: unknown | null;
-}
-
-export interface ReplaceClubAvailabilityVariables {
-  clubId: string;
-  windows?: unknown | null;
-}
-
 export interface ReplaceClubEventAlbumData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 
@@ -1978,6 +1995,8 @@ export interface ReplaceClubEventAlbumVariables {
 }
 
 export interface ReplaceClubEventAttendeesData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 
@@ -1988,6 +2007,8 @@ export interface ReplaceClubEventAttendeesVariables {
 }
 
 export interface ReplaceClubEventStatsData {
+  cleared?: number | null;
+  added?: number | null;
   event?: unknown | null;
 }
 
@@ -1998,6 +2019,8 @@ export interface ReplaceClubEventStatsVariables {
 }
 
 export interface ReplaceMatchAttendeesData {
+  cleared?: number | null;
+  added?: number | null;
   report?: unknown | null;
 }
 
@@ -2185,6 +2208,7 @@ export interface SaveFinancialGoalVariables {
 }
 
 export interface SaveGalleryPhotoData {
+  album?: number | null;
   photo?: unknown | null;
 }
 
@@ -3903,18 +3927,6 @@ export const insertClubAvailabilityRef: InsertClubAvailabilityRef;
 export function insertClubAvailability(vars: InsertClubAvailabilityVariables): MutationPromise<InsertClubAvailabilityData, InsertClubAvailabilityVariables>;
 export function insertClubAvailability(dc: DataConnect, vars: InsertClubAvailabilityVariables): MutationPromise<InsertClubAvailabilityData, InsertClubAvailabilityVariables>;
 
-interface ReplaceClubAvailabilityRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: ReplaceClubAvailabilityVariables): MutationRef<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: ReplaceClubAvailabilityVariables): MutationRef<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-  operationName: string;
-}
-export const replaceClubAvailabilityRef: ReplaceClubAvailabilityRef;
-
-export function replaceClubAvailability(vars: ReplaceClubAvailabilityVariables): MutationPromise<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-export function replaceClubAvailability(dc: DataConnect, vars: ReplaceClubAvailabilityVariables): MutationPromise<ReplaceClubAvailabilityData, ReplaceClubAvailabilityVariables>;
-
 interface SaveClubPortadaRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: SaveClubPortadaVariables): MutationRef<SaveClubPortadaData, SaveClubPortadaVariables>;
@@ -4406,6 +4418,18 @@ export const platformChromeRef: PlatformChromeRef;
 
 export function platformChrome(options?: ExecuteQueryOptions): QueryPromise<PlatformChromeData, undefined>;
 export function platformChrome(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<PlatformChromeData, undefined>;
+
+interface PlatformBannerRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<PlatformBannerData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<PlatformBannerData, undefined>;
+  operationName: string;
+}
+export const platformBannerRef: PlatformBannerRef;
+
+export function platformBanner(options?: ExecuteQueryOptions): QueryPromise<PlatformBannerData, undefined>;
+export function platformBanner(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<PlatformBannerData, undefined>;
 
 interface HomePageRef {
   /* Allow users to create refs without passing in DataConnect */

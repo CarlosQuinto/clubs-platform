@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { matchesPage } from "../../../dataconnect/generated";
-import { todayIso } from "../../lib/courts";
-import { dataConnect } from "../../lib/sqlConnect";
+import { dataConnect, matchesPage, QueryFetchPolicy } from "../../infrastructure/dataconnect";
+import { todayIso } from "../../domains/courts/courts";
 import { filterMatches, toMatchesPage } from "./matchesMapper";
 import type { MatchesPageModel } from "./matchesViewState";
 
@@ -41,7 +40,7 @@ export function useMatchesPage() {
     request.current = ticket;
     setLoading(true);
     setError(null);
-    void matchesPage(dataConnect)
+    void matchesPage(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => {
         if (ticket !== request.current) return;
         setModel(toMatchesPage(result.data, todayIso()));

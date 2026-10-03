@@ -1,14 +1,14 @@
 import {
   FootballType,
-  MatchStatus,
-  TournamentStatus,
-  type MatchSlotHintsData,
   type MatchScoreSheetData,
+  type MatchSlotHintsData,
+  MatchStatus,
   type MatchSummaryData,
   type TournamentScreenData,
-} from "../../../dataconnect/generated";
-import { suggestSlots, toMinutes } from "../../lib/courts";
-import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type TimeWindow, type Weekday } from "../../lib/types";
+  TournamentStatus,
+} from "../../infrastructure/dataconnect";
+import { suggestSlots, toMinutes } from "../../domains/courts/courts";
+import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type TimeWindow, type Weekday } from "../../shared/types";
 import type {
   CalendarMatchView,
   ClubMark,

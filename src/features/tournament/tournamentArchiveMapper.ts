@@ -1,9 +1,5 @@
-import {
-  FootballType,
-  TournamentStatus,
-  type TournamentArchiveData,
-} from "../../../dataconnect/generated";
-import { whatsappUrl } from "../../lib/social";
+import { FootballType, type TournamentArchiveData, TournamentStatus } from "../../infrastructure/dataconnect";
+import { whatsappUrl } from "../../domains/platform/social";
 import { formatCalendarDate } from "./tournamentMapper";
 import type {
   TournamentArchiveView,

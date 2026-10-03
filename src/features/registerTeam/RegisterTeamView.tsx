@@ -1,11 +1,11 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Mail, Phone, Shield, Sparkles, User } from "lucide-react";
-import PlatformLayout, { markScrollTopAfterNav } from "../../components/platform/PlatformLayout";
-import PageHeroBanner from "../../components/platform/PageHeroBanner";
-import PublicFormBand from "../../components/platform/PublicFormBand";
-import { C } from "../../components/ui";
-import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
+import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
+import PageHeroBanner from "../shell/PageHeroBanner";
+import PublicFormBand from "../shell/PublicFormBand";
+import { C } from "../../shared/ui";
+import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { useRegisterTeam } from "./useRegisterTeam";
 import type { ClubCardView } from "../teams/teamsViewState";
 

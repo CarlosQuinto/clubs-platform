@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { courtsPage } from "../../../dataconnect/generated";
-import { todayIso } from "../../lib/courts";
-import { asCourtSlot } from "../../lib/types";
-import { dataConnect } from "../../lib/sqlConnect";
+import { courtsPage, dataConnect, QueryFetchPolicy } from "../../infrastructure/dataconnect";
+import { todayIso } from "../../domains/courts/courts";
+import { asCourtSlot } from "../../shared/types";
 import { toCourtsPage } from "./courtsMapper";
 
 export function useCourtsPage() {
@@ -20,7 +19,7 @@ export function useCourtsPage() {
     request.current = ticket;
     setLoading(true);
     setError(null);
-    void courtsPage(dataConnect, { date })
+    void courtsPage(dataConnect, { date }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => {
         if (ticket !== request.current) return;
         setData(result.data);

@@ -1,16 +1,12 @@
-import {
-  FootballType,
-  TournamentStatus,
-  type HomePageData,
-} from "../../../dataconnect/generated";
-import { safeAdHref, safeAdImageUrl } from "../../lib/ads";
+import { FootballType, type HomePageData, TournamentStatus } from "../../infrastructure/dataconnect";
+import { safeAdHref, safeAdImageUrl } from "../../domains/platform/ads";
 import {
   DEFAULT_PLATFORM_HERO_IMAGES,
   PLATFORM_DESCRIPTION,
   PLATFORM_HEADLINE,
-} from "../../lib/clubDefaults";
-import { whatsappUrl } from "../../lib/social";
-import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
+} from "../../domains/clubs/clubDefaults";
+import { whatsappUrl } from "../../domains/platform/social";
+import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
 import type { HomeAdView, HomePageModel, HomeTournamentCard } from "./homeViewState";

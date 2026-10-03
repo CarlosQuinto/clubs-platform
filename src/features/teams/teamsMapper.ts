@@ -1,4 +1,4 @@
-import type { TeamsPageData } from "../../../dataconnect/generated";
+import { type TeamsPageData } from "../../infrastructure/dataconnect";
 import type { StandingRowView } from "../tournament/tournamentViewState";
 import type {
   ClubCardView,

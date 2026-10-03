@@ -1,7 +1,5 @@
-import { randomBytes } from "crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   gmailConfigured,
@@ -23,22 +21,14 @@ import {
   teamRejectedEmailHtml,
   teamRejectedEmailText,
 } from "./mail";
+import { assertClubAdmin, assertSuperAdmin, platformBrand, sql } from "./sql";
 
 initializeApp();
-const db = getFirestore();
 const auth = getAuth();
-
-async function sqlAdmin() {
-  const { getDataConnect } = await import("firebase-admin/data-connect");
-  return getDataConnect({
-    location: "us-east4",
-    serviceId: "clubs-platform-aem9u-service",
-    connector: "app",
-  });
-}
 
 const APP_URL = process.env.APP_URL || "https://clubs-platform-aem9u.web.app";
 const ROLES = ["admin", "dt", "prensa", "tesorero"] as const;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");
@@ -54,34 +44,6 @@ async function userExists(email: string) {
     if (code === "auth/user-not-found") return false;
     throw err;
   }
-}
-
-async function assertSuperAdmin(uid: string) {
-  const sql = await sqlAdmin();
-  const result = await sql.executeQuery<{ platformAdmin?: { email: string } | null }, { id: string }>(
-    "PlatformAdminById",
-    { id: uid },
-  );
-  if (!result.data.platformAdmin) {
-    throw new HttpsError(
-      "permission-denied",
-      "Solo un superadmin puede revisar solicitudes.",
-    );
-  }
-}
-
-async function assertClubAdmin(uid: string, clubId: string) {
-  const sql = await sqlAdmin();
-  const result = await sql.executeQuery<
-    { platformAdmin?: { email: string } | null; clubMember?: { role: string } | null },
-    { clubId: string; userId: string }
-  >("ClubAdminGate", { clubId, userId: uid });
-  if (result.data.platformAdmin) return;
-  if (result.data.clubMember?.role === "ADMIN") return;
-  throw new HttpsError(
-    "permission-denied",
-    "Solo el presidente o un superadmin puede invitar.",
-  );
 }
 
 function inviteUrls(
@@ -110,6 +72,7 @@ function inviteUrls(
 
 const CALLABLE = { cors: true, region: "us-central1" as const };
 
+/** Correo de invitación a un club. La invitación ya se guardó en SQL desde el panel. */
 export const sendClubInvite = onCall(CALLABLE, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Inicia sesión para invitar.");
@@ -117,190 +80,65 @@ export const sendClubInvite = onCall(CALLABLE, async (request) => {
   const clubId = String(request.data?.clubId || "").trim();
   const email = String(request.data?.email || "").trim().toLowerCase();
   const role = String(request.data?.role || "").trim();
-  if (!clubId || !email || !ROLES.includes(role as (typeof ROLES)[number])) {
+  const token = String(request.data?.token || "").trim();
+  if (!clubId || !email || !token || !ROLES.includes(role as (typeof ROLES)[number])) {
     throw new HttpsError("invalid-argument", "Datos de invitación incompletos.");
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!EMAIL_RE.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
   }
 
   await assertClubAdmin(request.auth.uid, clubId);
 
-  if (request.data?.mailOnly) {
-    const token = String(request.data.token || "").trim();
-    const slug = String(request.data.slug || clubId);
-    const clubName = String(request.data.clubName || clubId);
-    const key = emailKey(email);
-    const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
-    const urls = inviteUrls(clubId, email, key, token, kind, slug);
-    const platformName = await platformDisplayName();
-    const content = {
-      kind,
-      platformName,
-      clubName,
-      role,
-      actionUrl: urls.actionUrl,
-      declineUrl: urls.declineUrl,
-    };
-    const mailed = await sendGmail({
-      to: email,
-      subject:
-        kind === "signup"
-          ? `Te invitaron a ${clubName} en ${platformName}`
-          : `¿Aceptas ser ${roleLabel(role)} de ${clubName}?`,
-      html: inviteEmailHtml(content),
-      text: inviteEmailText(content),
-      fromName: platformName,
-    });
-    return { kind, mailed, url: urls.copyUrl };
-  }
+  const found = await sql().executeQuery<
+    { club?: { id: string; name: string; slug: string } | null },
+    { clubId: string }
+  >("ClubMailInfo", { clubId });
+  const club = found.data.club;
+  if (!club) throw new HttpsError("not-found", "El club no existe.");
 
-  const club = await db.doc(`clubs/${clubId}`).get();
-  if (!club.exists) {
-    throw new HttpsError("not-found", "El club no existe.");
-  }
-  const clubName = String(club.data()?.name || clubId);
   const key = emailKey(email);
-
-  const existingMember = await db
-    .collection(`clubs/${clubId}/members`)
-    .where("email", "==", email)
-    .limit(1)
-    .get();
-  if (!existingMember.empty) {
-    throw new HttpsError(
-      "already-exists",
-      "Esa persona ya es administrador del club.",
-    );
-  }
-
   const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
-  const token = randomBytes(24).toString("hex");
-  const slug = String(club.data()?.slug || clubId);
-  const urls = inviteUrls(clubId, email, key, token, kind, slug);
-
-  await db.doc(`clubs/${clubId}/invites/${key}`).set({
-    email,
-    role,
-    token,
-    kind,
-    invitedBy: request.auth.uid,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  if (kind === "signup") {
-    await db.doc(`signupInvites/${key}`).set(
-      {
-        email,
-        clubId,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  } else {
-    await db.doc(`signupInvites/${key}`).delete().catch(() => undefined);
-  }
-
-  const platformName = await platformDisplayName();
+  const urls = inviteUrls(clubId, email, key, token, kind, club.slug || clubId);
+  const { name: platformName } = await platformBrand();
   const content = {
     kind,
     platformName,
-    clubName,
+    clubName: club.name,
     role,
     actionUrl: urls.actionUrl,
     declineUrl: urls.declineUrl,
   };
-  const html = inviteEmailHtml(content);
-  const text = inviteEmailText(content);
-  const subject =
-    kind === "signup"
-      ? `Te invitaron a ${clubName} en ${platformName}`
-      : `¿Aceptas ser ${roleLabel(role)} de ${clubName}?`;
-
-  await db.collection("mail").add({
-    to: [email],
-    message: { subject, html },
-    createdAt: FieldValue.serverTimestamp(),
-    meta: { clubId, kind },
-  });
-
   const mailed = await sendGmail({
     to: email,
-    subject,
-    html,
-    text,
+    subject:
+      kind === "signup"
+        ? `Te invitaron a ${club.name} en ${platformName}`
+        : `¿Aceptas ser ${roleLabel(role)} de ${club.name}?`,
+    html: inviteEmailHtml(content),
+    text: inviteEmailText(content),
     fromName: platformName,
   });
-
-  return {
-    kind,
-    mailed,
-    url: urls.copyUrl,
-  };
+  return { kind, mailed, url: urls.copyUrl };
 });
 
-const DEFAULT_CLUB_DESCRIPTION =
-  "Club conformado por auténticos amantes del fútbol. Más que un equipo, una familia en la cancha.";
-const DEFAULT_HERO_IMAGE =
-  "https://images.unsplash.com/photo-1511886929837-354d827aae26?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80";
-const RESERVED_SLUGS = [
-  "admin",
-  "login",
-  "registro",
-  "invitar",
-  "restablecer",
-  "registrar-equipo",
-  "contacto",
-  "solicitudes",
-  "clubes",
-  "equipos",
-  "torneos",
-  "temporadas",
-  "categorias",
-  "api",
-];
+type TeamApplicationMailData = {
+  teamApplication?: {
+    teamName: string;
+    captainName: string;
+    captainEmail: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    slug?: string | null;
+    club?: { id: string; slug: string } | null;
+  } | null;
+};
 
-function normalizeSlug(input: string) {
-  return input
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
-
-
-async function slugTaken(slug: string) {
-  if (RESERVED_SLUGS.includes(slug)) return true;
-  const snap = await db.collection("clubs").where("slug", "==", slug).limit(1).get();
-  return !snap.empty;
-}
-
-async function uniqueClubSlug(teamName: string) {
-  const base = normalizeSlug(teamName) || "equipo";
-  let slug = base;
-  let n = 2;
-  while (await slugTaken(slug)) {
-    slug = `${base}-${n++}`;
-  }
-  return slug;
-}
-
-async function platformContact() {
-  const snap = await db.doc("platform/config").get();
-  const data = snap.data() || {};
-  return {
-    name: String(data.name || "").trim() || DEFAULT_PLATFORM_NAME,
-    whatsapp: String(data.social?.whatsapp || "").trim(),
-  };
-}
-
+/** Correo al capitán después de aprobar o rechazar su solicitud en SQL. */
 export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Inicia sesión para revisar solicitudes.");
   }
-  await assertSuperAdmin(request.auth.uid);
+  await assertSuperAdmin(request.auth.uid, "Solo un superadmin puede revisar solicitudes.");
 
   const applicationId = String(request.data?.applicationId || "").trim();
   const action = String(request.data?.action || "").trim();
@@ -308,86 +146,28 @@ export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
     throw new HttpsError("invalid-argument", "La revisión no es válida.");
   }
 
-  if (request.data?.prepared) {
-    const teamName = String(request.data.teamName || "").trim();
-    const captainName = String(request.data.captainName || "").trim();
-    const captainEmail = String(request.data.captainEmail || "").trim().toLowerCase();
-    if (!teamName || !captainEmail) {
-      throw new HttpsError("invalid-argument", "Faltan los datos del correo.");
-    }
-    const brand = await platformContact();
-    const kind: InviteKind = (await userExists(captainEmail)) ? "accept" : "signup";
-    if (action === "reject") {
-      const actionUrl = `${APP_URL}/registrar-equipo`;
-      const content = {
-        platformName: brand.name,
-        teamName,
-        captainName,
-        actionUrl,
-        whatsapp: brand.whatsapp,
-      };
-      const mailed = await sendGmail({
-        to: captainEmail,
-        subject: `No registramos a ${teamName}`,
-        html: teamRejectedEmailHtml(content),
-        text: teamRejectedEmailText(content),
-        fromName: brand.name,
-      });
-      return { ok: true, action, mailed };
-    }
-    const clubId = String(request.data.clubId || "").trim();
-    const slug = String(request.data.slug || "").trim();
-    const token = String(request.data.token || "").trim();
-    const key = String(request.data.emailKey || emailKey(captainEmail));
-    const urls = inviteUrls(clubId, captainEmail, key, token, kind, slug);
-    const content = {
-      kind,
-      platformName: brand.name,
-      teamName,
-      captainName,
-      actionUrl: urls.actionUrl,
-    };
-    const mailed = await sendGmail({
-      to: captainEmail,
-      subject: `${teamName} ya está en ${brand.name}`,
-      html: teamApprovedEmailHtml(content),
-      text: teamApprovedEmailText(content),
-      fromName: brand.name,
-    });
-    return { ok: true, action, mailed, clubId, slug, kind, url: urls.copyUrl };
+  const found = await sql().executeQuery<TeamApplicationMailData, { id: string }>(
+    "TeamApplicationMail",
+    { id: applicationId },
+  );
+  const application = found.data.teamApplication;
+  if (!application) throw new HttpsError("not-found", "La solicitud no existe.");
+  const expected = action === "approve" ? "APPROVED" : "REJECTED";
+  if (application.status !== expected) {
+    throw new HttpsError("failed-precondition", "La solicitud todavía no se revisó.");
   }
-
-  const appRef = db.doc(`teamApplications/${applicationId}`);
-  const appSnap = await appRef.get();
-  if (!appSnap.exists) {
-    throw new HttpsError("not-found", "La solicitud no existe.");
-  }
-  const app = appSnap.data() || {};
-  if (String(app.status || "pending") !== "pending") {
-    throw new HttpsError("failed-precondition", "Esa solicitud ya fue revisada.");
-  }
-
-  const teamName = String(app.teamName || "").trim();
-  const captainName = String(app.captainName || "").trim();
-  const captainEmail = String(app.captainEmail || "").trim().toLowerCase();
-  const captainPhone = String(app.captainPhone || "").trim();
-  if (!teamName || !captainEmail) {
-    throw new HttpsError("failed-precondition", "La solicitud está incompleta.");
-  }
-
-  const brand = await platformContact();
+  const teamName = application.teamName.trim();
+  const captainName = application.captainName.trim();
+  const captainEmail = application.captainEmail.trim().toLowerCase();
+  const brand = await platformBrand();
+  const kind: InviteKind = (await userExists(captainEmail)) ? "accept" : "signup";
 
   if (action === "reject") {
-    await appRef.update({
-      status: "rejected",
-      reviewedAt: FieldValue.serverTimestamp(),
-    });
-    const actionUrl = `${APP_URL}/registrar-equipo`;
     const content = {
       platformName: brand.name,
       teamName,
       captainName,
-      actionUrl,
+      actionUrl: `${APP_URL}/registrar-equipo`,
       whatsapp: brand.whatsapp,
     };
     const mailed = await sendGmail({
@@ -400,66 +180,14 @@ export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
     return { ok: true, action, mailed };
   }
 
-  const localityId = String(request.data?.localityId || "").trim();
-  if (!localityId) {
-    throw new HttpsError("invalid-argument", "Elige una localidad.");
+  const clubId = application.club?.id || "";
+  const slug = application.club?.slug || application.slug || "";
+  const token = String(request.data?.token || "").trim();
+  if (!clubId || !token) {
+    throw new HttpsError("invalid-argument", "Faltan los datos del correo.");
   }
-  const locality = await db.doc(`localities/${localityId}`).get();
-  if (!locality.exists) {
-    throw new HttpsError("not-found", "La localidad no existe.");
-  }
-  const localityName = String(locality.data()?.name || "");
-  const slug = await uniqueClubSlug(teamName);
-  const clubRef = db.collection("clubs").doc();
-  const clubId = clubRef.id;
-
-  await clubRef.set({
-    slug,
-    name: teamName,
-    localityId,
-    location: localityName,
-    description: DEFAULT_CLUB_DESCRIPTION,
-    heroImages: [DEFAULT_HERO_IMAGE],
-    defaultLineups: {},
-    presidentPhone: captainPhone,
-    active: true,
-    createdAt: FieldValue.serverTimestamp(),
-    createdBy: request.auth.uid,
-  });
-
-  const key = emailKey(captainEmail);
-  const kind: InviteKind = (await userExists(captainEmail)) ? "accept" : "signup";
-  const token = randomBytes(24).toString("hex");
+  const key = String(request.data?.emailKey || emailKey(captainEmail));
   const urls = inviteUrls(clubId, captainEmail, key, token, kind, slug);
-
-  await db.doc(`clubs/${clubId}/invites/${key}`).set({
-    email: captainEmail,
-    role: "admin",
-    token,
-    kind,
-    invitedBy: request.auth.uid,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  if (kind === "signup") {
-    await db.doc(`signupInvites/${key}`).set(
-      {
-        email: captainEmail,
-        clubId,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  } else {
-    await db.doc(`signupInvites/${key}`).delete().catch(() => undefined);
-  }
-
-  await appRef.update({
-    status: "approved",
-    clubId,
-    slug,
-    reviewedAt: FieldValue.serverTimestamp(),
-  });
-
   const content = {
     kind,
     platformName: brand.name,
@@ -474,202 +202,49 @@ export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
     text: teamApprovedEmailText(content),
     fromName: brand.name,
   });
-
-  return {
-    ok: true,
-    action,
-    mailed,
-    clubId,
-    slug,
-    kind,
-    url: urls.copyUrl,
-  };
+  return { ok: true, action, mailed, clubId, slug, kind, url: urls.copyUrl };
 });
 
-export const getClubInvite = onCall(CALLABLE, async (request) => {
-  const clubId = String(request.data?.clubId || "").trim();
-  const emailKeyParam = String(request.data?.emailKey || "").trim();
-  const token = String(request.data?.token || "").trim();
-  if (!clubId || !emailKeyParam || !token) {
-    throw new HttpsError("invalid-argument", "Falta la invitación.");
-  }
-  const snap = await db.doc(`clubs/${clubId}/invites/${emailKeyParam}`).get();
-  if (!snap.exists || snap.data()?.token !== token) {
-    throw new HttpsError("not-found", "La invitación no es válida o ya expiró.");
-  }
-  const club = await db.doc(`clubs/${clubId}`).get();
-  const data = snap.data() || {};
-  const clubData = club.data() || {};
-  return {
-    clubId,
-    slug: String(clubData.slug || clubId),
-    clubName: String(clubData.name || clubId),
-    email: String(data.email || ""),
-    role: String(data.role || ""),
-    kind: (data.kind as InviteKind) || "signup",
-  };
-});
-
-export const respondClubInvite = onCall(CALLABLE, async (request) => {
-  const clubId = String(request.data?.clubId || "").trim();
-  const emailKeyParam = String(request.data?.emailKey || "").trim();
-  const token = String(request.data?.token || "").trim();
-  const action = String(request.data?.action || "").trim();
-  if (!clubId || !emailKeyParam || !token || !["accept", "decline"].includes(action)) {
-    throw new HttpsError("invalid-argument", "Solicitud incompleta.");
-  }
-
-  const inviteRef = db.doc(`clubs/${clubId}/invites/${emailKeyParam}`);
-  const snap = await inviteRef.get();
-  if (!snap.exists || snap.data()?.token !== token) {
-    throw new HttpsError("not-found", "La invitación no es válida o ya expiró.");
-  }
-  const data = snap.data() || {};
-  const email = String(data.email || "").toLowerCase();
-  const role = String(data.role || "admin");
-
-  if (action === "decline") {
-    await inviteRef.delete();
-    await db.doc(`signupInvites/${emailKeyParam}`).delete().catch(() => undefined);
-    return { ok: true, action };
-  }
-
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "Inicia sesión con el correo invitado para aceptar.",
-    );
-  }
-  const authEmail = (request.auth.token.email || "").toLowerCase();
-  if (authEmail !== email) {
-    throw new HttpsError(
-      "permission-denied",
-      `Entra con ${email} para aceptar esta invitación.`,
-    );
-  }
-
-  await db.doc(`clubs/${clubId}/members/${request.auth.uid}`).set({
-    role,
-    email,
-    displayName: request.auth.token.name || "",
-    joinedAt: FieldValue.serverTimestamp(),
-  });
-  await inviteRef.delete();
-  await db.doc(`signupInvites/${emailKeyParam}`).delete().catch(() => undefined);
-  const club = await db.doc(`clubs/${clubId}`).get();
-  return {
-    ok: true,
-    action,
-    clubId,
-    slug: String(club.data()?.slug || clubId),
-  };
-});
-
-const DEFAULT_PLATFORM_NAME = "Clubs Platform";
-
-async function platformDisplayName() {
-  const snap = await db.doc("platform/config").get();
-  const name = String(snap.data()?.name || "").trim();
-  return name || DEFAULT_PLATFORM_NAME;
-}
-
+/** Correo de invitación a superadministrador. La invitación ya se guardó en SQL. */
 export const sendPlatformAdminInvite = onCall(CALLABLE, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Inicia sesión para invitar.");
   }
-  await assertSuperAdmin(request.auth.uid);
+  await assertSuperAdmin(request.auth.uid, "Solo un superadmin puede invitar.");
 
   const email = String(request.data?.email || "").trim().toLowerCase();
-  if (request.data?.mailOnly) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new HttpsError("invalid-argument", "El correo no es válido.");
-    }
-    const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
-    const actionUrl =
-      kind === "signup"
-        ? `${APP_URL}/registro?email=${encodeURIComponent(email)}`
-        : `${APP_URL}/login`;
-    const platformName = await platformDisplayName();
-    const content = { kind, platformName, actionUrl };
-    const subject =
-      kind === "signup"
-        ? `Te invitaron a administrar ${platformName}`
-        : `Acepta administrar ${platformName}`;
-    const mailed = await sendGmail({
-      to: email,
-      subject,
-      html: platformAdminInviteEmailHtml(content),
-      text: platformAdminInviteEmailText(content),
-      fromName: platformName,
-    });
-    return { kind, mailed, url: actionUrl };
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!EMAIL_RE.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
   }
-
-  const config = await db.doc("platform/config").get();
-  const adminEmails = (config.data()?.superAdminEmails || {}) as Record<string, string>;
-  if (Object.values(adminEmails).some((value) => String(value).toLowerCase() === email)) {
-    throw new HttpsError("already-exists", "Ese correo ya es administrador.");
+  const invite = await sql().executeQuery<
+    { platformAdminInvite?: { email: string } | null },
+    { emailKey: string }
+  >("PlatformAdminInviteMail", { emailKey: emailKey(email) });
+  if (!invite.data.platformAdminInvite) {
+    throw new HttpsError("not-found", "No hay una invitación para ese correo.");
   }
-
-  const key = emailKey(email);
   const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
   const actionUrl =
     kind === "signup"
       ? `${APP_URL}/registro?email=${encodeURIComponent(email)}`
       : `${APP_URL}/login`;
-
-  await db.doc(`platform/config/invites/${key}`).set(
-    {
-      email,
-      invitedBy: request.auth.uid,
-      createdAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  if (kind === "signup") {
-    await db.doc(`signupInvites/${key}`).set(
-      {
-        email,
-        platform: true,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-
-  const platformName = await platformDisplayName();
+  const { name: platformName } = await platformBrand();
   const content = { kind, platformName, actionUrl };
-  const subject =
-    kind === "signup"
-      ? `Te invitaron a administrar ${platformName}`
-      : `Acepta administrar ${platformName}`;
-  const html = platformAdminInviteEmailHtml(content);
-  const text = platformAdminInviteEmailText(content);
-
-  await db.collection("mail").add({
-    to: [email],
-    message: { subject, html },
-    createdAt: FieldValue.serverTimestamp(),
-    meta: { kind, platform: true },
-  });
-
   const mailed = await sendGmail({
     to: email,
-    subject,
-    html,
-    text,
+    subject:
+      kind === "signup"
+        ? `Te invitaron a administrar ${platformName}`
+        : `Acepta administrar ${platformName}`,
+    html: platformAdminInviteEmailHtml(content),
+    text: platformAdminInviteEmailText(content),
     fromName: platformName,
   });
-
   return { kind, mailed, url: actionUrl };
 });
 
 async function sendCustomPasswordReset(email: string) {
-  const platformName = await platformDisplayName();
+  const { name: platformName } = await platformBrand();
   const firebaseLink = await auth.generatePasswordResetLink(email);
   const oobCode = new URL(firebaseLink).searchParams.get("oobCode");
   if (!oobCode) {
@@ -713,18 +288,7 @@ async function sendFirebasePasswordReset(email: string) {
   }
 }
 
-export {
-  ensureTournamentTables,
-  rebuildAllTournamentTables,
-  syncTournamentTablesOnClubs,
-  syncTournamentTablesOnMatch,
-} from "./tournamentTables";
-
-export { notifyTournamentEnrollment, scheduleMatch } from "./scheduling";
-
-export { backfillMatchListings, syncMatchListing } from "./matchListings";
-
-export { migrateClubAvailability } from "./availability";
+export { sendMatchScheduleNotice, sendTournamentEnrollmentNotice } from "./notices";
 
 /** Avisa por correo una renta de cancha: alta, cambio o cancelación. */
 export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
@@ -736,7 +300,7 @@ export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
   const dateLabel = String(request.data?.dateLabel || "").trim();
   const note = String(request.data?.note || "");
   const rawSlots = Array.isArray(request.data?.slots) ? request.data.slots : [];
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+  if (!EMAIL_RE.test(to)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
   }
   if (kind !== "created" && kind !== "updated" && kind !== "cancelled") {
@@ -756,7 +320,7 @@ export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
   if (!slots.length || !dateLabel) {
     throw new HttpsError("invalid-argument", "Faltan los datos de la renta.");
   }
-  const platformName = await platformDisplayName();
+  const { name: platformName } = await platformBrand();
   const content = { platformName, kind, dateLabel, note, slots };
   const mailed = await sendGmail({
     to,
@@ -771,7 +335,7 @@ export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
 /** Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios. */
 export const requestPasswordReset = onCall(CALLABLE, async (request) => {
   const email = String(request.data?.email || "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!EMAIL_RE.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
   }
   if (await userExists(email)) {

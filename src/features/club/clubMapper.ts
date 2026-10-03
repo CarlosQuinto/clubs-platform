@@ -1,10 +1,27 @@
-import {
-  type ClubScreenData,
-  type MemberRole,
-} from "../../../dataconnect/generated";
-import type { FirestoreDoc, ClubInfo } from "../../hooks/useClubData";
-import type { Category, Match, MatchSide, Season, TimeWindow, Tournament } from "../../lib/types";
-import type { Role } from "../../lib/roles";
+import { type ClubScreenData, type MemberRole } from "../../infrastructure/dataconnect";
+import type { Category, Match, MatchSide, Season, TimeWindow, Tournament } from "../../shared/types";
+import type { Role } from "../../domains/auth/roles";
+
+export interface ClubInfo {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  location?: string;
+  localityId?: string;
+  heroImages: string[];
+  defaultLineups: Record<string, any>;
+  logoUrl?: string;
+  presidentPhone?: string;
+  active?: boolean;
+  createdAt?: any;
+}
+
+/** Fila de una pestaÃ±a del club (jugadores, agenda, finanzasâ€¦) con la forma que pintan sus componentes. */
+export interface ClubRecord {
+  id: string;
+  [key: string]: any;
+}
 
 const ROLE_FROM_SQL: Record<MemberRole, Role> = {
   ADMIN: "admin",
@@ -17,12 +34,12 @@ export interface ClubScreenModel {
   exists: boolean;
   clubInfo: ClubInfo | null;
   role: Role | null;
-  players: FirestoreDoc[];
-  events: FirestoreDoc[];
-  transactions: FirestoreDoc[];
-  inventory: FirestoreDoc[];
-  gallery: FirestoreDoc[];
-  goals: FirestoreDoc[];
+  players: ClubRecord[];
+  events: ClubRecord[];
+  transactions: ClubRecord[];
+  inventory: ClubRecord[];
+  gallery: ClubRecord[];
+  goals: ClubRecord[];
   windows: TimeWindow[];
   seasons: Season[];
   categories: Category[];

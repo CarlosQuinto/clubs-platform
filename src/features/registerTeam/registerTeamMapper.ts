@@ -1,5 +1,5 @@
-import type { RegisterTeamPageData } from "../../../dataconnect/generated";
-import { EMAIL_RE } from "../../lib/social";
+import { type RegisterTeamPageData } from "../../infrastructure/dataconnect";
+import { EMAIL_RE } from "../../domains/platform/social";
 import type { ClubCardView } from "../teams/teamsViewState";
 
 export interface RegisterTeamDraft {

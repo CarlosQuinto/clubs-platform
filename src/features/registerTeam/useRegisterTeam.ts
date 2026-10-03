@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { registerTeamPage, submitTeamApplication } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+import {
+  dataConnect,
+  QueryFetchPolicy,
+  registerTeamPage,
+  submitTeamApplication,
+} from "../../infrastructure/dataconnect";
 import { toRegisterTeamClubs, validateRegisterTeam } from "./registerTeamMapper";
 import type { RegisterTeamFormView } from "./registerTeamViewState";
 
@@ -25,7 +29,7 @@ export function useRegisterTeam() {
     const ticket = request.current + 1;
     request.current = ticket;
     setClubsLoading(true);
-    void registerTeamPage(dataConnect)
+    void registerTeamPage(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => {
         if (ticket !== request.current) return;
         setForm((current) => ({ ...current, clubs: toRegisterTeamClubs(result.data) }));

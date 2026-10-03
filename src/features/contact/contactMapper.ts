@@ -1,5 +1,5 @@
-import type { ContactPageData } from "../../../dataconnect/generated";
-import { EMAIL_RE } from "../../lib/social";
+import { type ContactPageData } from "../../infrastructure/dataconnect";
+import { EMAIL_RE } from "../../domains/platform/social";
 import type { ContactTopicView } from "./contactViewState";
 
 export const CONTACT_TOPICS: ContactTopicView[] = [

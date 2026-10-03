@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { ChevronRight, Filter, Phone, Search, Shield, Users } from "lucide-react";
-import { PageTitle, SectionRule } from "../../components/platform/ArchiveUI";
-import { LoadMoreButton } from "../../components/platform/ClubDirectoryList";
-import PlatformLayout from "../../components/platform/PlatformLayout";
-import { C, FormInput, FormSelect, SectionCard } from "../../components/ui";
-import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
+import { PageTitle, SectionRule } from "../shell/ArchiveUI";
+import { LoadMoreButton } from "../shell/ClubDirectoryList";
+import PlatformLayout from "../shell/PlatformLayout";
+import { C, FormInput, FormSelect, SectionCard } from "../../shared/ui";
+import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { useTeamsPage } from "./useTeamsPage";
 import type { ClubCardView } from "./teamsViewState";
 import type { StandingRowView } from "../tournament/tournamentViewState";

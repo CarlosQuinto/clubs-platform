@@ -8,21 +8,20 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Crown, Pencil, Trash2, Trophy } from "lucide-react";
-import { useTournamentEdit } from "../../components/admin/TournamentEditModal";
-import { ArchiveSection, TournamentGrid } from "../../components/platform/ArchiveUI";
-import ConfirmModal from "../../components/ConfirmModal";
-import HeroCarousel from "../../components/platform/HeroCarousel";
-import PlatformLayout, { markScrollTopAfterNav } from "../../components/platform/PlatformLayout";
-import { C, PrimaryButton, RADIUS, SHADOWS } from "../../components/ui";
-import { deleteUnplayedTournament } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
-import { useAuth } from "../../context/AuthContext";
+import { useTournamentEdit } from "../tournament/TournamentEditModal";
+import { ArchiveSection, TournamentGrid } from "../shell/ArchiveUI";
+import ConfirmModal from "../../shared/ConfirmModal";
+import HeroCarousel from "../shell/HeroCarousel";
+import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
+import { C, PrimaryButton, RADIUS, SHADOWS } from "../../shared/ui";
+import { dataConnect, deleteUnplayedTournament } from "../../infrastructure/dataconnect";
+import { useAuth } from "../../domains/auth/AuthContext";
 import {
   DEFAULT_CLUB_LOGO,
   DEFAULT_PLATFORM_HERO_IMAGES,
   PLATFORM_DESCRIPTION,
   PLATFORM_HEADLINE,
-} from "../../lib/clubDefaults";
+} from "../../domains/clubs/clubDefaults";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
 import { useHomePage } from "./useHomePage";
 import type { HomeAdView, HomeTournamentCard } from "./homeViewState";

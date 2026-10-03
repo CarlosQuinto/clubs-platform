@@ -5,15 +5,14 @@ import {
   ArchiveSection,
   PageTitle,
   TournamentGrid,
-} from "../../components/platform/ArchiveUI";
-import { markScrollTopAfterNav } from "../../components/platform/PlatformLayout";
-import PlatformLayout from "../../components/platform/PlatformLayout";
-import { useTournamentEdit } from "../../components/admin/TournamentEditModal";
-import ConfirmModal from "../../components/ConfirmModal";
-import { C } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
-import { deleteUnplayedTournament } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+} from "../shell/ArchiveUI";
+import { markScrollTopAfterNav } from "../shell/PlatformLayout";
+import PlatformLayout from "../shell/PlatformLayout";
+import { useTournamentEdit } from "./TournamentEditModal";
+import ConfirmModal from "../../shared/ConfirmModal";
+import { C } from "../../shared/ui";
+import { useAuth } from "../../domains/auth/AuthContext";
+import { dataConnect, deleteUnplayedTournament } from "../../infrastructure/dataconnect";
 import { useTournamentArchive } from "./useTournamentArchive";
 import type { TournamentCardView } from "./tournamentArchiveViewState";
 

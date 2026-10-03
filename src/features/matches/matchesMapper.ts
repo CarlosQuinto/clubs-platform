@@ -1,5 +1,5 @@
-import { TournamentStatus, type MatchesPageData } from "../../../dataconnect/generated";
-import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
+import { type MatchesPageData, TournamentStatus } from "../../infrastructure/dataconnect";
+import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import type { MatchesPageModel, UpcomingMatchView } from "./matchesViewState";
 
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];

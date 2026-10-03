@@ -1,4 +1,4 @@
-import type { PlatformSocial } from "../../lib/types";
+import type { PlatformSocial } from "../../shared/types";
 
 export interface PlatformChromeView {
   brandName: string;

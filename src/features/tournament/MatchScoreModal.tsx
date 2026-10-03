@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
-import { useModalLock } from "../../hooks/useModalLock";
-import { C, FormSelect, PrimaryButton, RADIUS, SHADOWS, SecondaryButton } from "../../components/ui";
-import { loadMatchScoreSheet, saveMatchEvents } from "./tournamentCommands";
+import { useModalLock } from "../../shared/useModalLock";
+import { C, FormSelect, PrimaryButton, RADIUS, SHADOWS, SecondaryButton } from "../../shared/ui";
+import { loadMatchScoreSheet } from "./tournamentQueries";
+import { saveMatchEvents } from "../../domains/matches/matchCommands";
 import type { CalendarMatchView, ScoreGoalView, ScorePlayerView } from "./tournamentViewState";
 
 const SCORE_MAX = 30;

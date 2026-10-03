@@ -2,12 +2,14 @@ import { type ReactNode } from "react";
 import { Calendar, Check, ChevronRight, Clock, MapPin, Timer, Trophy, Users } from "lucide-react";
 import courtDefault from "../../assets/court-default.jpg";
 import rentBg from "../../assets/rent-bg.jpg";
-import PlatformLayout from "../../components/platform/PlatformLayout";
-import { FormInput, FormSelect } from "../../components/ui";
+import PlatformLayout from "../shell/PlatformLayout";
+import { useAuth } from "../../domains/auth/AuthContext";
+import { FormInput, FormSelect } from "../../shared/ui";
 import { useCourtsPage } from "./useCourtsPage";
 import type { CourtCardView } from "./courtsViewState";
 
-export default function CourtsPageView({ warnMissingWhatsapp = false }: { warnMissingWhatsapp?: boolean }) {
+export default function CourtsPageView() {
+  const { isSuperAdmin: warnMissingWhatsapp } = useAuth();
   const screen = useCourtsPage();
   const view = screen.view;
 

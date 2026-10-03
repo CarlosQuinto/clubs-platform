@@ -1,5 +1,5 @@
-import type { TournamentEditorData } from "../../../dataconnect/generated";
-import { asMatchDuration, type ClubSummary, type Match, type Tournament } from "../../lib/types";
+import { type TournamentEditorData } from "../../infrastructure/dataconnect";
+import { asMatchDuration, type ClubSummary, type Match, type Tournament } from "../../shared/types";
 
 export interface TournamentEditorModel {
   tournament: Tournament;

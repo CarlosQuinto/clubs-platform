@@ -13,6 +13,8 @@ dist-ssr/
 # Caché de Firebase
 .firebase/
 dataconnect-debug.log
+dataconnect/.dataconnect/
+pglite-debug.log
 firebase-debug.log
 firebase-debug.*.log
 
@@ -25,5 +27,3 @@ functions/.env
 .agents/
 serviceAccountKey.json
 exports/
-firestore.rules.prod.bak
-firestore.rules.seed

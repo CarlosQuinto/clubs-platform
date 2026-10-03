@@ -1,14 +1,13 @@
-import HeroAdmin from "../../../components/admin/HeroAdmin";
-import type { PlatformConfig } from "../../../context/AuthContext";
-import { loadCover } from "../commands";
+import HeroAdmin from "./HeroAdmin";
+import type { PlatformCover } from "../../../shared/types";
+import { loadCover } from "../../../domains/platform/platformCommands";
 import { useAdminQuery } from "../useAdminQuery";
 
 export default function CoverAdminView() {
   const screen = useAdminQuery(loadCover);
   const settings = screen.data?.platformSettings;
-  const config: PlatformConfig | null = settings
+  const config: PlatformCover | null = settings
     ? {
-        superAdmins: [],
         name: settings.name,
         motto: settings.motto,
         headline: settings.headline,

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
-import { contactPage, submitInquiry } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+import {
+  contactPage,
+  dataConnect,
+  QueryFetchPolicy,
+  submitInquiry,
+} from "../../infrastructure/dataconnect";
 import { CONTACT_TOPICS, toContactWhatsapp, validateContact } from "./contactMapper";
 import type { ContactFormView } from "./contactViewState";
 

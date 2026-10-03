@@ -256,7 +256,7 @@ query ClubScreen($slug: String!)
 }
 
 mutation DeleteUnplayedTournament($id: String!) @auth(level: USER) {
-  tournament: _executeReturningFirst(
+  children: _execute(
     sql: """
       WITH allowed AS (
         SELECT 1 FROM platform_admins WHERE user_id = $2
@@ -318,17 +318,23 @@ mutation DeleteUnplayedTournament($id: String!) @auth(level: USER) {
         WHERE tournament_id = $1
           AND NOT EXISTS (SELECT 1 FROM blocked)
           AND EXISTS (SELECT 1 FROM allowed)
-      ),
-      drop_notices AS (
-        DELETE FROM tournament_notices
-        WHERE tournament_id = $1
-          AND NOT EXISTS (SELECT 1 FROM blocked)
-          AND EXISTS (SELECT 1 FROM allowed)
       )
-      DELETE FROM tournaments
-      WHERE id = $1
+      DELETE FROM tournament_notices
+      WHERE tournament_id = $1
         AND NOT EXISTS (SELECT 1 FROM blocked)
         AND EXISTS (SELECT 1 FROM allowed)
+    """
+    params: [$id, { _expr: "auth.uid" }]
+  )
+  tournament: _executeReturningFirst(
+    sql: """
+      DELETE FROM tournaments
+      WHERE id = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM matches
+          WHERE tournament_id = $1 AND status::text = 'PLAYED'
+        )
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
       RETURNING id
     """
     params: [$id, { _expr: "auth.uid" }]

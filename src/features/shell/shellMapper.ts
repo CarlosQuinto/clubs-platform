@@ -1,7 +1,7 @@
-import type { PlatformChromeData } from "../../../dataconnect/generated";
-import { PLATFORM_NAME } from "../../lib/clubDefaults";
-import { hasAnySocial } from "../../lib/social";
-import type { PlatformSocial } from "../../lib/types";
+import { type PlatformChromeData } from "../../infrastructure/dataconnect";
+import { PLATFORM_NAME } from "../../domains/clubs/clubDefaults";
+import { hasAnySocial } from "../../domains/platform/social";
+import type { PlatformSocial } from "../../shared/types";
 import type { PlatformChromeView } from "./shellViewState";
 
 export const EMPTY_CHROME: PlatformChromeView = {

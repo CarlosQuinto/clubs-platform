@@ -1027,18 +1027,6 @@ export function insertClubAvailability(dcOrVars, vars) {
   return executeMutation(insertClubAvailabilityRef(dcInstance, inputVars));
 }
 
-export const replaceClubAvailabilityRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'ReplaceClubAvailability', inputVars);
-}
-replaceClubAvailabilityRef.operationName = 'ReplaceClubAvailability';
-
-export function replaceClubAvailability(dcOrVars, vars) {
-  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(replaceClubAvailabilityRef(dcInstance, inputVars));
-}
-
 export const saveClubPortadaRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -1538,6 +1526,19 @@ export function platformChrome(dcOrOptions, options) {
   
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
   return executeQuery(platformChromeRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
+}
+
+export const platformBannerRef = (dc) => {
+  const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'PlatformBanner');
+}
+platformBannerRef.operationName = 'PlatformBanner';
+
+export function platformBanner(dcOrOptions, options) {
+  
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
+  return executeQuery(platformBannerRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
 }
 
 export const homePageRef = (dcOrVars, vars) => {

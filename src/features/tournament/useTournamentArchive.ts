@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
-import { tournamentArchive } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
-import { TOURNAMENT_EDITED } from "../../lib/tournamentEdited";
+import { dataConnect, QueryFetchPolicy, tournamentArchive } from "../../infrastructure/dataconnect";
+import { TOURNAMENT_EDITED } from "../../domains/competition/tournamentEdited";
 import { toTournamentArchive } from "./tournamentArchiveMapper";
 import type { TournamentArchiveView } from "./tournamentArchiveViewState";
 

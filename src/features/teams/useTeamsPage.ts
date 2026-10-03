@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { teamsPage } from "../../../dataconnect/generated";
-import { CLUB_PAGE_SIZE } from "../../components/platform/ClubDirectoryList";
-import { dataConnect } from "../../lib/sqlConnect";
+import { dataConnect, QueryFetchPolicy, teamsPage } from "../../infrastructure/dataconnect";
+import { CLUB_PAGE_SIZE } from "../shell/ClubDirectoryList";
 import { filterClubs, toTeamsPage } from "./teamsMapper";
 import type { TeamsPageModel, TeamsScopeView } from "./teamsViewState";
 
@@ -42,7 +41,7 @@ export function useTeamsPage() {
     request.current = ticket;
     setLoading(true);
     setError(null);
-    void teamsPage(dataConnect)
+    void teamsPage(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => {
         if (ticket !== request.current) return;
         const next = toTeamsPage(result.data);

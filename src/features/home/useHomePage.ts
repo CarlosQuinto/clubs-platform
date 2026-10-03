@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
-import { homePage, type HomePageData } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
-import { isoDate } from "../../utils/helpers";
-import { TOURNAMENT_EDITED } from "../../lib/tournamentEdited";
+import {
+  dataConnect,
+  homePage,
+  type HomePageData,
+  QueryFetchPolicy,
+} from "../../infrastructure/dataconnect";
+import { isoDate } from "../../shared/helpers";
+import { TOURNAMENT_EDITED } from "../../domains/competition/tournamentEdited";
 import { toHomePage } from "./homeMapper";
 import type { HomePageModel } from "./homeViewState";
 

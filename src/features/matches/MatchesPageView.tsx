@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Search } from "lucide-react";
-import { PageTitle } from "../../components/platform/ArchiveUI";
-import PlatformLayout from "../../components/platform/PlatformLayout";
-import { C, FormInput, FormSelect, RADIUS } from "../../components/ui";
-import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
-import { useAuth } from "../../context/AuthContext";
-import { scheduleCourts, scheduleOfficialMatch } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+import { PageTitle } from "../shell/ArchiveUI";
+import PlatformLayout from "../shell/PlatformLayout";
+import { C, FormInput, FormSelect, RADIUS } from "../../shared/ui";
+import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
+import { useAuth } from "../../domains/auth/AuthContext";
+import {
+  dataConnect,
+  QueryFetchPolicy,
+  scheduleCourts,
+  scheduleOfficialMatch,
+} from "../../infrastructure/dataconnect";
 import { useMatchesPage } from "./useMatchesPage";
 import type { UpcomingMatchView } from "./matchesViewState";
 
@@ -19,7 +23,7 @@ export default function MatchesPageView() {
 
   useEffect(() => {
     if (!isSuperAdmin) return;
-    void scheduleCourts(dataConnect)
+    void scheduleCourts(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => setCourts(result.data.courts))
       .catch((err: unknown) => console.error(err));
   }, [isSuperAdmin]);

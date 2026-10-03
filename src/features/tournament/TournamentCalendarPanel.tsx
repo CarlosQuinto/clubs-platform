@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, ChevronDown, ChevronRight, Clock, MapPin, Pencil } from "lucide-react";
-import { C, FormInput, FormSelect, PrimaryButton, SectionCard } from "../../components/ui";
-import { DEFAULT_CLUB_LOGO } from "../../lib/clubDefaults";
-import { shortSlotLabel } from "../../lib/courts";
-import { formatFriendlyTime } from "../../utils/helpers";
-import { freeCourtsAt, loadMatchSummary, loadSlotHints, saveMatchSchedule } from "./tournamentCommands";
-import type { Court, CourtSlotMinutes, TimeWindow } from "../../lib/types";
+import { C, FormInput, FormSelect, PrimaryButton, SectionCard } from "../../shared/ui";
+import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
+import { shortSlotLabel } from "../../domains/courts/courts";
+import { formatFriendlyTime } from "../../shared/helpers";
+import { freeCourtsAt, saveMatchSchedule } from "../../domains/matches/matchCommands";
+import { loadMatchSummary, loadSlotHints } from "./tournamentQueries";
+import type { Court, CourtSlotMinutes, TimeWindow } from "../../shared/types";
 import MatchScoreModal from "./MatchScoreModal";
 import type { CalendarMatchView, MatchSummaryView, RoundView } from "./tournamentViewState";
 

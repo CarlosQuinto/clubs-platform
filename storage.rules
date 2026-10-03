@@ -16,8 +16,7 @@ service firebase.storage {
     }
 
     // Lectura pública. Escritura: sesión + imagen < 5 MB.
-    // Quién puede guardar logo/portada/galería en el club sigue en firestore.rules.
-    // No usamos firestore.get aquí: en buckets nuevos suele devolver 403.
+    // Quién puede asociar la imagen al club lo decide la mutación de Data Connect que guarda la URL.
     function canWrite() {
       return signedIn() && (request.resource == null || isImage());
     }

@@ -1,10 +1,10 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Mail, MessageCircle, Phone, Sparkles, User } from "lucide-react";
-import PlatformLayout, { markScrollTopAfterNav } from "../../components/platform/PlatformLayout";
-import PageHeroBanner from "../../components/platform/PageHeroBanner";
-import PublicFormBand from "../../components/platform/PublicFormBand";
-import WhatsAppCard from "../../components/platform/WhatsAppCard";
+import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
+import PageHeroBanner from "../shell/PageHeroBanner";
+import PublicFormBand from "../shell/PublicFormBand";
+import WhatsAppCard from "../shell/WhatsAppCard";
 import { useContact } from "./useContact";
 
 export default function ContactView() {

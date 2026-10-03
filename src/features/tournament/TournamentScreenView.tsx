@@ -1,11 +1,11 @@
 import { Link, useParams } from "react-router-dom";
 import { Medal, Pencil, Trophy } from "lucide-react";
-import PlatformLayout from "../../components/platform/PlatformLayout";
-import { ScorersTable, StandingsTable } from "../../components/platform/TournamentTables";
-import { useTournamentEdit } from "../../components/admin/TournamentEditModal";
-import { C, RADIUS, SectionCard } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
-import type { ClubSummary, ScorerRow, StandingRow } from "../../lib/types";
+import PlatformLayout from "../shell/PlatformLayout";
+import { ScorersTable, StandingsTable } from "./TournamentTables";
+import { useTournamentEdit } from "./TournamentEditModal";
+import { C, RADIUS, SectionCard } from "../../shared/ui";
+import { useAuth } from "../../domains/auth/AuthContext";
+import type { ClubSummary, ScorerRow, StandingRow } from "../../shared/types";
 import TournamentCalendarPanel from "./TournamentCalendarPanel";
 import { useTournamentScreen } from "./useTournamentScreen";
 import type { PodiumSlotView, StandingRowView, TournamentScreenView } from "./tournamentViewState";

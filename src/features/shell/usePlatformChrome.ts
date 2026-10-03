@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
-import { platformChrome } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+import { dataConnect, platformChrome, QueryFetchPolicy } from "../../infrastructure/dataconnect";
 import { EMPTY_CHROME, toPlatformChrome } from "./shellMapper";
 import type { PlatformChromeView } from "./shellViewState";
 

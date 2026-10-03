@@ -1,5 +1,5 @@
-import { AdPlacementKind, type AdminAdsData } from "../../../../dataconnect/generated";
-import { calendarDay, type Ad, type AdPlacement } from "../../../lib/ads";
+import { type AdminAdsData, AdPlacementKind } from "../../../infrastructure/dataconnect";
+import { calendarDay, type Ad, type AdPlacement } from "../../../domains/platform/ads";
 
 const TO_PLACEMENT: Record<AdPlacementKind, AdPlacement> = {
   [AdPlacementKind.HOME]: "home",

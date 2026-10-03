@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { QueryFetchPolicy } from "firebase/data-connect";
-import { tournamentScreen } from "../../../dataconnect/generated";
-import { dataConnect } from "../../lib/sqlConnect";
+import { dataConnect, QueryFetchPolicy, tournamentScreen } from "../../infrastructure/dataconnect";
 import { toTournamentScreen } from "./tournamentMapper";
 import type { TournamentScreenView } from "./tournamentViewState";
 

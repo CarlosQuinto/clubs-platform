@@ -1,8 +1,8 @@
-import SeasonsAdmin from "../../../components/admin/SeasonsAdmin";
-import TournamentsAdmin from "../../../components/admin/TournamentsAdmin";
-import { loadCompetition } from "../commands";
+import SeasonsAdmin from "./SeasonsAdmin";
+import TournamentsAdmin from "./TournamentsAdmin";
+import { loadCompetition } from "../../../domains/competition/competitionCommands";
 import { useAdminQuery } from "../useAdminQuery";
-import type { Category, Season } from "../../../lib/types";
+import type { Category, Season } from "../../../shared/types";
 
 export default function CompetitionAdminView() {
   const screen = useAdminQuery(loadCompetition);

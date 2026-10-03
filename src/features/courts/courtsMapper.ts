@@ -1,4 +1,4 @@
-import type { CourtsPageData } from "../../../dataconnect/generated";
+import { type CourtsPageData } from "../../infrastructure/dataconnect";
 import {
   daySlotStarts,
   formatDuration,
@@ -6,10 +6,10 @@ import {
   maxFreeMinutes,
   slotOccupied,
   weekdayOf,
-} from "../../lib/courts";
-import { whatsappUrl } from "../../lib/social";
-import { asCourtSlot, type CourtHold, type TimeWindow, type Weekday } from "../../lib/types";
-import { formatFriendlyDate, formatFriendlyTime } from "../../utils/helpers";
+} from "../../domains/courts/courts";
+import { whatsappUrl } from "../../domains/platform/social";
+import { asCourtSlot, type CourtHold, type TimeWindow, type Weekday } from "../../shared/types";
+import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import type { CourtsPageView } from "./courtsViewState";
 
 export interface CourtsSelection {

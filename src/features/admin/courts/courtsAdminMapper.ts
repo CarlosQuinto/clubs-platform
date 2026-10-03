@@ -1,12 +1,12 @@
-import type { AdminCourtsData } from "../../../../dataconnect/generated";
-import { readWindows } from "../../../lib/courts";
+import { type AdminCourtsData } from "../../../infrastructure/dataconnect";
+import { readWindows } from "../../../domains/courts/courts";
 import {
   asCourtSlot,
   type Court,
   type CourtHold,
   type CourtSlotMinutes,
   type TimeWindow,
-} from "../../../lib/types";
+} from "../../../shared/types";
 
 export interface CourtsAdminView {
   enabled: boolean;
@@ -56,6 +56,7 @@ export function toCourtsAdmin(data: AdminCourtsData): CourtsAdminView {
       matchId: hold.match?.id,
       homeClubName: hold.match?.homeClub.name,
       awayClubName: hold.match?.awayClub.name,
+      matchDurationMinutes: hold.match?.tournament.durationMinutes,
       note: hold.note,
       guestEmail: hold.guestEmail,
     })),
