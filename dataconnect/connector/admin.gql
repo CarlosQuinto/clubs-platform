@@ -364,7 +364,7 @@ mutation CreateClub(
         AND $2 NOT IN (
           'admin', 'login', 'registro', 'invitar', 'registrar-equipo', 'contacto',
           'solicitudes', 'clubes', 'equipos', 'torneos', 'temporadas', 'categorias',
-          'canchas', 'api'
+          'canchas', 'api', 'partido', 'partidos'
         )
         AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = $2)
         AND EXISTS (SELECT 1 FROM localities WHERE id = $5)

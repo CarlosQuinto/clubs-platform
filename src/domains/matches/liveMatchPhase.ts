@@ -45,3 +45,47 @@ export function liveMatchPhase(
   if (at < window.end) return "live";
   return matchDate.slice(0, 10) === isoDate(now) ? "finished" : null;
 }
+
+/**
+ * Fase en la página del partido. A diferencia de la portada no caduca al terminar el día:
+ * «pending» es un partido cuya hora ya pasó pero que el superadmin aún no finaliza.
+ */
+export type MatchPagePhase = "unscheduled" | "upcoming" | "live" | "pending" | "final";
+
+export function matchPagePhase(
+  match: {
+    status: string;
+    walkover: boolean;
+    matchDate?: string | null;
+    startTime?: string | null;
+    durationMinutes: number;
+    marginMinutes: number;
+  },
+  now: Date,
+): MatchPagePhase {
+  if (match.status === "PLAYED" || match.walkover) return "final";
+  const window = liveMatchWindow(
+    match.matchDate || "",
+    match.startTime || "",
+    match.durationMinutes,
+    match.marginMinutes,
+  );
+  if (!window) return "unscheduled";
+  const at = now.getTime();
+  if (at < window.start) return "upcoming";
+  if (at < window.end) return "live";
+  return "pending";
+}
+
+/** Minuto de juego (1…duración) contado desde la hora de inicio programada. */
+export function liveMinute(startMs: number, now: Date, durationMinutes: number): number {
+  const elapsed = Math.floor((now.getTime() - startMs) / MINUTE) + 1;
+  return Math.min(Math.max(elapsed, 1), durationMinutes);
+}
+
+/** «37'» mientras corre el tiempo; «90'+» pasada la duración. */
+export function liveMinuteLabel(startMs: number, now: Date, durationMinutes: number): string {
+  const elapsed = Math.floor((now.getTime() - startMs) / MINUTE) + 1;
+  if (elapsed > durationMinutes) return `${durationMinutes}'+`;
+  return `${Math.max(elapsed, 1)}'`;
+}

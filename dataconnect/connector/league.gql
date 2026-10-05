@@ -694,6 +694,7 @@ mutation InsertMatchCard(
   $playerId: String!
   $playerName: String!
   $color: String!
+  $minute: Int
 ) @auth(level: USER) {
   query {
     platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
@@ -702,10 +703,260 @@ mutation InsertMatchCard(
   }
   card: _executeReturningFirst(
     sql: """
-      INSERT INTO match_cards (match_id, club_id, player_id, player_name, color)
-      VALUES ($1, $2, NULLIF($3, ''), $4, $5::card_color)
+      INSERT INTO match_cards (match_id, club_id, player_id, player_name, color, minute)
+      VALUES (
+        $1, $2, NULLIF($3, ''), $4, $5::card_color,
+        CASE WHEN $6::int BETWEEN 1 AND 150 THEN $6::int END
+      )
       RETURNING id
     """
-    params: [$matchId, $clubId, $playerId, $playerName, $color]
+    params: [$matchId, $clubId, $playerId, $playerName, $color, $minute]
+  )
+}
+
+# Gol del modal «Marcador» con su minuto. Los nombres se leen de players, así cabe
+# el minuto en $1–$9. InsertMatchGoal se conserva para clientes ya publicados.
+mutation InsertTimedMatchGoal(
+  $matchId: String!
+  $clubId: String!
+  $sortOrder: Int!
+  $scorerId: String! = ""
+  $assistId: String! = ""
+  $isPenalty: Boolean! = false
+  $isOwnGoal: Boolean! = false
+  $minute: Int
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  goal: _executeReturningFirst(
+    sql: """
+      INSERT INTO match_goals (
+        match_id, club_id, sort_order, scorer_id, scorer_name,
+        assist_id, assist_name, is_penalty, is_own_goal, minute
+      )
+      VALUES (
+        $1, $2, $3,
+        (SELECT id FROM players WHERE id = NULLIF($4, '')),
+        COALESCE((SELECT name FROM players WHERE id = NULLIF($4, '')), ''),
+        (SELECT id FROM players WHERE id = NULLIF($5, '')),
+        COALESCE((SELECT name FROM players WHERE id = NULLIF($5, '')), ''),
+        $6, $7,
+        CASE WHEN $8::int BETWEEN 1 AND 150 THEN $8::int END
+      )
+      RETURNING id
+    """
+    params: [$matchId, $clubId, $sortOrder, $scorerId, $assistId, $isPenalty, $isOwnGoal, $minute]
+  )
+}
+
+# ── Marcador en vivo ──
+# Mientras el partido sigue SCHEDULED, cada evento se guarda al momento y el marcador
+# se recalcula contando match_goals (club_id = equipo al que se le suma el gol).
+# La tabla solo cuenta PLAYED, así que el marcador parcial no la toca.
+# El id del evento lo genera el navegador: repetir la operación no duplica nada.
+
+mutation AddLiveMatchGoal(
+  $id: String!
+  $matchId: String!
+  $clubId: String!
+  $scorerId: String! = ""
+  $assistId: String! = ""
+  $isPenalty: Boolean! = false
+  $isOwnGoal: Boolean! = false
+  $minute: Int
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  goal: _execute(
+    sql: """
+      INSERT INTO match_goals (
+        id, match_id, club_id, sort_order, scorer_id, scorer_name,
+        assist_id, assist_name, is_penalty, is_own_goal, minute
+      )
+      SELECT
+        $1::uuid, m.id, $3,
+        COALESCE((SELECT MAX(sort_order) FROM match_goals WHERE match_id = m.id AND club_id = $3), 0) + 1,
+        (SELECT id FROM players WHERE id = NULLIF($4, '')),
+        COALESCE((SELECT name FROM players WHERE id = NULLIF($4, '')), ''),
+        (SELECT id FROM players WHERE id = NULLIF($5, '')),
+        COALESCE((SELECT name FROM players WHERE id = NULLIF($5, '')), ''),
+        $6, $7,
+        CASE WHEN $8::int BETWEEN 1 AND 150 THEN $8::int END
+      FROM matches m
+      WHERE m.id = $2
+        AND m.status::text = 'SCHEDULED'
+        AND $3 IN (m.home_club_id, m.away_club_id)
+      ON CONFLICT (id) DO NOTHING
+    """
+    params: [$id, $matchId, $clubId, $scorerId, $assistId, $isPenalty, $isOwnGoal, $minute]
+  )
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches m
+      SET home_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.home_club_id
+          )::smallint,
+          away_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.away_club_id
+          )::smallint,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE m.id = $1
+        AND m.status::text = 'SCHEDULED'
+        AND EXISTS (SELECT 1 FROM match_goals WHERE id = $2::uuid AND match_id = $1)
+      RETURNING m.id
+    """
+    params: [$matchId, $id]
+  )
+}
+
+mutation DeleteLiveMatchGoal($matchId: String!, $goalId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  removed: _execute(
+    sql: """
+      DELETE FROM match_goals
+      WHERE id = $2::uuid
+        AND match_id = $1
+        AND EXISTS (SELECT 1 FROM matches WHERE id = $1 AND status::text = 'SCHEDULED')
+    """
+    params: [$matchId, $goalId]
+  )
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches m
+      SET home_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.home_club_id
+          )::smallint,
+          away_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.away_club_id
+          )::smallint,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE m.id = $1
+        AND m.status::text = 'SCHEDULED'
+        AND NOT EXISTS (SELECT 1 FROM match_goals WHERE id = $2::uuid)
+      RETURNING m.id
+    """
+    params: [$matchId, $goalId]
+  )
+}
+
+mutation AddLiveMatchCard(
+  $id: String!
+  $matchId: String!
+  $clubId: String!
+  $playerId: String! = ""
+  $color: String!
+  $minute: Int
+) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  card: _execute(
+    sql: """
+      INSERT INTO match_cards (id, match_id, club_id, player_id, player_name, color, minute)
+      SELECT
+        $1::uuid, m.id, $3,
+        (SELECT id FROM players WHERE id = NULLIF($4, '')),
+        COALESCE((SELECT name FROM players WHERE id = NULLIF($4, '')), ''),
+        $5::card_color,
+        CASE WHEN $6::int BETWEEN 1 AND 150 THEN $6::int END
+      FROM matches m
+      WHERE m.id = $2
+        AND m.status::text = 'SCHEDULED'
+        AND $3 IN (m.home_club_id, m.away_club_id)
+      ON CONFLICT (id) DO NOTHING
+    """
+    params: [$id, $matchId, $clubId, $playerId, $color, $minute]
+  )
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND status::text = 'SCHEDULED'
+        AND EXISTS (SELECT 1 FROM match_cards WHERE id = $2::uuid AND match_id = $1)
+      RETURNING id
+    """
+    params: [$matchId, $id]
+  )
+}
+
+mutation DeleteLiveMatchCard($matchId: String!, $cardId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  removed: _execute(
+    sql: """
+      DELETE FROM match_cards
+      WHERE id = $2::uuid
+        AND match_id = $1
+        AND EXISTS (SELECT 1 FROM matches WHERE id = $1 AND status::text = 'SCHEDULED')
+    """
+    params: [$matchId, $cardId]
+  )
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND status::text = 'SCHEDULED'
+        AND NOT EXISTS (SELECT 1 FROM match_cards WHERE id = $2::uuid)
+      RETURNING id
+    """
+    params: [$matchId, $cardId]
+  )
+}
+
+# Cierra el partido en vivo: el marcador sale de match_goals y pasa a contar en la tabla.
+mutation FinishLiveMatch($matchId: String!) @auth(level: USER) {
+  query {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
+      user { id }
+    }
+  }
+  tournament: _execute(
+    sql: """
+      UPDATE tournaments
+      SET status = 'ACTIVE'::tournament_status
+      WHERE id = (SELECT tournament_id FROM matches WHERE id = $1 AND status::text = 'SCHEDULED')
+        AND status::text = 'UPCOMING'
+    """
+    params: [$matchId]
+  )
+  match: _executeReturningFirst(
+    sql: """
+      UPDATE matches m
+      SET home_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.home_club_id
+          )::smallint,
+          away_score = (
+            SELECT COUNT(*) FROM match_goals g
+            WHERE g.match_id = m.id AND g.club_id = m.away_club_id
+          )::smallint,
+          status = 'PLAYED'::match_status,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE m.id = $1
+        AND m.status::text = 'SCHEDULED'
+      RETURNING m.id
+    """
+    params: [$matchId]
   )
 }

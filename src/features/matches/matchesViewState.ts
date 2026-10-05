@@ -5,7 +5,8 @@ export interface TournamentOptionView {
 
 export interface UpcomingMatchView {
   id: string;
-  tournamentHref: string;
+  /** Página del partido. */
+  href: string;
   isoDate: string;
   day: number;
   month: string;

@@ -109,7 +109,7 @@ export default function MatchesPageView() {
                 <div className="match-list__grid">
                   {screen.matches.map((match, index) => (
                     <MatchCard
-                      key={match.id || `${match.tournamentHref}-${index}`}
+                      key={match.id || `${match.href}-${index}`}
                       match={match}
                       admin={isSuperAdmin}
                       courts={courts}
@@ -176,7 +176,7 @@ function MatchCard({
 
   return (
     <div className="match-card">
-      <Link to={match.tournamentHref} className="match-card" style={{ display: "contents" }}>
+      <Link to={match.href} className="match-card" style={{ display: "contents" }}>
         <time className="match-card__date" dateTime={match.isoDate} aria-label={match.dateLabel}>
           <span className="match-card__day">{match.day}</span>
           <span className="match-card__month">{match.month}</span>

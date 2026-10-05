@@ -26,6 +26,9 @@ export const normalizeSlug = (input: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
 
+/** Página pública de un partido. */
+export const matchPath = (matchId: string) => `/partido/${encodeURIComponent(matchId)}`;
+
 /** Clave `email_key` de invitaciones y administradores. Debe coincidir con la de las Functions y con las filas guardadas. */
 export const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");
@@ -45,4 +48,6 @@ export const RESERVED_SLUGS = [
   "categorias",
   "canchas",
   "api",
+  "partido",
+  "partidos",
 ];

@@ -1,5 +1,6 @@
 import { type MatchesPageData, TournamentStatus } from "../../infrastructure/dataconnect";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
+import { matchPath } from "../../shared/paths";
 import type { MatchesPageModel, UpcomingMatchView } from "./matchesViewState";
 
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
@@ -44,7 +45,7 @@ export function toMatchesPage(data: MatchesPageData, today: string): MatchesPage
     const card: UpcomingMatchView & { tournamentId: string } = {
       id: match.id,
       tournamentId: match.tournament.id,
-      tournamentHref: `/torneos/${match.tournament.id}`,
+      href: matchPath(match.id),
       isoDate: match.matchDate,
       day: date.day,
       month: date.month,

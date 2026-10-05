@@ -152,6 +152,7 @@ query HomePage($today: Date!)
     orderBy: [{ matchDate: ASC }, { startTime: ASC }]
     limit: 30
   ) {
+    id
     matchDate
     startTime
     venue
@@ -204,6 +205,7 @@ query LiveMatches($from: Date!, $to: Date!)
     matchDate
     startTime
     venue
+    status
     homeScore
     awayScore
     penaltiesHome
@@ -418,6 +420,131 @@ query MatchSummary($matchId: String!)
   }
 }
 
+# Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo.
+query MatchDetail($id: String!)
+  @auth(level: PUBLIC, insecureReason: "La ficha de un partido del torneo es pública.") {
+  matches(where: { id: { eq: $id } }, limit: 1) {
+    id
+    roundLabel
+    matchDate
+    startTime
+    venue
+    status
+    homeScore
+    awayScore
+    penaltiesHome
+    penaltiesAway
+    walkover
+    court { name imageUrl }
+    tournament {
+      id
+      name
+      footballType
+      durationMinutes
+      liveMarginMinutes
+      category { name }
+    }
+    homeClub {
+      id
+      name
+      slug
+      logoUrl
+      players_on_club(where: { active: { eq: true } }, orderBy: [{ name: ASC }], limit: 80) {
+        id
+        name
+        shirtNumber
+        imageUrl
+        isCoach
+      }
+    }
+    awayClub {
+      id
+      name
+      slug
+      logoUrl
+      players_on_club(where: { active: { eq: true } }, orderBy: [{ name: ASC }], limit: 80) {
+        id
+        name
+        shirtNumber
+        imageUrl
+        isCoach
+      }
+    }
+    matchClubReports_on_match {
+      club { id }
+      lineup
+      mvp { id name }
+    }
+    matchAttendees_on_match(limit: 160) {
+      club { id }
+      player { id }
+    }
+    matchGoals_on_match(orderBy: [{ minute: ASC }, { sortOrder: ASC }], limit: 60) {
+      id
+      minute
+      sortOrder
+      isPenalty
+      isOwnGoal
+      scorerName
+      assistName
+      club { id }
+      scorer { id name }
+      assist { id name }
+    }
+    matchCards_on_match(orderBy: [{ minute: ASC }], limit: 60) {
+      id
+      minute
+      color
+      playerName
+      club { id }
+      player { id name }
+    }
+  }
+}
+
+# Previa del partido: tabla del torneo y últimos partidos jugados de ambos clubes
+# (forma reciente e historial entre ellos se separan en el cliente).
+query MatchPreview($tournamentId: String!, $homeClubId: String!, $awayClubId: String!)
+  @auth(level: PUBLIC, insecureReason: "La previa de un partido es pública.") {
+  tournamentStandings(
+    where: { tournament: { id: { eq: $tournamentId } } }
+    orderBy: [{ standingRank: ASC }]
+  ) {
+    standingRank
+    pj
+    pts
+    club { id }
+  }
+  matches(
+    where: {
+      _and: [
+        { status: { eq: PLAYED } }
+        {
+          _or: [
+            { homeClub: { id: { eq: $homeClubId } } }
+            { awayClub: { id: { eq: $homeClubId } } }
+            { homeClub: { id: { eq: $awayClubId } } }
+            { awayClub: { id: { eq: $awayClubId } } }
+          ]
+        }
+      ]
+    }
+    orderBy: [{ matchDate: DESC }, { startTime: DESC }]
+    limit: 60
+  ) {
+    id
+    matchDate
+    homeScore
+    awayScore
+    penaltiesHome
+    penaltiesAway
+    walkover
+    homeClub { id name }
+    awayClub { id name }
+    tournament { id name }
+  }
+}
+
 query MatchScoreSheet($matchId: String!) @auth(level: USER) {
   matches(where: { id: { eq: $matchId } }, limit: 1) {
     homeScore
@@ -444,11 +571,13 @@ query MatchScoreSheet($matchId: String!) @auth(level: USER) {
       assist { id }
       isPenalty
       isOwnGoal
+      minute
     }
-    matchCards_on_match {
+    matchCards_on_match(orderBy: [{ minute: ASC }]) {
       club { id }
       color
       player { id }
+      minute
     }
   }
 }

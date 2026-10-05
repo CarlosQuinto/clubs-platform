@@ -14,6 +14,7 @@ import { tournamentPhase } from "../../domains/competition/tournamentPhase";
 import { liveMatchPhase, liveMatchWindow } from "../../domains/matches/liveMatchPhase";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
+import { matchPath } from "../../shared/paths";
 import { asLiveMargin, asMatchDuration } from "../../shared/types";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
@@ -110,8 +111,8 @@ function toMatch(
   if (!date) return null;
   const venue = match.venue.trim();
   return {
-    id: "",
-    tournamentHref: `/torneos/${match.tournament.id}`,
+    id: match.id,
+    href: matchPath(match.id),
     isoDate: match.matchDate,
     day: date.day,
     month: date.month,
@@ -203,6 +204,7 @@ function liveWindow(match: LiveRow) {
 export function hasLiveWindow(data: LiveMatchesData, now: Date): boolean {
   const at = now.getTime();
   return data.matches.some((match) => {
+    if (match.status === "PLAYED") return false;
     const window = liveWindow(match);
     return window != null && window.start - LIVE_SOON_MS <= at && at < window.end;
   });
@@ -215,7 +217,7 @@ function score(value: number | null | undefined) {
 export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[] {
   const rows = data.matches.flatMap((match) => {
     if (!match.matchDate || !match.startTime || !TIME_RE.test(match.startTime)) return [];
-    const phase = liveMatchPhase(
+    let phase = liveMatchPhase(
       match.matchDate,
       match.startTime,
       asMatchDuration(match.tournament.durationMinutes),
@@ -223,13 +225,16 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
       now,
     );
     if (phase !== "live" && phase !== "finished") return [];
+    // Finalizado por el superadmin antes de la hora de fin: ya es resultado, no «en vivo».
+    if (match.status === "PLAYED") phase = "finished";
     const penaltiesHome = score(match.penaltiesHome);
     const penaltiesAway = score(match.penaltiesAway);
     const venue = match.venue.trim();
     const view: LiveMatchView = {
       id: match.id,
-      tournamentHref: `/torneos/${match.tournament.id}`,
+      href: matchPath(match.id),
       phase,
+      pending: phase === "finished" && match.status !== "PLAYED",
       homeName: match.homeClub.name,
       awayName: match.awayClub.name,
       homeLogo: match.homeClub.logoUrl?.trim() || null,

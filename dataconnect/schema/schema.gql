@@ -374,6 +374,8 @@ type MatchGoal @table(name: "match_goals")
   assistName: String! @col(dataType: "varchar(160)") @default(value: "")
   isPenalty: Boolean! @default(value: false)
   isOwnGoal: Boolean! @default(value: false)
+  # Minuto del partido; null en goles anteriores al registro en vivo.
+  minute: Int @col(dataType: "smallint")
 }
 
 type MatchCard @table(name: "match_cards")
@@ -384,6 +386,8 @@ type MatchCard @table(name: "match_cards")
   player: Player
   playerName: String! @col(dataType: "varchar(160)") @default(value: "")
   color: CardColor!
+  # Minuto del partido; null en tarjetas anteriores al registro en vivo.
+  minute: Int @col(dataType: "smallint")
 }
 
 type MatchGoalkeeper @table(name: "match_goalkeepers", key: ["match", "club", "player"]) {

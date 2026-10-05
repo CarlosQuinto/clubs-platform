@@ -36,8 +36,11 @@ export interface HomePageModel {
 /** Partido de hoy en la portada: «live» mientras se juega (más el margen), luego «finished». */
 export interface LiveMatchView {
   id: string;
-  tournamentHref: string;
+  /** Página del partido. */
+  href: string;
   phase: "live" | "finished";
+  /** Terminó por hora pero el superadmin aún no lo finaliza: el marcador puede cambiar. */
+  pending: boolean;
   homeName: string;
   awayName: string;
   homeLogo: string | null;

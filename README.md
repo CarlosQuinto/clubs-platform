@@ -67,6 +67,7 @@ Hay tres tipos de usuario:
 | `/torneos/:id` | Ficha del torneo: tabla de posiciones con escudos, goleadores, calendario por jornada (fecha u “Por definir”), resumen de partido y podio cuando el torneo está finalizado y tiene podio guardado. |
 | `/equipos` | Directorio de clubes y posiciones por temporada y categoría. |
 | `/partidos` | Próximos partidos con filtros. |
+| `/partido/:id` | Página del partido: marcador, minuto y estado (por empezar, en vivo, por confirmar, final), cronología de goles y tarjetas, estadísticas, alineaciones en una cancha con la formación de cada club, y previa (posición en la tabla, forma reciente, historial entre ambos y convocados). Las tarjetas de partido de la portada, de `/partidos` y del calendario del torneo llevan aquí. El superadmin ve el botón «Marcador en vivo». |
 | `/canchas` | Elegir cancha, fecha, horario y duración según la apertura y los apartados. El botón final abre WhatsApp; elegir un horario **no** reserva nada en la base. Solo aparece si `courts_enabled` está activo. |
 | `/contacto` | Formulario de contacto (se guarda en `inquiries`). |
 | `/registrar-equipo` | Solicitud de alta de un equipo (se guarda en `team_applications` como pendiente). |
@@ -366,11 +367,26 @@ Al rechazar, la app ejecuta `RejectTeamApplication` y la función manda el corre
 - Al sumar equipos a un torneo, la app llama a `sendTournamentEnrollmentNotice`. La función inserta en `tournament_notices` con `RecordTournamentNotice` y solo manda el correo si la fila es nueva, así que cada club recibe el aviso una vez.
 - La tabla de posiciones y los goleadores no se guardan: son vistas SQL (`TournamentStanding`, `TournamentScorer`) sobre los partidos `PLAYED`. Victoria 3, empate 1; desempate por puntos, diferencia, goles a favor e ID de club. Los próximos partidos salen de la vista `MatchListing`.
 
-### Partidos en vivo en la portada
+### Partidos en vivo
 
 - La sección «En vivo» de `/` lee los partidos de ayer y hoy con `LiveMatches` (pública). Un partido está **en vivo** desde su hora de inicio hasta inicio + `tournaments.duration_minutes` + `tournaments.live_margin_minutes`. Después aparece como **Terminado**, con su resultado, hasta el fin del día. La fase se calcula en el navegador con la hora local (`domains/matches/liveMatchPhase.ts`); no hay estado «en curso» en `matches`.
 - El margen (0, 3, 5, 10 o 15 min; 10 por defecto) se cambia en «Editar torneo». La misma lista se valida en el SQL de `UpdateTournamentSettings`.
-- El marcador lo actualiza el superadmin desde «Marcador» en la ficha del torneo (cada «Guardar» deja el partido en `PLAYED`). La portada vuelve a consultar cada 15 s solo mientras hay un partido en vivo (o a punto de empezar) y la pestaña está visible, y también al volver a la pestaña.
+- **Marcador en vivo.** Desde `/partido/:id`, el superadmin registra cada gol (normal, penal, autogol o «Sin asignar») y cada tarjeta al momento, con su minuto. El minuto se calcula con la hora de inicio programada y se puede corregir. Usa `AddLiveMatchGoal`, `DeleteLiveMatchGoal`, `AddLiveMatchCard` y `DeleteLiveMatchCard`:
+  - Mientras el partido sigue `SCHEDULED`, cada cambio recalcula `home_score`/`away_score` contando las filas de `match_goals`. El autogol se guarda en el `club_id` del equipo al que se le suma y lo marca un jugador rival.
+  - La tabla y los goleadores solo cuentan `PLAYED`, así que el marcador parcial no los toca.
+  - El id del evento lo genera el navegador (`crypto.randomUUID()`) y el SQL usa `ON CONFLICT (id)`, de modo que reintentar no lo duplica.
+- **Finalizar partido** (`FinishLiveMatch`) recalcula el marcador, deja el partido en `PLAYED` y activa el torneo si seguía próximo.
+- Después de finalizar ya no hay edición en vivo. Las correcciones se hacen con «Marcador» en la ficha del torneo:
+  - Cada «Guardar» de ese modal deja el partido en `PLAYED`.
+  - El modal reescribe goles y tarjetas y conserva su minuto (`InsertTimedMatchGoal`, `InsertMatchCard` con `$minute`).
+  - No se puede reabrir un partido.
+- **Permisos.** Las mutaciones en vivo comprueban `platformAdmin(key: { userId_expr: "auth.uid" })`, es decir, el uid de la sesión, no uno enviado por el cliente.
+- **Sondeo.**
+  - La portada vuelve a consultar cada 15 s solo mientras hay un partido en vivo (o a punto de empezar) y la pestaña está visible, y también al volver a la pestaña.
+  - La página del partido (`MatchDetail`, pública) hace lo mismo desde 2 min antes del inicio hasta una hora después de la hora de fin, mientras no esté finalizado (`shared/useVisibleInterval.ts`). Un partido cuya hora ya pasó pero sigue `SCHEDULED` se muestra «Por confirmar».
+  - La previa (`MatchPreview`) se pide una vez y otra al cambiar el estado.
+- **Minutos.** `match_goals.minute` y `match_cards.minute` son opcionales; los eventos anteriores no tienen minuto y van al final de la cronología.
+- **Alineaciones.** Son las que guarda cada club en `match_club_reports.lineup` (`{mode, formation, positions}`). Las coordenadas de las formaciones están en `domains/matches/formations.ts`, compartidas con la pizarra del club.
 
 ---
 

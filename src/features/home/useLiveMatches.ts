@@ -7,6 +7,7 @@ import {
 } from "../../infrastructure/dataconnect";
 import { isoDate } from "../../shared/helpers";
 import { TOURNAMENT_EDITED } from "../../domains/competition/tournamentEdited";
+import { useVisibleInterval } from "../../shared/useVisibleInterval";
 import { hasLiveWindow, toLiveMatches } from "./homeMapper";
 import type { LiveMatchView } from "./homeViewState";
 
@@ -61,26 +62,11 @@ export function useLiveMatches(): LiveMatchView[] {
     return () => window.removeEventListener(TOURNAMENT_EDITED, onEdited);
   }, [load]);
 
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      setNow(new Date());
-      load();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const at = new Date();
-      setNow(at);
-      if (document.visibilityState !== "visible") return;
-      const data = payloadRef.current;
-      if (isoDate(at) !== loadedDay.current || (data && hasLiveWindow(data, at))) load();
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  useVisibleInterval((at, resumed) => {
+    setNow(at);
+    const data = payloadRef.current;
+    if (resumed || isoDate(at) !== loadedDay.current || (data && hasLiveWindow(data, at))) load();
+  }, POLL_MS);
 
   return useMemo(() => (payload ? toLiveMatches(payload, now) : []), [payload, now]);
 }

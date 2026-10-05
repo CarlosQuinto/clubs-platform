@@ -45,6 +45,8 @@ This README will guide you through the process of using the generated JavaScript
   - [*TournamentsBySeason*](#tournamentsbyseason)
   - [*TournamentScreen*](#tournamentscreen)
   - [*MatchSummary*](#matchsummary)
+  - [*MatchDetail*](#matchdetail)
+  - [*MatchPreview*](#matchpreview)
   - [*MatchScoreSheet*](#matchscoresheet)
   - [*CourtBusyOnDate*](#courtbusyondate)
   - [*MatchesByTournament*](#matchesbytournament)
@@ -144,6 +146,12 @@ This README will guide you through the process of using the generated JavaScript
   - [*ActivateTournament*](#activatetournament)
   - [*InsertMatchGoal*](#insertmatchgoal)
   - [*InsertMatchCard*](#insertmatchcard)
+  - [*InsertTimedMatchGoal*](#inserttimedmatchgoal)
+  - [*AddLiveMatchGoal*](#addlivematchgoal)
+  - [*DeleteLiveMatchGoal*](#deletelivematchgoal)
+  - [*AddLiveMatchCard*](#addlivematchcard)
+  - [*DeleteLiveMatchCard*](#deletelivematchcard)
+  - [*FinishLiveMatch*](#finishlivematch)
   - [*SubmitInquiry*](#submitinquiry)
   - [*SubmitTeamApplication*](#submitteamapplication)
   - [*EnsureMyProfile*](#ensuremyprofile)
@@ -3575,6 +3583,7 @@ export interface HomePageData {
     })[];
   } & Tournament_Key)[];
   matches: ({
+    id: string;
     matchDate?: DateString | null;
     startTime?: string | null;
     venue: string;
@@ -3594,7 +3603,7 @@ export interface HomePageData {
         name: string;
       };
     } & Tournament_Key;
-  })[];
+  } & Match_Key)[];
   adPlacements: ({
     ad: {
       brand: string;
@@ -3736,6 +3745,7 @@ export interface LiveMatchesData {
     matchDate?: DateString | null;
     startTime?: string | null;
     venue: string;
+    status: MatchStatus;
     homeScore?: number | null;
     awayScore?: number | null;
     penaltiesHome?: number | null;
@@ -4923,6 +4933,365 @@ executeQuery(ref).then((response) => {
 });
 ```
 
+## MatchDetail
+You can execute the `MatchDetail` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+matchDetail(vars: MatchDetailVariables, options?: ExecuteQueryOptions): QueryPromise<MatchDetailData, MatchDetailVariables>;
+
+interface MatchDetailRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: MatchDetailVariables): QueryRef<MatchDetailData, MatchDetailVariables>;
+}
+export const matchDetailRef: MatchDetailRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+matchDetail(dc: DataConnect, vars: MatchDetailVariables, options?: ExecuteQueryOptions): QueryPromise<MatchDetailData, MatchDetailVariables>;
+
+interface MatchDetailRef {
+  ...
+  (dc: DataConnect, vars: MatchDetailVariables): QueryRef<MatchDetailData, MatchDetailVariables>;
+}
+export const matchDetailRef: MatchDetailRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the matchDetailRef:
+```typescript
+const name = matchDetailRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `MatchDetail` query requires an argument of type `MatchDetailVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface MatchDetailVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `MatchDetail` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `MatchDetailData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface MatchDetailData {
+  matches: ({
+    id: string;
+    roundLabel: string;
+    matchDate?: DateString | null;
+    startTime?: string | null;
+    venue: string;
+    status: MatchStatus;
+    homeScore?: number | null;
+    awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
+    walkover: boolean;
+    court?: {
+      name: string;
+      imageUrl?: string | null;
+    };
+    tournament: {
+      id: string;
+      name: string;
+      footballType: FootballType;
+      durationMinutes: number;
+      liveMarginMinutes: number;
+      category: {
+        name: string;
+      };
+    } & Tournament_Key;
+    homeClub: {
+      id: string;
+      name: string;
+      slug: string;
+      logoUrl?: string | null;
+      players_on_club: ({
+        id: string;
+        name: string;
+        shirtNumber: string;
+        imageUrl: string;
+        isCoach: boolean;
+      } & Player_Key)[];
+    } & Club_Key;
+    awayClub: {
+      id: string;
+      name: string;
+      slug: string;
+      logoUrl?: string | null;
+      players_on_club: ({
+        id: string;
+        name: string;
+        shirtNumber: string;
+        imageUrl: string;
+        isCoach: boolean;
+      } & Player_Key)[];
+    } & Club_Key;
+    matchClubReports_on_match: ({
+      club: {
+        id: string;
+      } & Club_Key;
+      lineup?: unknown | null;
+      mvp?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    })[];
+    matchAttendees_on_match: ({
+      club: {
+        id: string;
+      } & Club_Key;
+      player: {
+        id: string;
+      } & Player_Key;
+    })[];
+    matchGoals_on_match: ({
+      id: UUIDString;
+      minute?: number | null;
+      sortOrder: number;
+      isPenalty: boolean;
+      isOwnGoal: boolean;
+      scorerName: string;
+      assistName: string;
+      club: {
+        id: string;
+      } & Club_Key;
+      scorer?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+      assist?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    } & MatchGoal_Key)[];
+    matchCards_on_match: ({
+      id: UUIDString;
+      minute?: number | null;
+      color: CardColor;
+      playerName: string;
+      club: {
+        id: string;
+      } & Club_Key;
+      player?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    } & MatchCard_Key)[];
+  } & Match_Key)[];
+}
+```
+### Using `MatchDetail`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, matchDetail, MatchDetailVariables } from '@clubs-platform/dataconnect';
+
+// The `MatchDetail` query requires an argument of type `MatchDetailVariables`:
+const matchDetailVars: MatchDetailVariables = {
+  id: ..., 
+};
+
+// Call the `matchDetail()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await matchDetail(matchDetailVars);
+// Variables can be defined inline as well.
+const { data } = await matchDetail({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await matchDetail(dataConnect, matchDetailVars);
+
+console.log(data.matches);
+
+// Or, you can use the `Promise` API.
+matchDetail(matchDetailVars).then((response) => {
+  const data = response.data;
+  console.log(data.matches);
+});
+```
+
+### Using `MatchDetail`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, matchDetailRef, MatchDetailVariables } from '@clubs-platform/dataconnect';
+
+// The `MatchDetail` query requires an argument of type `MatchDetailVariables`:
+const matchDetailVars: MatchDetailVariables = {
+  id: ..., 
+};
+
+// Call the `matchDetailRef()` function to get a reference to the query.
+const ref = matchDetailRef(matchDetailVars);
+// Variables can be defined inline as well.
+const ref = matchDetailRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = matchDetailRef(dataConnect, matchDetailVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.matches);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.matches);
+});
+```
+
+## MatchPreview
+You can execute the `MatchPreview` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+matchPreview(vars: MatchPreviewVariables, options?: ExecuteQueryOptions): QueryPromise<MatchPreviewData, MatchPreviewVariables>;
+
+interface MatchPreviewRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: MatchPreviewVariables): QueryRef<MatchPreviewData, MatchPreviewVariables>;
+}
+export const matchPreviewRef: MatchPreviewRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+matchPreview(dc: DataConnect, vars: MatchPreviewVariables, options?: ExecuteQueryOptions): QueryPromise<MatchPreviewData, MatchPreviewVariables>;
+
+interface MatchPreviewRef {
+  ...
+  (dc: DataConnect, vars: MatchPreviewVariables): QueryRef<MatchPreviewData, MatchPreviewVariables>;
+}
+export const matchPreviewRef: MatchPreviewRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the matchPreviewRef:
+```typescript
+const name = matchPreviewRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `MatchPreview` query requires an argument of type `MatchPreviewVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface MatchPreviewVariables {
+  tournamentId: string;
+  homeClubId: string;
+  awayClubId: string;
+}
+```
+### Return Type
+Recall that executing the `MatchPreview` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `MatchPreviewData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface MatchPreviewData {
+  tournamentStandings: ({
+    standingRank?: number | null;
+    pj?: number | null;
+    pts?: number | null;
+    club?: {
+      id: string;
+    } & Club_Key;
+  })[];
+  matches: ({
+    id: string;
+    matchDate?: DateString | null;
+    homeScore?: number | null;
+    awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
+    walkover: boolean;
+    homeClub: {
+      id: string;
+      name: string;
+    } & Club_Key;
+    awayClub: {
+      id: string;
+      name: string;
+    } & Club_Key;
+    tournament: {
+      id: string;
+      name: string;
+    } & Tournament_Key;
+  } & Match_Key)[];
+}
+```
+### Using `MatchPreview`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, matchPreview, MatchPreviewVariables } from '@clubs-platform/dataconnect';
+
+// The `MatchPreview` query requires an argument of type `MatchPreviewVariables`:
+const matchPreviewVars: MatchPreviewVariables = {
+  tournamentId: ..., 
+  homeClubId: ..., 
+  awayClubId: ..., 
+};
+
+// Call the `matchPreview()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await matchPreview(matchPreviewVars);
+// Variables can be defined inline as well.
+const { data } = await matchPreview({ tournamentId: ..., homeClubId: ..., awayClubId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await matchPreview(dataConnect, matchPreviewVars);
+
+console.log(data.tournamentStandings);
+console.log(data.matches);
+
+// Or, you can use the `Promise` API.
+matchPreview(matchPreviewVars).then((response) => {
+  const data = response.data;
+  console.log(data.tournamentStandings);
+  console.log(data.matches);
+});
+```
+
+### Using `MatchPreview`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, matchPreviewRef, MatchPreviewVariables } from '@clubs-platform/dataconnect';
+
+// The `MatchPreview` query requires an argument of type `MatchPreviewVariables`:
+const matchPreviewVars: MatchPreviewVariables = {
+  tournamentId: ..., 
+  homeClubId: ..., 
+  awayClubId: ..., 
+};
+
+// Call the `matchPreviewRef()` function to get a reference to the query.
+const ref = matchPreviewRef(matchPreviewVars);
+// Variables can be defined inline as well.
+const ref = matchPreviewRef({ tournamentId: ..., homeClubId: ..., awayClubId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = matchPreviewRef(dataConnect, matchPreviewVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.tournamentStandings);
+console.log(data.matches);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.tournamentStandings);
+  console.log(data.matches);
+});
+```
+
 ## MatchScoreSheet
 You can execute the `MatchScoreSheet` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
@@ -4997,6 +5366,7 @@ export interface MatchScoreSheetData {
       } & Player_Key;
       isPenalty: boolean;
       isOwnGoal: boolean;
+      minute?: number | null;
     })[];
     matchCards_on_match: ({
       club: {
@@ -5006,6 +5376,7 @@ export interface MatchScoreSheetData {
       player?: {
         id: string;
       } & Player_Key;
+      minute?: number | null;
     })[];
   })[];
 }
@@ -16803,6 +17174,7 @@ export interface InsertMatchCardVariables {
   playerId: string;
   playerName: string;
   color: string;
+  minute?: number | null;
 }
 ```
 ### Return Type
@@ -16835,13 +17207,14 @@ const insertMatchCardVars: InsertMatchCardVariables = {
   playerId: ..., 
   playerName: ..., 
   color: ..., 
+  minute: ..., // optional
 };
 
 // Call the `insertMatchCard()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await insertMatchCard(insertMatchCardVars);
 // Variables can be defined inline as well.
-const { data } = await insertMatchCard({ userId: ..., matchId: ..., clubId: ..., playerId: ..., playerName: ..., color: ..., });
+const { data } = await insertMatchCard({ userId: ..., matchId: ..., clubId: ..., playerId: ..., playerName: ..., color: ..., minute: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -16872,12 +17245,13 @@ const insertMatchCardVars: InsertMatchCardVariables = {
   playerId: ..., 
   playerName: ..., 
   color: ..., 
+  minute: ..., // optional
 };
 
 // Call the `insertMatchCardRef()` function to get a reference to the mutation.
 const ref = insertMatchCardRef(insertMatchCardVars);
 // Variables can be defined inline as well.
-const ref = insertMatchCardRef({ userId: ..., matchId: ..., clubId: ..., playerId: ..., playerName: ..., color: ..., });
+const ref = insertMatchCardRef({ userId: ..., matchId: ..., clubId: ..., playerId: ..., playerName: ..., color: ..., minute: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -16895,6 +17269,814 @@ executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.query);
   console.log(data.card);
+});
+```
+
+## InsertTimedMatchGoal
+You can execute the `InsertTimedMatchGoal` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+insertTimedMatchGoal(vars: InsertTimedMatchGoalVariables): MutationPromise<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+
+interface InsertTimedMatchGoalRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: InsertTimedMatchGoalVariables): MutationRef<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+}
+export const insertTimedMatchGoalRef: InsertTimedMatchGoalRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+insertTimedMatchGoal(dc: DataConnect, vars: InsertTimedMatchGoalVariables): MutationPromise<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+
+interface InsertTimedMatchGoalRef {
+  ...
+  (dc: DataConnect, vars: InsertTimedMatchGoalVariables): MutationRef<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+}
+export const insertTimedMatchGoalRef: InsertTimedMatchGoalRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the insertTimedMatchGoalRef:
+```typescript
+const name = insertTimedMatchGoalRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `InsertTimedMatchGoal` mutation requires an argument of type `InsertTimedMatchGoalVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface InsertTimedMatchGoalVariables {
+  matchId: string;
+  clubId: string;
+  sortOrder: number;
+  scorerId?: string;
+  assistId?: string;
+  isPenalty?: boolean;
+  isOwnGoal?: boolean;
+  minute?: number | null;
+}
+```
+### Return Type
+Recall that executing the `InsertTimedMatchGoal` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `InsertTimedMatchGoalData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface InsertTimedMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  goal?: unknown | null;
+}
+```
+### Using `InsertTimedMatchGoal`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, insertTimedMatchGoal, InsertTimedMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `InsertTimedMatchGoal` mutation requires an argument of type `InsertTimedMatchGoalVariables`:
+const insertTimedMatchGoalVars: InsertTimedMatchGoalVariables = {
+  matchId: ..., 
+  clubId: ..., 
+  sortOrder: ..., 
+  scorerId: ..., // optional
+  assistId: ..., // optional
+  isPenalty: ..., // optional
+  isOwnGoal: ..., // optional
+  minute: ..., // optional
+};
+
+// Call the `insertTimedMatchGoal()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await insertTimedMatchGoal(insertTimedMatchGoalVars);
+// Variables can be defined inline as well.
+const { data } = await insertTimedMatchGoal({ matchId: ..., clubId: ..., sortOrder: ..., scorerId: ..., assistId: ..., isPenalty: ..., isOwnGoal: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await insertTimedMatchGoal(dataConnect, insertTimedMatchGoalVars);
+
+console.log(data.query);
+console.log(data.goal);
+
+// Or, you can use the `Promise` API.
+insertTimedMatchGoal(insertTimedMatchGoalVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.goal);
+});
+```
+
+### Using `InsertTimedMatchGoal`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, insertTimedMatchGoalRef, InsertTimedMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `InsertTimedMatchGoal` mutation requires an argument of type `InsertTimedMatchGoalVariables`:
+const insertTimedMatchGoalVars: InsertTimedMatchGoalVariables = {
+  matchId: ..., 
+  clubId: ..., 
+  sortOrder: ..., 
+  scorerId: ..., // optional
+  assistId: ..., // optional
+  isPenalty: ..., // optional
+  isOwnGoal: ..., // optional
+  minute: ..., // optional
+};
+
+// Call the `insertTimedMatchGoalRef()` function to get a reference to the mutation.
+const ref = insertTimedMatchGoalRef(insertTimedMatchGoalVars);
+// Variables can be defined inline as well.
+const ref = insertTimedMatchGoalRef({ matchId: ..., clubId: ..., sortOrder: ..., scorerId: ..., assistId: ..., isPenalty: ..., isOwnGoal: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = insertTimedMatchGoalRef(dataConnect, insertTimedMatchGoalVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.goal);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.goal);
+});
+```
+
+## AddLiveMatchGoal
+You can execute the `AddLiveMatchGoal` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+addLiveMatchGoal(vars: AddLiveMatchGoalVariables): MutationPromise<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+
+interface AddLiveMatchGoalRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: AddLiveMatchGoalVariables): MutationRef<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+}
+export const addLiveMatchGoalRef: AddLiveMatchGoalRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+addLiveMatchGoal(dc: DataConnect, vars: AddLiveMatchGoalVariables): MutationPromise<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+
+interface AddLiveMatchGoalRef {
+  ...
+  (dc: DataConnect, vars: AddLiveMatchGoalVariables): MutationRef<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+}
+export const addLiveMatchGoalRef: AddLiveMatchGoalRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the addLiveMatchGoalRef:
+```typescript
+const name = addLiveMatchGoalRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `AddLiveMatchGoal` mutation requires an argument of type `AddLiveMatchGoalVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface AddLiveMatchGoalVariables {
+  id: string;
+  matchId: string;
+  clubId: string;
+  scorerId?: string;
+  assistId?: string;
+  isPenalty?: boolean;
+  isOwnGoal?: boolean;
+  minute?: number | null;
+}
+```
+### Return Type
+Recall that executing the `AddLiveMatchGoal` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `AddLiveMatchGoalData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface AddLiveMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  goal?: number | null;
+  match?: unknown | null;
+}
+```
+### Using `AddLiveMatchGoal`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, addLiveMatchGoal, AddLiveMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `AddLiveMatchGoal` mutation requires an argument of type `AddLiveMatchGoalVariables`:
+const addLiveMatchGoalVars: AddLiveMatchGoalVariables = {
+  id: ..., 
+  matchId: ..., 
+  clubId: ..., 
+  scorerId: ..., // optional
+  assistId: ..., // optional
+  isPenalty: ..., // optional
+  isOwnGoal: ..., // optional
+  minute: ..., // optional
+};
+
+// Call the `addLiveMatchGoal()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await addLiveMatchGoal(addLiveMatchGoalVars);
+// Variables can be defined inline as well.
+const { data } = await addLiveMatchGoal({ id: ..., matchId: ..., clubId: ..., scorerId: ..., assistId: ..., isPenalty: ..., isOwnGoal: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await addLiveMatchGoal(dataConnect, addLiveMatchGoalVars);
+
+console.log(data.query);
+console.log(data.goal);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+addLiveMatchGoal(addLiveMatchGoalVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.goal);
+  console.log(data.match);
+});
+```
+
+### Using `AddLiveMatchGoal`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, addLiveMatchGoalRef, AddLiveMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `AddLiveMatchGoal` mutation requires an argument of type `AddLiveMatchGoalVariables`:
+const addLiveMatchGoalVars: AddLiveMatchGoalVariables = {
+  id: ..., 
+  matchId: ..., 
+  clubId: ..., 
+  scorerId: ..., // optional
+  assistId: ..., // optional
+  isPenalty: ..., // optional
+  isOwnGoal: ..., // optional
+  minute: ..., // optional
+};
+
+// Call the `addLiveMatchGoalRef()` function to get a reference to the mutation.
+const ref = addLiveMatchGoalRef(addLiveMatchGoalVars);
+// Variables can be defined inline as well.
+const ref = addLiveMatchGoalRef({ id: ..., matchId: ..., clubId: ..., scorerId: ..., assistId: ..., isPenalty: ..., isOwnGoal: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = addLiveMatchGoalRef(dataConnect, addLiveMatchGoalVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.goal);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.goal);
+  console.log(data.match);
+});
+```
+
+## DeleteLiveMatchGoal
+You can execute the `DeleteLiveMatchGoal` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+deleteLiveMatchGoal(vars: DeleteLiveMatchGoalVariables): MutationPromise<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+
+interface DeleteLiveMatchGoalRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: DeleteLiveMatchGoalVariables): MutationRef<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+}
+export const deleteLiveMatchGoalRef: DeleteLiveMatchGoalRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+deleteLiveMatchGoal(dc: DataConnect, vars: DeleteLiveMatchGoalVariables): MutationPromise<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+
+interface DeleteLiveMatchGoalRef {
+  ...
+  (dc: DataConnect, vars: DeleteLiveMatchGoalVariables): MutationRef<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+}
+export const deleteLiveMatchGoalRef: DeleteLiveMatchGoalRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the deleteLiveMatchGoalRef:
+```typescript
+const name = deleteLiveMatchGoalRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `DeleteLiveMatchGoal` mutation requires an argument of type `DeleteLiveMatchGoalVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface DeleteLiveMatchGoalVariables {
+  matchId: string;
+  goalId: string;
+}
+```
+### Return Type
+Recall that executing the `DeleteLiveMatchGoal` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `DeleteLiveMatchGoalData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface DeleteLiveMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  removed?: number | null;
+  match?: unknown | null;
+}
+```
+### Using `DeleteLiveMatchGoal`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, deleteLiveMatchGoal, DeleteLiveMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `DeleteLiveMatchGoal` mutation requires an argument of type `DeleteLiveMatchGoalVariables`:
+const deleteLiveMatchGoalVars: DeleteLiveMatchGoalVariables = {
+  matchId: ..., 
+  goalId: ..., 
+};
+
+// Call the `deleteLiveMatchGoal()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await deleteLiveMatchGoal(deleteLiveMatchGoalVars);
+// Variables can be defined inline as well.
+const { data } = await deleteLiveMatchGoal({ matchId: ..., goalId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await deleteLiveMatchGoal(dataConnect, deleteLiveMatchGoalVars);
+
+console.log(data.query);
+console.log(data.removed);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+deleteLiveMatchGoal(deleteLiveMatchGoalVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.removed);
+  console.log(data.match);
+});
+```
+
+### Using `DeleteLiveMatchGoal`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, deleteLiveMatchGoalRef, DeleteLiveMatchGoalVariables } from '@clubs-platform/dataconnect';
+
+// The `DeleteLiveMatchGoal` mutation requires an argument of type `DeleteLiveMatchGoalVariables`:
+const deleteLiveMatchGoalVars: DeleteLiveMatchGoalVariables = {
+  matchId: ..., 
+  goalId: ..., 
+};
+
+// Call the `deleteLiveMatchGoalRef()` function to get a reference to the mutation.
+const ref = deleteLiveMatchGoalRef(deleteLiveMatchGoalVars);
+// Variables can be defined inline as well.
+const ref = deleteLiveMatchGoalRef({ matchId: ..., goalId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = deleteLiveMatchGoalRef(dataConnect, deleteLiveMatchGoalVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.removed);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.removed);
+  console.log(data.match);
+});
+```
+
+## AddLiveMatchCard
+You can execute the `AddLiveMatchCard` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+addLiveMatchCard(vars: AddLiveMatchCardVariables): MutationPromise<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+
+interface AddLiveMatchCardRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: AddLiveMatchCardVariables): MutationRef<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+}
+export const addLiveMatchCardRef: AddLiveMatchCardRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+addLiveMatchCard(dc: DataConnect, vars: AddLiveMatchCardVariables): MutationPromise<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+
+interface AddLiveMatchCardRef {
+  ...
+  (dc: DataConnect, vars: AddLiveMatchCardVariables): MutationRef<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+}
+export const addLiveMatchCardRef: AddLiveMatchCardRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the addLiveMatchCardRef:
+```typescript
+const name = addLiveMatchCardRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `AddLiveMatchCard` mutation requires an argument of type `AddLiveMatchCardVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface AddLiveMatchCardVariables {
+  id: string;
+  matchId: string;
+  clubId: string;
+  playerId?: string;
+  color: string;
+  minute?: number | null;
+}
+```
+### Return Type
+Recall that executing the `AddLiveMatchCard` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `AddLiveMatchCardData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface AddLiveMatchCardData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  card?: number | null;
+  match?: unknown | null;
+}
+```
+### Using `AddLiveMatchCard`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, addLiveMatchCard, AddLiveMatchCardVariables } from '@clubs-platform/dataconnect';
+
+// The `AddLiveMatchCard` mutation requires an argument of type `AddLiveMatchCardVariables`:
+const addLiveMatchCardVars: AddLiveMatchCardVariables = {
+  id: ..., 
+  matchId: ..., 
+  clubId: ..., 
+  playerId: ..., // optional
+  color: ..., 
+  minute: ..., // optional
+};
+
+// Call the `addLiveMatchCard()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await addLiveMatchCard(addLiveMatchCardVars);
+// Variables can be defined inline as well.
+const { data } = await addLiveMatchCard({ id: ..., matchId: ..., clubId: ..., playerId: ..., color: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await addLiveMatchCard(dataConnect, addLiveMatchCardVars);
+
+console.log(data.query);
+console.log(data.card);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+addLiveMatchCard(addLiveMatchCardVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.card);
+  console.log(data.match);
+});
+```
+
+### Using `AddLiveMatchCard`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, addLiveMatchCardRef, AddLiveMatchCardVariables } from '@clubs-platform/dataconnect';
+
+// The `AddLiveMatchCard` mutation requires an argument of type `AddLiveMatchCardVariables`:
+const addLiveMatchCardVars: AddLiveMatchCardVariables = {
+  id: ..., 
+  matchId: ..., 
+  clubId: ..., 
+  playerId: ..., // optional
+  color: ..., 
+  minute: ..., // optional
+};
+
+// Call the `addLiveMatchCardRef()` function to get a reference to the mutation.
+const ref = addLiveMatchCardRef(addLiveMatchCardVars);
+// Variables can be defined inline as well.
+const ref = addLiveMatchCardRef({ id: ..., matchId: ..., clubId: ..., playerId: ..., color: ..., minute: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = addLiveMatchCardRef(dataConnect, addLiveMatchCardVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.card);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.card);
+  console.log(data.match);
+});
+```
+
+## DeleteLiveMatchCard
+You can execute the `DeleteLiveMatchCard` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+deleteLiveMatchCard(vars: DeleteLiveMatchCardVariables): MutationPromise<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+
+interface DeleteLiveMatchCardRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: DeleteLiveMatchCardVariables): MutationRef<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+}
+export const deleteLiveMatchCardRef: DeleteLiveMatchCardRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+deleteLiveMatchCard(dc: DataConnect, vars: DeleteLiveMatchCardVariables): MutationPromise<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+
+interface DeleteLiveMatchCardRef {
+  ...
+  (dc: DataConnect, vars: DeleteLiveMatchCardVariables): MutationRef<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+}
+export const deleteLiveMatchCardRef: DeleteLiveMatchCardRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the deleteLiveMatchCardRef:
+```typescript
+const name = deleteLiveMatchCardRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `DeleteLiveMatchCard` mutation requires an argument of type `DeleteLiveMatchCardVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface DeleteLiveMatchCardVariables {
+  matchId: string;
+  cardId: string;
+}
+```
+### Return Type
+Recall that executing the `DeleteLiveMatchCard` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `DeleteLiveMatchCardData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface DeleteLiveMatchCardData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  removed?: number | null;
+  match?: unknown | null;
+}
+```
+### Using `DeleteLiveMatchCard`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, deleteLiveMatchCard, DeleteLiveMatchCardVariables } from '@clubs-platform/dataconnect';
+
+// The `DeleteLiveMatchCard` mutation requires an argument of type `DeleteLiveMatchCardVariables`:
+const deleteLiveMatchCardVars: DeleteLiveMatchCardVariables = {
+  matchId: ..., 
+  cardId: ..., 
+};
+
+// Call the `deleteLiveMatchCard()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await deleteLiveMatchCard(deleteLiveMatchCardVars);
+// Variables can be defined inline as well.
+const { data } = await deleteLiveMatchCard({ matchId: ..., cardId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await deleteLiveMatchCard(dataConnect, deleteLiveMatchCardVars);
+
+console.log(data.query);
+console.log(data.removed);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+deleteLiveMatchCard(deleteLiveMatchCardVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.removed);
+  console.log(data.match);
+});
+```
+
+### Using `DeleteLiveMatchCard`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, deleteLiveMatchCardRef, DeleteLiveMatchCardVariables } from '@clubs-platform/dataconnect';
+
+// The `DeleteLiveMatchCard` mutation requires an argument of type `DeleteLiveMatchCardVariables`:
+const deleteLiveMatchCardVars: DeleteLiveMatchCardVariables = {
+  matchId: ..., 
+  cardId: ..., 
+};
+
+// Call the `deleteLiveMatchCardRef()` function to get a reference to the mutation.
+const ref = deleteLiveMatchCardRef(deleteLiveMatchCardVars);
+// Variables can be defined inline as well.
+const ref = deleteLiveMatchCardRef({ matchId: ..., cardId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = deleteLiveMatchCardRef(dataConnect, deleteLiveMatchCardVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.removed);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.removed);
+  console.log(data.match);
+});
+```
+
+## FinishLiveMatch
+You can execute the `FinishLiveMatch` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+finishLiveMatch(vars: FinishLiveMatchVariables): MutationPromise<FinishLiveMatchData, FinishLiveMatchVariables>;
+
+interface FinishLiveMatchRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: FinishLiveMatchVariables): MutationRef<FinishLiveMatchData, FinishLiveMatchVariables>;
+}
+export const finishLiveMatchRef: FinishLiveMatchRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+finishLiveMatch(dc: DataConnect, vars: FinishLiveMatchVariables): MutationPromise<FinishLiveMatchData, FinishLiveMatchVariables>;
+
+interface FinishLiveMatchRef {
+  ...
+  (dc: DataConnect, vars: FinishLiveMatchVariables): MutationRef<FinishLiveMatchData, FinishLiveMatchVariables>;
+}
+export const finishLiveMatchRef: FinishLiveMatchRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the finishLiveMatchRef:
+```typescript
+const name = finishLiveMatchRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `FinishLiveMatch` mutation requires an argument of type `FinishLiveMatchVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface FinishLiveMatchVariables {
+  matchId: string;
+}
+```
+### Return Type
+Recall that executing the `FinishLiveMatch` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `FinishLiveMatchData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface FinishLiveMatchData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  tournament?: number | null;
+  match?: unknown | null;
+}
+```
+### Using `FinishLiveMatch`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, finishLiveMatch, FinishLiveMatchVariables } from '@clubs-platform/dataconnect';
+
+// The `FinishLiveMatch` mutation requires an argument of type `FinishLiveMatchVariables`:
+const finishLiveMatchVars: FinishLiveMatchVariables = {
+  matchId: ..., 
+};
+
+// Call the `finishLiveMatch()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await finishLiveMatch(finishLiveMatchVars);
+// Variables can be defined inline as well.
+const { data } = await finishLiveMatch({ matchId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await finishLiveMatch(dataConnect, finishLiveMatchVars);
+
+console.log(data.query);
+console.log(data.tournament);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+finishLiveMatch(finishLiveMatchVars).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.tournament);
+  console.log(data.match);
+});
+```
+
+### Using `FinishLiveMatch`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, finishLiveMatchRef, FinishLiveMatchVariables } from '@clubs-platform/dataconnect';
+
+// The `FinishLiveMatch` mutation requires an argument of type `FinishLiveMatchVariables`:
+const finishLiveMatchVars: FinishLiveMatchVariables = {
+  matchId: ..., 
+};
+
+// Call the `finishLiveMatchRef()` function to get a reference to the mutation.
+const ref = finishLiveMatchRef(finishLiveMatchVars);
+// Variables can be defined inline as well.
+const ref = finishLiveMatchRef({ matchId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = finishLiveMatchRef(dataConnect, finishLiveMatchVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.query);
+console.log(data.tournament);
+console.log(data.match);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.query);
+  console.log(data.tournament);
+  console.log(data.match);
 });
 ```
 

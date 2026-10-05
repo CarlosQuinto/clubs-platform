@@ -5,7 +5,7 @@ import {
   courtBusyOnDate,
   dataConnect,
   insertMatchCard,
-  insertMatchGoal,
+  insertTimedMatchGoal,
   QueryFetchPolicy,
   saveMatchCourtHold,
   saveMatchScore,
@@ -21,6 +21,12 @@ export interface MatchGoalInput {
   assistId: string;
   isPenalty: boolean;
   isOwnGoal: boolean;
+  minute: number | null;
+}
+
+export interface MatchCardInput {
+  playerId: string;
+  minute: number | null;
 }
 
 function minutes(value: string) {
@@ -132,10 +138,10 @@ export async function saveMatchEvents(input: {
   awayClubId: string;
   homeGoals: MatchGoalInput[];
   awayGoals: MatchGoalInput[];
-  homeYellow: string[];
-  awayYellow: string[];
-  homeRed: string[];
-  awayRed: string[];
+  homeYellow: MatchCardInput[];
+  awayYellow: MatchCardInput[];
+  homeRed: MatchCardInput[];
+  awayRed: MatchCardInput[];
   names: Record<string, string>;
 }) {
   const userId = sessionUserId();
@@ -156,43 +162,35 @@ export async function saveMatchEvents(input: {
   for (const side of sides) {
     let order = 0;
     for (const goal of side.goals) {
-      if (!goal.scorerId) continue;
+      // Un gol en vivo «Sin asignar» conserva su fila por el minuto.
+      if (!goal.scorerId && goal.minute == null) continue;
       order += 1;
-      const created = await insertMatchGoal(dataConnect, {
-        userId,
+      const created = await insertTimedMatchGoal(dataConnect, {
         matchId: input.matchId,
         clubId: side.clubId,
         sortOrder: order,
         scorerId: goal.scorerId,
-        scorerName: input.names[goal.scorerId] || "",
         assistId: goal.isOwnGoal || goal.isPenalty ? "" : goal.assistId,
-        assistName: goal.isOwnGoal || goal.isPenalty ? "" : input.names[goal.assistId] || "",
         isPenalty: goal.isPenalty,
         isOwnGoal: goal.isOwnGoal,
+        minute: goal.minute,
       });
       if (created.data.goal == null) throw new Error("No se pudo guardar.");
     }
-    for (const playerId of side.yellow) {
-      if (!playerId) continue;
+    const cards = [
+      ...side.yellow.map((card) => ({ ...card, color: "YELLOW" })),
+      ...side.red.map((card) => ({ ...card, color: "RED" })),
+    ];
+    for (const card of cards) {
+      if (!card.playerId) continue;
       const created = await insertMatchCard(dataConnect, {
         userId,
         matchId: input.matchId,
         clubId: side.clubId,
-        playerId,
-        playerName: input.names[playerId] || "",
-        color: "YELLOW",
-      });
-      if (created.data.card == null) throw new Error("No se pudo guardar.");
-    }
-    for (const playerId of side.red) {
-      if (!playerId) continue;
-      const created = await insertMatchCard(dataConnect, {
-        userId,
-        matchId: input.matchId,
-        clubId: side.clubId,
-        playerId,
-        playerName: input.names[playerId] || "",
-        color: "RED",
+        playerId: card.playerId,
+        playerName: input.names[card.playerId] || "",
+        color: card.color,
+        minute: card.minute,
       });
       if (created.data.card == null) throw new Error("No se pudo guardar.");
     }

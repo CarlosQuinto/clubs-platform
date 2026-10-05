@@ -388,7 +388,7 @@ function MatchGrid({ matches }: { matches: UpcomingMatchView[] }) {
     <div className="match-list">
       <div className="match-list__grid">
         {matches.map((match) => (
-          <MatchCard key={`${match.tournamentHref}-${match.isoDate}-${match.homeName}`} match={match} />
+          <MatchCard key={match.id} match={match} />
         ))}
       </div>
     </div>
@@ -397,7 +397,7 @@ function MatchGrid({ matches }: { matches: UpcomingMatchView[] }) {
 
 function MatchCard({ match }: { match: UpcomingMatchView }) {
   return (
-    <Link to={match.tournamentHref} className="match-card">
+    <Link to={match.href} className="match-card">
       <time className="match-card__date" dateTime={match.isoDate} aria-label={match.dateLabel}>
         <span className="match-card__day">{match.day}</span>
         <span className="match-card__month">{match.month}</span>
@@ -449,15 +449,16 @@ function LiveMatchCard({ match }: { match: LiveMatchView }) {
   const home = scored ? String(match.homeScore) : live ? "0" : "–";
   const away = scored ? String(match.awayScore) : live ? "0" : "–";
   const note = [match.walkover ? "W.O." : null, match.penaltiesLabel].filter(Boolean).join(" · ");
+  const label = live ? "En vivo" : match.pending ? "Por confirmar" : "Terminado";
   return (
     <Link
-      to={match.tournamentHref}
+      to={match.href}
       className="match-card live-card"
-      aria-label={`${match.homeName} ${home}, ${match.awayName} ${away}. ${live ? "En vivo" : "Terminado"}.`}
+      aria-label={`${match.homeName} ${home}, ${match.awayName} ${away}. ${label}.`}
     >
       <div className={`live-card__status ${live ? "is-live" : "is-finished"}`}>
         {live ? <span className="live-card__pulse" aria-hidden /> : null}
-        <span className="live-card__label">{live ? "En vivo" : "Terminado"}</span>
+        <span className="live-card__label">{label}</span>
         <span className="live-card__time">{match.timeLabel}</span>
       </div>
       <div className="match-card__body">

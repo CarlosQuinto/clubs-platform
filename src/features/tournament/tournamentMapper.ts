@@ -16,6 +16,7 @@ import type {
   MatchSummaryView,
   PodiumSlotView,
   RoundView,
+  ScoreCardView,
   ScoreGoalView,
   SummarySideView,
   TournamentScreenView,
@@ -231,6 +232,7 @@ function goalsOf(
       assistId: goal.assist?.id || "",
       isPenalty: goal.isPenalty,
       isOwnGoal: goal.isOwnGoal,
+      minute: goal.minute ?? null,
     }));
 }
 
@@ -238,10 +240,10 @@ function cardsOf(
   rows: MatchScoreSheetData["matches"][number]["matchCards_on_match"],
   clubId: string,
   color: "YELLOW" | "RED",
-): string[] {
+): ScoreCardView[] {
   return rows
     .filter((card) => card.club.id === clubId && card.color === color && card.player?.id)
-    .map((card) => card.player!.id);
+    .map((card) => ({ playerId: card.player!.id, minute: card.minute ?? null }));
 }
 
 function asWindow(row: { weekday: number; startTime: string; endTime: string }): TimeWindow | null {

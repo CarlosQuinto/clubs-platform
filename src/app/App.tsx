@@ -13,6 +13,7 @@ import TournamentPage from "../features/tournament/TournamentScreenView";
 import ClubPage from "../features/club/ClubPage";
 import TeamsPage from "../features/teams/TeamsPageView";
 import MatchesPage from "../features/matches/MatchesPageView";
+import MatchPage from "../features/match/MatchDetailView";
 import Contact from "../features/contact/ContactView";
 import RegisterTeam from "../features/registerTeam/RegisterTeamView";
 import CourtsPage from "../features/courts/CourtsPageView";
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/temporadas/:id" element={<Navigate to="/torneos" replace />} />
             <Route path="/equipos" element={<TeamsPage />} />
             <Route path="/partidos" element={<MatchesPage />} />
+            <Route path="/partido/:id" element={<MatchPage />} />
             <Route path="/canchas" element={<CourtsPage />} />
             <Route path="/terminos" element={<TermsPage />} />
             <Route path="/aviso-de-privacidad" element={<PrivacyPage />} />

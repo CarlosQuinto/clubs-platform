@@ -1320,6 +1320,78 @@ export function insertMatchCard(dcOrVars, vars) {
   return executeMutation(insertMatchCardRef(dcInstance, inputVars));
 }
 
+export const insertTimedMatchGoalRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'InsertTimedMatchGoal', inputVars);
+}
+insertTimedMatchGoalRef.operationName = 'InsertTimedMatchGoal';
+
+export function insertTimedMatchGoal(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(insertTimedMatchGoalRef(dcInstance, inputVars));
+}
+
+export const addLiveMatchGoalRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'AddLiveMatchGoal', inputVars);
+}
+addLiveMatchGoalRef.operationName = 'AddLiveMatchGoal';
+
+export function addLiveMatchGoal(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(addLiveMatchGoalRef(dcInstance, inputVars));
+}
+
+export const deleteLiveMatchGoalRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'DeleteLiveMatchGoal', inputVars);
+}
+deleteLiveMatchGoalRef.operationName = 'DeleteLiveMatchGoal';
+
+export function deleteLiveMatchGoal(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(deleteLiveMatchGoalRef(dcInstance, inputVars));
+}
+
+export const addLiveMatchCardRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'AddLiveMatchCard', inputVars);
+}
+addLiveMatchCardRef.operationName = 'AddLiveMatchCard';
+
+export function addLiveMatchCard(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(addLiveMatchCardRef(dcInstance, inputVars));
+}
+
+export const deleteLiveMatchCardRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'DeleteLiveMatchCard', inputVars);
+}
+deleteLiveMatchCardRef.operationName = 'DeleteLiveMatchCard';
+
+export function deleteLiveMatchCard(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(deleteLiveMatchCardRef(dcInstance, inputVars));
+}
+
+export const finishLiveMatchRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'FinishLiveMatch', inputVars);
+}
+finishLiveMatchRef.operationName = 'FinishLiveMatch';
+
+export function finishLiveMatch(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(finishLiveMatchRef(dcInstance, inputVars));
+}
+
 export const submitInquiryRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -1696,6 +1768,32 @@ export function matchSummary(dcOrVars, varsOrOptions, options) {
   
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
   return executeQuery(matchSummaryRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
+}
+
+export const matchDetailRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'MatchDetail', inputVars);
+}
+matchDetailRef.operationName = 'MatchDetail';
+
+export function matchDetail(dcOrVars, varsOrOptions, options) {
+  
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
+  return executeQuery(matchDetailRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
+}
+
+export const matchPreviewRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'MatchPreview', inputVars);
+}
+matchPreviewRef.operationName = 'MatchPreview';
+
+export function matchPreview(dcOrVars, varsOrOptions, options) {
+  
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
+  return executeQuery(matchPreviewRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
 }
 
 export const matchScoreSheetRef = (dcOrVars, vars) => {

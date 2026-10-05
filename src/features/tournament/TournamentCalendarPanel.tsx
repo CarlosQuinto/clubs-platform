@@ -5,6 +5,7 @@ import { C, FormInput, FormSelect, PrimaryButton, SectionCard } from "../../shar
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { shortSlotLabel } from "../../domains/courts/courts";
 import { formatFriendlyTime } from "../../shared/helpers";
+import { matchPath } from "../../shared/paths";
 import { freeCourtsAt, saveMatchSchedule } from "../../domains/matches/matchCommands";
 import { loadMatchSummary, loadSlotHints } from "./tournamentQueries";
 import type { Court, CourtSlotMinutes, TimeWindow } from "../../shared/types";
@@ -219,6 +220,10 @@ function MatchRow({
               </div>
             )
           )}
+          <Link to={matchPath(match.id)} className="cal-match__link">
+            Ver partido
+            <ChevronRight size={13} />
+          </Link>
         </div>
         {admin ? (
           <div className="cal-match__aside">

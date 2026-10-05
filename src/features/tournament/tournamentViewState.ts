@@ -93,6 +93,13 @@ export interface ScoreGoalView {
   assistId: string;
   isPenalty: boolean;
   isOwnGoal: boolean;
+  /** Minuto registrado en vivo; null si no se anotó. */
+  minute: number | null;
+}
+
+export interface ScoreCardView {
+  playerId: string;
+  minute: number | null;
 }
 
 export interface MatchScoreSheetView {
@@ -106,8 +113,8 @@ export interface MatchScoreSheetView {
   awayPlayers: ScorePlayerView[];
   homeGoals: ScoreGoalView[];
   awayGoals: ScoreGoalView[];
-  homeYellow: string[];
-  homeRed: string[];
-  awayYellow: string[];
-  awayRed: string[];
+  homeYellow: ScoreCardView[];
+  homeRed: ScoreCardView[];
+  awayYellow: ScoreCardView[];
+  awayRed: ScoreCardView[];
 }

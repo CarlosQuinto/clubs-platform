@@ -5,9 +5,10 @@ import { useModalLock } from "../../shared/useModalLock";
 import { C, FormSelect, PrimaryButton, RADIUS, SHADOWS, SecondaryButton } from "../../shared/ui";
 import { loadMatchScoreSheet } from "./tournamentQueries";
 import { saveMatchEvents } from "../../domains/matches/matchCommands";
-import type { CalendarMatchView, ScoreGoalView, ScorePlayerView } from "./tournamentViewState";
+import type { CalendarMatchView, ScoreCardView, ScoreGoalView, ScorePlayerView } from "./tournamentViewState";
 
 const SCORE_MAX = 30;
+const MINUTE_MAX = 150;
 
 type GoalRow = ScoreGoalView;
 
@@ -25,10 +26,10 @@ export default function MatchScoreModal({
   const [awayScore, setAwayScore] = useState(match.awayScore ?? 0);
   const [homeGoals, setHomeGoals] = useState<GoalRow[]>([]);
   const [awayGoals, setAwayGoals] = useState<GoalRow[]>([]);
-  const [homeYellow, setHomeYellow] = useState<string[]>([]);
-  const [awayYellow, setAwayYellow] = useState<string[]>([]);
-  const [homeRed, setHomeRed] = useState<string[]>([]);
-  const [awayRed, setAwayRed] = useState<string[]>([]);
+  const [homeYellow, setHomeYellow] = useState<ScoreCardView[]>([]);
+  const [awayYellow, setAwayYellow] = useState<ScoreCardView[]>([]);
+  const [homeRed, setHomeRed] = useState<ScoreCardView[]>([]);
+  const [awayRed, setAwayRed] = useState<ScoreCardView[]>([]);
   const [homePlayers, setHomePlayers] = useState<ScorePlayerView[]>([]);
   const [awayPlayers, setAwayPlayers] = useState<ScorePlayerView[]>([]);
   const [homeClubId, setHomeClubId] = useState(match.home.id);
@@ -80,8 +81,8 @@ export default function MatchScoreModal({
         awayScore,
         homeClubId,
         awayClubId,
-        homeGoals: homeGoals.slice(0, homeScore).filter((goal) => goal.scorerId),
-        awayGoals: awayGoals.slice(0, awayScore).filter((goal) => goal.scorerId),
+        homeGoals: homeGoals.slice(0, homeScore).filter((goal) => goal.scorerId || goal.minute != null),
+        awayGoals: awayGoals.slice(0, awayScore).filter((goal) => goal.scorerId || goal.minute != null),
         homeYellow,
         awayYellow,
         homeRed,
@@ -234,10 +235,10 @@ function TeamBlock({
   count: number;
   rows: GoalRow[];
   onRows: (rows: GoalRow[]) => void;
-  yellow: string[];
-  onYellow: (ids: string[]) => void;
-  red: string[];
-  onRed: (ids: string[]) => void;
+  yellow: ScoreCardView[];
+  onYellow: (cards: ScoreCardView[]) => void;
+  red: ScoreCardView[];
+  onRed: (cards: ScoreCardView[]) => void;
   players: ScorePlayerView[];
   rivals: ScorePlayerView[];
 }) {
@@ -255,7 +256,14 @@ function TeamBlock({
             const scorers = row.isOwnGoal ? rivals : players;
             return (
               <div key={index} className="match-goal-card">
-                <div className="match-goal-card__label">{row.isOwnGoal ? `Autogol ${index + 1}` : `Gol ${index + 1}`}</div>
+                <div className="match-goal-card__label">
+                  <span>{row.isOwnGoal ? `Autogol ${index + 1}` : `Gol ${index + 1}`}</span>
+                  <MinuteInput
+                    value={row.minute}
+                    label={`Minuto del gol ${index + 1} ${name}`}
+                    onChange={(minute) => patch(index, { minute })}
+                  />
+                </div>
                 <FormSelect
                   value={row.scorerId}
                   aria-label={`Goleador ${index + 1} ${name}`}
@@ -305,8 +313,8 @@ function TeamBlock({
           })}
         </div>
       )}
-      <CardList label="Amarillas" tone="yellow" ids={yellow} onChange={onYellow} players={players} />
-      <CardList label="Rojas" tone="red" ids={red} onChange={onRed} players={players} />
+      <CardList label="Amarillas" tone="yellow" cards={yellow} onChange={onYellow} players={players} />
+      <CardList label="Rojas" tone="red" cards={red} onChange={onRed} players={players} />
     </div>
   );
 }
@@ -314,34 +322,33 @@ function TeamBlock({
 function CardList({
   label,
   tone,
-  ids,
+  cards,
   onChange,
   players,
 }: {
   label: string;
   tone: "yellow" | "red";
-  ids: string[];
-  onChange: (ids: string[]) => void;
+  cards: ScoreCardView[];
+  onChange: (cards: ScoreCardView[]) => void;
   players: ScorePlayerView[];
 }) {
+  const patch = (index: number, next: Partial<ScoreCardView>) =>
+    onChange(cards.map((card, item) => (item === index ? { ...card, ...next } : card)));
   return (
     <div className={`match-discipline match-discipline--${tone}`}>
       <div className="match-discipline__head">
         <span className="match-section-label">{label}</span>
-        <button type="button" className="match-discipline__add" onClick={() => onChange([...ids, ""])}>
+        <button type="button" className="match-discipline__add" onClick={() => onChange([...cards, { playerId: "", minute: null }])}>
           <Plus size={12} /> Añadir
         </button>
       </div>
-      {ids.length === 0 ? (
+      {cards.length === 0 ? (
         <p className="match-discipline__empty">Ninguna.</p>
       ) : (
         <div className="match-discipline__list">
-          {ids.map((id, index) => (
+          {cards.map((card, index) => (
             <div key={`${label}-${index}`} className="match-discipline__row">
-              <FormSelect
-                value={id}
-                onChange={(event) => onChange(ids.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
-              >
+              <FormSelect value={card.playerId} onChange={(event) => patch(index, { playerId: event.target.value })}>
                 <option value="">Jugador</option>
                 {players.map((player) => (
                   <option key={player.id} value={player.id}>
@@ -349,11 +356,16 @@ function CardList({
                   </option>
                 ))}
               </FormSelect>
+              <MinuteInput
+                value={card.minute}
+                label={`Minuto de ${label.toLowerCase()} ${index + 1}`}
+                onChange={(minute) => patch(index, { minute })}
+              />
               <button
                 type="button"
                 className="match-discipline__remove"
                 aria-label={`Quitar ${label.toLowerCase()}`}
-                onClick={() => onChange(ids.filter((_, itemIndex) => itemIndex !== index))}
+                onClick={() => onChange(cards.filter((_, itemIndex) => itemIndex !== index))}
               >
                 <X size={16} />
               </button>
@@ -365,8 +377,35 @@ function CardList({
   );
 }
 
+/** Minuto opcional del evento (1–150); vacío = sin minuto. */
+function MinuteInput({
+  value,
+  label,
+  onChange,
+}: {
+  value: number | null;
+  label: string;
+  onChange: (minute: number | null) => void;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      className="match-minute-input"
+      placeholder="Min."
+      aria-label={label}
+      value={value == null ? "" : String(value)}
+      onChange={(event) => {
+        const digits = event.target.value.replace(/\D/g, "").slice(0, 3);
+        const minute = digits ? Math.min(Number(digits), MINUTE_MAX) : null;
+        onChange(minute === 0 ? null : minute);
+      }}
+    />
+  );
+}
+
 function pad(rows: GoalRow[], count: number): GoalRow[] {
   const next = rows.slice(0, count);
-  while (next.length < count) next.push({ scorerId: "", assistId: "", isPenalty: false, isOwnGoal: false });
+  while (next.length < count) next.push({ scorerId: "", assistId: "", isPenalty: false, isOwnGoal: false, minute: null });
   return next;
 }

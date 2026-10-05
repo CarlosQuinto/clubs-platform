@@ -122,6 +122,50 @@ export interface Ad_Key {
   __typename?: 'Ad_Key';
 }
 
+export interface AddLiveMatchCardData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  card?: number | null;
+  match?: unknown | null;
+}
+
+export interface AddLiveMatchCardVariables {
+  id: string;
+  matchId: string;
+  clubId: string;
+  playerId?: string;
+  color: string;
+  minute?: number | null;
+}
+
+export interface AddLiveMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  goal?: number | null;
+  match?: unknown | null;
+}
+
+export interface AddLiveMatchGoalVariables {
+  id: string;
+  matchId: string;
+  clubId: string;
+  scorerId?: string;
+  assistId?: string;
+  isPenalty?: boolean;
+  isOwnGoal?: boolean;
+  minute?: number | null;
+}
+
 export interface AddTournamentClubData {
   query?: {
     platformAdmin?: {
@@ -1185,6 +1229,40 @@ export interface DeleteInventoryItemVariables {
   clubId: string;
 }
 
+export interface DeleteLiveMatchCardData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  removed?: number | null;
+  match?: unknown | null;
+}
+
+export interface DeleteLiveMatchCardVariables {
+  matchId: string;
+  cardId: string;
+}
+
+export interface DeleteLiveMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  removed?: number | null;
+  match?: unknown | null;
+}
+
+export interface DeleteLiveMatchGoalVariables {
+  matchId: string;
+  goalId: string;
+}
+
 export interface DeleteLocalityData {
   locality?: unknown | null;
 }
@@ -1279,6 +1357,22 @@ export interface FinancialGoal_Key {
   __typename?: 'FinancialGoal_Key';
 }
 
+export interface FinishLiveMatchData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  tournament?: number | null;
+  match?: unknown | null;
+}
+
+export interface FinishLiveMatchVariables {
+  matchId: string;
+}
+
 export interface GalleryPhoto_Key {
   id: string;
   __typename?: 'GalleryPhoto_Key';
@@ -1322,6 +1416,7 @@ export interface HomePageData {
     })[];
   } & Tournament_Key)[];
   matches: ({
+    id: string;
     matchDate?: DateString | null;
     startTime?: string | null;
     venue: string;
@@ -1341,7 +1436,7 @@ export interface HomePageData {
         name: string;
       };
     } & Tournament_Key;
-  })[];
+  } & Match_Key)[];
   adPlacements: ({
     ad: {
       brand: string;
@@ -1418,6 +1513,7 @@ export interface InsertMatchCardVariables {
   playerId: string;
   playerName: string;
   color: string;
+  minute?: number | null;
 }
 
 export interface InsertMatchGoalData {
@@ -1442,6 +1538,28 @@ export interface InsertMatchGoalVariables {
   assistName: string;
   isPenalty: boolean;
   isOwnGoal: boolean;
+}
+
+export interface InsertTimedMatchGoalData {
+  query?: {
+    platformAdmin?: {
+      user: {
+        id: string;
+      } & User_Key;
+    };
+  };
+  goal?: unknown | null;
+}
+
+export interface InsertTimedMatchGoalVariables {
+  matchId: string;
+  clubId: string;
+  sortOrder: number;
+  scorerId?: string;
+  assistId?: string;
+  isPenalty?: boolean;
+  isOwnGoal?: boolean;
+  minute?: number | null;
 }
 
 export interface InsertUnplayedMatchData {
@@ -1498,6 +1616,7 @@ export interface LiveMatchesData {
     matchDate?: DateString | null;
     startTime?: string | null;
     venue: string;
+    status: MatchStatus;
     homeScore?: number | null;
     awayScore?: number | null;
     penaltiesHome?: number | null;
@@ -1570,6 +1689,117 @@ export interface MatchClubReport_Key {
   __typename?: 'MatchClubReport_Key';
 }
 
+export interface MatchDetailData {
+  matches: ({
+    id: string;
+    roundLabel: string;
+    matchDate?: DateString | null;
+    startTime?: string | null;
+    venue: string;
+    status: MatchStatus;
+    homeScore?: number | null;
+    awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
+    walkover: boolean;
+    court?: {
+      name: string;
+      imageUrl?: string | null;
+    };
+    tournament: {
+      id: string;
+      name: string;
+      footballType: FootballType;
+      durationMinutes: number;
+      liveMarginMinutes: number;
+      category: {
+        name: string;
+      };
+    } & Tournament_Key;
+    homeClub: {
+      id: string;
+      name: string;
+      slug: string;
+      logoUrl?: string | null;
+      players_on_club: ({
+        id: string;
+        name: string;
+        shirtNumber: string;
+        imageUrl: string;
+        isCoach: boolean;
+      } & Player_Key)[];
+    } & Club_Key;
+    awayClub: {
+      id: string;
+      name: string;
+      slug: string;
+      logoUrl?: string | null;
+      players_on_club: ({
+        id: string;
+        name: string;
+        shirtNumber: string;
+        imageUrl: string;
+        isCoach: boolean;
+      } & Player_Key)[];
+    } & Club_Key;
+    matchClubReports_on_match: ({
+      club: {
+        id: string;
+      } & Club_Key;
+      lineup?: unknown | null;
+      mvp?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    })[];
+    matchAttendees_on_match: ({
+      club: {
+        id: string;
+      } & Club_Key;
+      player: {
+        id: string;
+      } & Player_Key;
+    })[];
+    matchGoals_on_match: ({
+      id: UUIDString;
+      minute?: number | null;
+      sortOrder: number;
+      isPenalty: boolean;
+      isOwnGoal: boolean;
+      scorerName: string;
+      assistName: string;
+      club: {
+        id: string;
+      } & Club_Key;
+      scorer?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+      assist?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    } & MatchGoal_Key)[];
+    matchCards_on_match: ({
+      id: UUIDString;
+      minute?: number | null;
+      color: CardColor;
+      playerName: string;
+      club: {
+        id: string;
+      } & Club_Key;
+      player?: {
+        id: string;
+        name: string;
+      } & Player_Key;
+    } & MatchCard_Key)[];
+  } & Match_Key)[];
+}
+
+export interface MatchDetailVariables {
+  id: string;
+}
+
 export interface MatchGoal_Key {
   id: UUIDString;
   __typename?: 'MatchGoal_Key';
@@ -1580,6 +1810,44 @@ export interface MatchGoalkeeper_Key {
   clubId: string;
   playerId: string;
   __typename?: 'MatchGoalkeeper_Key';
+}
+
+export interface MatchPreviewData {
+  tournamentStandings: ({
+    standingRank?: number | null;
+    pj?: number | null;
+    pts?: number | null;
+    club?: {
+      id: string;
+    } & Club_Key;
+  })[];
+  matches: ({
+    id: string;
+    matchDate?: DateString | null;
+    homeScore?: number | null;
+    awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
+    walkover: boolean;
+    homeClub: {
+      id: string;
+      name: string;
+    } & Club_Key;
+    awayClub: {
+      id: string;
+      name: string;
+    } & Club_Key;
+    tournament: {
+      id: string;
+      name: string;
+    } & Tournament_Key;
+  } & Match_Key)[];
+}
+
+export interface MatchPreviewVariables {
+  tournamentId: string;
+  homeClubId: string;
+  awayClubId: string;
 }
 
 export interface MatchScoreSheetData {
@@ -1614,6 +1882,7 @@ export interface MatchScoreSheetData {
       } & Player_Key;
       isPenalty: boolean;
       isOwnGoal: boolean;
+      minute?: number | null;
     })[];
     matchCards_on_match: ({
       club: {
@@ -1623,6 +1892,7 @@ export interface MatchScoreSheetData {
       player?: {
         id: string;
       } & Player_Key;
+      minute?: number | null;
     })[];
   })[];
 }
@@ -4239,6 +4509,78 @@ export const insertMatchCardRef: InsertMatchCardRef;
 export function insertMatchCard(vars: InsertMatchCardVariables): MutationPromise<InsertMatchCardData, InsertMatchCardVariables>;
 export function insertMatchCard(dc: DataConnect, vars: InsertMatchCardVariables): MutationPromise<InsertMatchCardData, InsertMatchCardVariables>;
 
+interface InsertTimedMatchGoalRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: InsertTimedMatchGoalVariables): MutationRef<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: InsertTimedMatchGoalVariables): MutationRef<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+  operationName: string;
+}
+export const insertTimedMatchGoalRef: InsertTimedMatchGoalRef;
+
+export function insertTimedMatchGoal(vars: InsertTimedMatchGoalVariables): MutationPromise<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+export function insertTimedMatchGoal(dc: DataConnect, vars: InsertTimedMatchGoalVariables): MutationPromise<InsertTimedMatchGoalData, InsertTimedMatchGoalVariables>;
+
+interface AddLiveMatchGoalRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: AddLiveMatchGoalVariables): MutationRef<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: AddLiveMatchGoalVariables): MutationRef<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+  operationName: string;
+}
+export const addLiveMatchGoalRef: AddLiveMatchGoalRef;
+
+export function addLiveMatchGoal(vars: AddLiveMatchGoalVariables): MutationPromise<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+export function addLiveMatchGoal(dc: DataConnect, vars: AddLiveMatchGoalVariables): MutationPromise<AddLiveMatchGoalData, AddLiveMatchGoalVariables>;
+
+interface DeleteLiveMatchGoalRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: DeleteLiveMatchGoalVariables): MutationRef<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: DeleteLiveMatchGoalVariables): MutationRef<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+  operationName: string;
+}
+export const deleteLiveMatchGoalRef: DeleteLiveMatchGoalRef;
+
+export function deleteLiveMatchGoal(vars: DeleteLiveMatchGoalVariables): MutationPromise<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+export function deleteLiveMatchGoal(dc: DataConnect, vars: DeleteLiveMatchGoalVariables): MutationPromise<DeleteLiveMatchGoalData, DeleteLiveMatchGoalVariables>;
+
+interface AddLiveMatchCardRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: AddLiveMatchCardVariables): MutationRef<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: AddLiveMatchCardVariables): MutationRef<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+  operationName: string;
+}
+export const addLiveMatchCardRef: AddLiveMatchCardRef;
+
+export function addLiveMatchCard(vars: AddLiveMatchCardVariables): MutationPromise<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+export function addLiveMatchCard(dc: DataConnect, vars: AddLiveMatchCardVariables): MutationPromise<AddLiveMatchCardData, AddLiveMatchCardVariables>;
+
+interface DeleteLiveMatchCardRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: DeleteLiveMatchCardVariables): MutationRef<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: DeleteLiveMatchCardVariables): MutationRef<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+  operationName: string;
+}
+export const deleteLiveMatchCardRef: DeleteLiveMatchCardRef;
+
+export function deleteLiveMatchCard(vars: DeleteLiveMatchCardVariables): MutationPromise<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+export function deleteLiveMatchCard(dc: DataConnect, vars: DeleteLiveMatchCardVariables): MutationPromise<DeleteLiveMatchCardData, DeleteLiveMatchCardVariables>;
+
+interface FinishLiveMatchRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: FinishLiveMatchVariables): MutationRef<FinishLiveMatchData, FinishLiveMatchVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: FinishLiveMatchVariables): MutationRef<FinishLiveMatchData, FinishLiveMatchVariables>;
+  operationName: string;
+}
+export const finishLiveMatchRef: FinishLiveMatchRef;
+
+export function finishLiveMatch(vars: FinishLiveMatchVariables): MutationPromise<FinishLiveMatchData, FinishLiveMatchVariables>;
+export function finishLiveMatch(dc: DataConnect, vars: FinishLiveMatchVariables): MutationPromise<FinishLiveMatchData, FinishLiveMatchVariables>;
+
 interface SubmitInquiryRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: SubmitInquiryVariables): MutationRef<SubmitInquiryData, SubmitInquiryVariables>;
@@ -4598,6 +4940,30 @@ export const matchSummaryRef: MatchSummaryRef;
 
 export function matchSummary(vars: MatchSummaryVariables, options?: ExecuteQueryOptions): QueryPromise<MatchSummaryData, MatchSummaryVariables>;
 export function matchSummary(dc: DataConnect, vars: MatchSummaryVariables, options?: ExecuteQueryOptions): QueryPromise<MatchSummaryData, MatchSummaryVariables>;
+
+interface MatchDetailRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: MatchDetailVariables): QueryRef<MatchDetailData, MatchDetailVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: MatchDetailVariables): QueryRef<MatchDetailData, MatchDetailVariables>;
+  operationName: string;
+}
+export const matchDetailRef: MatchDetailRef;
+
+export function matchDetail(vars: MatchDetailVariables, options?: ExecuteQueryOptions): QueryPromise<MatchDetailData, MatchDetailVariables>;
+export function matchDetail(dc: DataConnect, vars: MatchDetailVariables, options?: ExecuteQueryOptions): QueryPromise<MatchDetailData, MatchDetailVariables>;
+
+interface MatchPreviewRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: MatchPreviewVariables): QueryRef<MatchPreviewData, MatchPreviewVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: MatchPreviewVariables): QueryRef<MatchPreviewData, MatchPreviewVariables>;
+  operationName: string;
+}
+export const matchPreviewRef: MatchPreviewRef;
+
+export function matchPreview(vars: MatchPreviewVariables, options?: ExecuteQueryOptions): QueryPromise<MatchPreviewData, MatchPreviewVariables>;
+export function matchPreview(dc: DataConnect, vars: MatchPreviewVariables, options?: ExecuteQueryOptions): QueryPromise<MatchPreviewData, MatchPreviewVariables>;
 
 interface MatchScoreSheetRef {
   /* Allow users to create refs without passing in DataConnect */
