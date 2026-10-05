@@ -1826,6 +1826,21 @@ exports.homePage = function homePage(dcOrVars, varsOrOptions, options) {
 }
 ;
 
+const liveMatchesRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'LiveMatches', inputVars);
+}
+liveMatchesRef.operationName = 'LiveMatches';
+exports.liveMatchesRef = liveMatchesRef;
+
+exports.liveMatches = function liveMatches(dcOrVars, varsOrOptions, options) {
+  
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
+  return executeQuery(liveMatchesRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
+}
+;
+
 const registerTeamPageRef = (dc) => {
   const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
   dcInstance._useGeneratedSdk();

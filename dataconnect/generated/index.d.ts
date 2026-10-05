@@ -1492,6 +1492,42 @@ export interface LiveAdsVariables {
   placement: AdPlacementKind;
 }
 
+export interface LiveMatchesData {
+  matches: ({
+    id: string;
+    matchDate?: DateString | null;
+    startTime?: string | null;
+    venue: string;
+    homeScore?: number | null;
+    awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
+    walkover: boolean;
+    homeClub: {
+      name: string;
+      logoUrl?: string | null;
+    };
+    awayClub: {
+      name: string;
+      logoUrl?: string | null;
+    };
+    tournament: {
+      id: string;
+      name: string;
+      durationMinutes: number;
+      liveMarginMinutes: number;
+      category: {
+        name: string;
+      };
+    } & Tournament_Key;
+  } & Match_Key)[];
+}
+
+export interface LiveMatchesVariables {
+  from: DateString;
+  to: DateString;
+}
+
 export interface Locality_Key {
   id: string;
   __typename?: 'Locality_Key';
@@ -2683,6 +2719,7 @@ export interface TournamentEditorData {
     legs: number;
     footballType: FootballType;
     durationMinutes: number;
+    liveMarginMinutes: number;
     startDate?: DateString | null;
     season: {
       id: string;
@@ -2958,6 +2995,7 @@ export interface UpdateTournamentSettingsVariables {
   footballType: string;
   durationMinutes: number;
   startDate?: DateString | null;
+  liveMarginMinutes?: number | null;
 }
 
 export interface User_Key {
@@ -4440,6 +4478,18 @@ export const homePageRef: HomePageRef;
 
 export function homePage(vars: HomePageVariables, options?: ExecuteQueryOptions): QueryPromise<HomePageData, HomePageVariables>;
 export function homePage(dc: DataConnect, vars: HomePageVariables, options?: ExecuteQueryOptions): QueryPromise<HomePageData, HomePageVariables>;
+
+interface LiveMatchesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: LiveMatchesVariables): QueryRef<LiveMatchesData, LiveMatchesVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: LiveMatchesVariables): QueryRef<LiveMatchesData, LiveMatchesVariables>;
+  operationName: string;
+}
+export const liveMatchesRef: LiveMatchesRef;
+
+export function liveMatches(vars: LiveMatchesVariables, options?: ExecuteQueryOptions): QueryPromise<LiveMatchesData, LiveMatchesVariables>;
+export function liveMatches(dc: DataConnect, vars: LiveMatchesVariables, options?: ExecuteQueryOptions): QueryPromise<LiveMatchesData, LiveMatchesVariables>;
 
 interface RegisterTeamPageRef {
   /* Allow users to create refs without passing in DataConnect */

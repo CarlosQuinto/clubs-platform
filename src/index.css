@@ -3969,6 +3969,81 @@ button {
   }
 }
 
+/* Sección «En vivo» de la portada */
+.live-card__status {
+  flex: 0 0 4.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.2rem;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.live-card__status.is-live {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.live-card__status.is-finished {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.live-card__label {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.live-card__time {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.live-card__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--red);
+  animation: live-card-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes live-card-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-card__pulse {
+    animation: none;
+  }
+}
+
+.live-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.live-card__score {
+  flex: 0 0 auto;
+  min-width: 1.4rem;
+  text-align: right;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--navy-900);
+  font-variant-numeric: tabular-nums;
+}
+
 .landing-match-rotator {
   overflow: hidden;
 }

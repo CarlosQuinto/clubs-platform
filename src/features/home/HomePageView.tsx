@@ -7,7 +7,7 @@ import {
   type TransitionEvent,
 } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Crown, Pencil, Trash2, Trophy } from "lucide-react";
+import { Calendar, Crown, Pencil, Radio, Trash2, Trophy } from "lucide-react";
 import { useTournamentEdit } from "../tournament/TournamentEditModal";
 import { ArchiveSection, TournamentGrid } from "../shell/ArchiveUI";
 import ConfirmModal from "../../shared/ConfirmModal";
@@ -24,7 +24,8 @@ import {
 } from "../../domains/clubs/clubDefaults";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
 import { useHomePage } from "./useHomePage";
-import type { HomeAdView, HomeTournamentCard } from "./homeViewState";
+import { useLiveMatches } from "./useLiveMatches";
+import type { HomeAdView, HomeTournamentCard, LiveMatchView } from "./homeViewState";
 
 const MATCH_PAGE = 6;
 const DESKTOP_QUERY = "(min-width: 900px)";
@@ -55,6 +56,7 @@ function useMediaQuery(query: string) {
 
 export default function HomePageView() {
   const home = useHomePage();
+  const live = useLiveMatches();
   const { user, isSuperAdmin, platformUnclaimed, claimPlatformAdmin } = useAuth();
   const [claiming, setClaiming] = useState(false);
   const desktop = useMediaQuery(DESKTOP_QUERY);
@@ -144,6 +146,8 @@ export default function HomePageView() {
             </button>
           </p>
         ) : null}
+
+        {live.length > 0 ? <LiveSection matches={live} /> : null}
 
         <Section
           title="Próximos partidos"
@@ -414,6 +418,64 @@ function MatchCard({ match }: { match: UpcomingMatchView }) {
             {match.venue ? <span className="match-card__venue">{match.venue}</span> : null}
           </div>
         )}
+      </div>
+    </Link>
+  );
+}
+
+function LiveSection({ matches }: { matches: LiveMatchView[] }) {
+  const playing = matches.some((match) => match.phase === "live");
+  return (
+    <Section
+      title={playing ? "En vivo" : "Resultados de hoy"}
+      icon={<Radio size={15} color={playing ? C.red : C.amber} />}
+      id="en-vivo"
+      tone="plain"
+    >
+      <div className="match-list">
+        <div className="match-list__grid">
+          {matches.map((match) => (
+            <LiveMatchCard key={match.id} match={match} />
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+function LiveMatchCard({ match }: { match: LiveMatchView }) {
+  const live = match.phase === "live";
+  const scored = match.homeScore != null && match.awayScore != null;
+  const home = scored ? String(match.homeScore) : live ? "0" : "–";
+  const away = scored ? String(match.awayScore) : live ? "0" : "–";
+  const note = [match.walkover ? "W.O." : null, match.penaltiesLabel].filter(Boolean).join(" · ");
+  return (
+    <Link
+      to={match.tournamentHref}
+      className="match-card live-card"
+      aria-label={`${match.homeName} ${home}, ${match.awayName} ${away}. ${live ? "En vivo" : "Terminado"}.`}
+    >
+      <div className={`live-card__status ${live ? "is-live" : "is-finished"}`}>
+        {live ? <span className="live-card__pulse" aria-hidden /> : null}
+        <span className="live-card__label">{live ? "En vivo" : "Terminado"}</span>
+        <span className="live-card__time">{match.timeLabel}</span>
+      </div>
+      <div className="match-card__body">
+        <div className="live-card__row">
+          <Side name={match.homeName} logo={match.homeLogo} />
+          <span className="live-card__score">{home}</span>
+        </div>
+        <div className="live-card__row">
+          <Side name={match.awayName} logo={match.awayLogo} />
+          <span className="live-card__score">{away}</span>
+        </div>
+        {match.subtitle ? <div className="match-card__comp">{match.subtitle}</div> : null}
+        {note || match.venue ? (
+          <div className="match-card__when">
+            {note ? <span className="match-card__time">{note}</span> : null}
+            {match.venue ? <span className="match-card__venue">{match.venue}</span> : null}
+          </div>
+        ) : null}
       </div>
     </Link>
   );

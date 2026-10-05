@@ -62,7 +62,7 @@ Hay tres tipos de usuario:
 
 | Ruta | Qué ofrece |
 |---|---|
-| `/` | Carrusel de portada, anuncios rotativos, próximos partidos, tarjetas de torneos activos y próximos. Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
+| `/` | Carrusel de portada, anuncios rotativos, sección «En vivo» con el marcador de los partidos de hoy, próximos partidos, tarjetas de torneos activos y próximos. Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
 | `/torneos` | Archivo de torneos: en curso, próximos y finalizados. El superadmin puede borrar un torneo que no tenga partidos jugados. |
 | `/torneos/:id` | Ficha del torneo: tabla de posiciones con escudos, goleadores, calendario por jornada (fecha u “Por definir”), resumen de partido y podio cuando el torneo está finalizado y tiene podio guardado. |
 | `/equipos` | Directorio de clubes y posiciones por temporada y categoría. |
@@ -365,6 +365,12 @@ Al rechazar, la app ejecuta `RejectTeamApplication` y la función manda el corre
 - Después de programar, la app llama a `sendMatchScheduleNotice`. La función lee el partido con `MatchScheduleNotice` y compara fecha, hora y cancha con `matches.schedule_notice_key`. Solo si cambiaron, avisa a los Presidentes de ambos clubes y actualiza la llave con `MarkMatchScheduleNotice`.
 - Al sumar equipos a un torneo, la app llama a `sendTournamentEnrollmentNotice`. La función inserta en `tournament_notices` con `RecordTournamentNotice` y solo manda el correo si la fila es nueva, así que cada club recibe el aviso una vez.
 - La tabla de posiciones y los goleadores no se guardan: son vistas SQL (`TournamentStanding`, `TournamentScorer`) sobre los partidos `PLAYED`. Victoria 3, empate 1; desempate por puntos, diferencia, goles a favor e ID de club. Los próximos partidos salen de la vista `MatchListing`.
+
+### Partidos en vivo en la portada
+
+- La sección «En vivo» de `/` lee los partidos de ayer y hoy con `LiveMatches` (pública). Un partido está **en vivo** desde su hora de inicio hasta inicio + `tournaments.duration_minutes` + `tournaments.live_margin_minutes`. Después aparece como **Terminado**, con su resultado, hasta el fin del día. La fase se calcula en el navegador con la hora local (`domains/matches/liveMatchPhase.ts`); no hay estado «en curso» en `matches`.
+- El margen (0, 3, 5, 10 o 15 min; 10 por defecto) se cambia en «Editar torneo». La misma lista se valida en el SQL de `UpdateTournamentSettings`.
+- El marcador lo actualiza el superadmin desde «Marcador» en la ficha del torneo (cada «Guardar» deja el partido en `PLAYED`). La portada vuelve a consultar cada 15 s solo mientras hay un partido en vivo (o a punto de empezar) y la pestaña está visible, y también al volver a la pestaña.
 
 ---
 

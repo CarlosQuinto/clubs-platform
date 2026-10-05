@@ -1,4 +1,9 @@
-import { FootballType, type HomePageData, TournamentStatus } from "../../infrastructure/dataconnect";
+import {
+  FootballType,
+  type HomePageData,
+  type LiveMatchesData,
+  TournamentStatus,
+} from "../../infrastructure/dataconnect";
 import { safeAdHref, safeAdImageUrl } from "../../domains/platform/ads";
 import {
   DEFAULT_PLATFORM_HERO_IMAGES,
@@ -6,16 +11,24 @@ import {
   PLATFORM_HEADLINE,
 } from "../../domains/clubs/clubDefaults";
 import { tournamentPhase } from "../../domains/competition/tournamentPhase";
+import { liveMatchPhase, liveMatchWindow } from "../../domains/matches/liveMatchPhase";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
+import { asLiveMargin, asMatchDuration } from "../../shared/types";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
-import type { HomeAdView, HomePageModel, HomeTournamentCard } from "./homeViewState";
+import type {
+  HomeAdView,
+  HomePageModel,
+  HomeTournamentCard,
+  LiveMatchView,
+} from "./homeViewState";
 
 const MATCH_LIMIT = 12;
 const TONE_COUNT = 4;
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 const TIME_RE = /^\d{2}:\d{2}$/;
+const LIVE_SOON_MS = 2 * 60_000;
 const LIVE = new Set<TournamentStatus>([TournamentStatus.ACTIVE, TournamentStatus.UPCOMING]);
 
 const FOOTBALL_LABEL: Record<FootballType, string> = {
@@ -172,4 +185,72 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
     activeTournaments: active,
     upcomingTournaments: upcoming,
   };
+}
+
+type LiveRow = LiveMatchesData["matches"][number];
+
+function liveWindow(match: LiveRow) {
+  if (!match.matchDate || !match.startTime) return null;
+  return liveMatchWindow(
+    match.matchDate,
+    match.startTime,
+    asMatchDuration(match.tournament.durationMinutes),
+    asLiveMargin(match.tournament.liveMarginMinutes),
+  );
+}
+
+/** Hay que seguir consultando: algún partido está en vivo o empieza en un par de minutos. */
+export function hasLiveWindow(data: LiveMatchesData, now: Date): boolean {
+  const at = now.getTime();
+  return data.matches.some((match) => {
+    const window = liveWindow(match);
+    return window != null && window.start - LIVE_SOON_MS <= at && at < window.end;
+  });
+}
+
+function score(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[] {
+  const rows = data.matches.flatMap((match) => {
+    if (!match.matchDate || !match.startTime || !TIME_RE.test(match.startTime)) return [];
+    const phase = liveMatchPhase(
+      match.matchDate,
+      match.startTime,
+      asMatchDuration(match.tournament.durationMinutes),
+      asLiveMargin(match.tournament.liveMarginMinutes),
+      now,
+    );
+    if (phase !== "live" && phase !== "finished") return [];
+    const penaltiesHome = score(match.penaltiesHome);
+    const penaltiesAway = score(match.penaltiesAway);
+    const venue = match.venue.trim();
+    const view: LiveMatchView = {
+      id: match.id,
+      tournamentHref: `/torneos/${match.tournament.id}`,
+      phase,
+      homeName: match.homeClub.name,
+      awayName: match.awayClub.name,
+      homeLogo: match.homeClub.logoUrl?.trim() || null,
+      awayLogo: match.awayClub.logoUrl?.trim() || null,
+      homeScore: score(match.homeScore),
+      awayScore: score(match.awayScore),
+      penaltiesLabel:
+        penaltiesHome != null && penaltiesAway != null
+          ? `${penaltiesHome}–${penaltiesAway} pen.`
+          : null,
+      walkover: match.walkover,
+      subtitle: [match.tournament.category.name, match.tournament.name].filter(Boolean).join(" · "),
+      timeLabel: formatFriendlyTime(match.startTime),
+      venue: venue || null,
+    };
+    return [{ view, start: `${match.matchDate}T${match.startTime}` }];
+  });
+  // En vivo primero, por hora de inicio; luego los terminados, el más reciente arriba.
+  rows.sort((a, b) => {
+    if (a.view.phase !== b.view.phase) return a.view.phase === "live" ? -1 : 1;
+    return a.view.phase === "live" ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start);
+  });
+  return rows.map((row) => row.view);
 }

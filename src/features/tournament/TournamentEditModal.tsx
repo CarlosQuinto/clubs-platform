@@ -33,11 +33,14 @@ import { isPlayed } from "../../domains/competition/stats";
 import {
   FOOTBALL_TYPES,
   asFootballType,
+  asLiveMargin,
   asMatchDuration,
   footballTypeLabel,
+  LIVE_MARGINS,
   MATCH_DURATIONS,
   type ClubSummary,
   type FootballType,
+  type LiveMarginMinutes,
   type MatchDurationMinutes,
   type Tournament,
 } from "../../shared/types";
@@ -142,6 +145,7 @@ export default function TournamentEditModal({
   const [draftFootballType, setDraftFootballType] = useState<FootballType>(7);
   const [draftStartDate, setDraftStartDate] = useState("");
   const [draftDuration, setDraftDuration] = useState<MatchDurationMinutes>(60);
+  const [draftMargin, setDraftMargin] = useState<LiveMarginMinutes>(10);
   const [saveOpen, setSaveOpen] = useState(false);
   const [lateEntry, setLateEntry] = useState<LateEntryChoice | null>(null);
   const [lateEntryHint, setLateEntryHint] = useState(false);
@@ -159,6 +163,7 @@ export default function TournamentEditModal({
     setDraftFootballType(asFootballType(tournament.footballType));
     setDraftStartDate(tournament.startDate || "");
     setDraftDuration(asMatchDuration(tournament.durationMinutes));
+    setDraftMargin(asLiveMargin(tournament.liveMarginMinutes));
     setSaveOpen(false);
     setReady(true);
   }, [tournamentId, hasTournament]);
@@ -190,11 +195,13 @@ export default function TournamentEditModal({
   const savedFootballType = asFootballType(tournament.footballType);
   const savedStartDate = tournament.startDate || "";
   const savedDuration = asMatchDuration(tournament.durationMinutes);
+  const savedMargin = asLiveMargin(tournament.liveMarginMinutes);
   const dirty =
     draftLegs !== savedLegs ||
     draftFootballType !== savedFootballType ||
     draftStartDate !== savedStartDate ||
     draftDuration !== savedDuration ||
+    draftMargin !== savedMargin ||
     !sameIdList(draftClubIds, tournament.clubIds);
   const planned = expectedMatchCount(draftClubIds.length, draftLegs);
   const playedReturns =
@@ -232,6 +239,7 @@ export default function TournamentEditModal({
     setDraftFootballType(savedFootballType);
     setDraftStartDate(savedStartDate);
     setDraftDuration(savedDuration);
+    setDraftMargin(savedMargin);
     setSaveOpen(false);
     onClose();
   };
@@ -250,6 +258,7 @@ export default function TournamentEditModal({
         footballType: football,
         durationMinutes: draftDuration,
         startDate: draftStartDate || null,
+        liveMarginMinutes: draftMargin,
       });
       if (settings.data.tournament == null) throw new Error("No se pudo guardar.");
       const previous = new Set(tournament.clubIds);
@@ -272,6 +281,7 @@ export default function TournamentEditModal({
         footballType: draftFootballType,
         startDate: draftStartDate || undefined,
         durationMinutes: draftDuration,
+        liveMarginMinutes: draftMargin,
       };
       const { toCreate, toDelete } = diffFixtures(updated, matches);
       for (const match of toDelete) {
@@ -449,6 +459,18 @@ export default function TournamentEditModal({
               />
             </div>
           </Field>
+          <Field label="Margen en vivo" hint="Minutos que el partido sigue «En vivo» en la portada tras su hora de fin.">
+            <div style={{ maxWidth: 420 }}>
+              <SegmentedControl
+                value={String(draftMargin)}
+                onChange={(v) => setDraftMargin(asLiveMargin(Number(v)))}
+                options={LIVE_MARGINS.map((minutes) => ({
+                  label: `${minutes} min`,
+                  value: String(minutes),
+                }))}
+              />
+            </div>
+          </Field>
           <Field label="Fecha de inicio">
             <FormInput
               type="date"
@@ -530,6 +552,8 @@ export default function TournamentEditModal({
             savedStartDate,
             draftDuration,
             savedDuration,
+            draftMargin,
+            savedMargin,
             clubNames,
             playedReturns,
           )}
@@ -852,6 +876,8 @@ function saveMessage(
   savedStartDate: string,
   draftDuration: MatchDurationMinutes,
   savedDuration: MatchDurationMinutes,
+  draftMargin: LiveMarginMinutes,
+  savedMargin: LiveMarginMinutes,
   clubNames: Record<string, string>,
   playedReturns: { homeClubId: string; awayClubId: string }[],
 ) {
@@ -881,6 +907,9 @@ function saveMessage(
   }
   if (draftDuration !== savedDuration) {
     lines.push(`Cada partido dura ${draftDuration} minutos.`);
+  }
+  if (draftMargin !== savedMargin) {
+    lines.push(`Cada partido sigue en vivo ${draftMargin} minutos tras su hora de fin.`);
   }
   if (draftStartDate !== savedStartDate) {
     lines.push(

@@ -186,6 +186,41 @@ query HomePage($today: Date!)
   }
 }
 
+# Desde ayer: un partido que empieza a las 23:30 sigue en vivo pasada la medianoche.
+query LiveMatches($from: Date!, $to: Date!)
+  @auth(level: PUBLIC, insecureReason: "Los partidos del día y su marcador son públicos.") {
+  matches(
+    where: {
+      matchDate: { ge: $from, le: $to }
+      status: { in: [SCHEDULED, PLAYED] }
+      tournament: {
+        _or: [{ status: { eq: ACTIVE } }, { status: { eq: UPCOMING } }]
+      }
+    }
+    orderBy: [{ matchDate: ASC }, { startTime: ASC }]
+    limit: 40
+  ) {
+    id
+    matchDate
+    startTime
+    venue
+    homeScore
+    awayScore
+    penaltiesHome
+    penaltiesAway
+    walkover
+    homeClub { name logoUrl }
+    awayClub { name logoUrl }
+    tournament {
+      id
+      name
+      durationMinutes
+      liveMarginMinutes
+      category { name }
+    }
+  }
+}
+
 query RegisterTeamPage
   @auth(level: PUBLIC, insecureReason: "El directorio de la solicitud de equipo es público.") {
   clubs(where: { active: { eq: true } }, orderBy: [{ name: ASC }], limit: 10) {

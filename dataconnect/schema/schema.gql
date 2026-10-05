@@ -279,6 +279,8 @@ type Tournament @table(name: "tournaments", key: "id")
   legs: Int! @default(value: 2)
   footballType: FootballType! @default(value: FUT_11)
   durationMinutes: Int! @default(value: 90)
+  # Minutos que un partido sigue «En vivo» en la portada después de su hora de fin.
+  liveMarginMinutes: Int! @default(value: 10)
   startDate: Date
   description: String! @default(value: "")
   createdAt: Timestamp! @default(expr: "request.time")
