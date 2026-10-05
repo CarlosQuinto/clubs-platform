@@ -215,6 +215,7 @@ export interface AdminClubsData {
     slug: string;
     name: string;
     active: boolean;
+    disabledReason?: string | null;
     locality?: {
       id: string;
     } & Locality_Key;
@@ -635,6 +636,7 @@ export interface ClubScreenData {
     presidentPhone: string;
     logoUrl?: string | null;
     active: boolean;
+    disabledReason?: string | null;
     locality?: {
       id: string;
       name: string;
@@ -1103,10 +1105,7 @@ export interface DeleteClubData {
     };
   };
   invites?: unknown | null;
-  heroes?: unknown | null;
-  members?: unknown | null;
-  windows?: unknown | null;
-  lineups?: unknown | null;
+  signups?: number | null;
   club?: unknown | null;
 }
 
@@ -2435,6 +2434,7 @@ export interface SetClubActiveVariables {
   userId?: string;
   id: string;
   active: boolean;
+  reason?: string;
 }
 
 export interface SetClubEventLineupData {

@@ -16,6 +16,7 @@ type NoticeClub = {
   id: string;
   name: string;
   slug?: string;
+  deletedAt?: string | null;
   clubMembers_on_club: { email: string }[];
   clubInvites_on_club: { email: string }[];
 };

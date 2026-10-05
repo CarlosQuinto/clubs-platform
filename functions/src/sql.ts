@@ -14,7 +14,7 @@ export function sql() {
 
 type AdminGate = {
   platformAdmin?: { email: string } | null;
-  clubMember?: { role: string } | null;
+  clubMember?: { role: string; club?: { deletedAt?: string | null } | null } | null;
 };
 
 async function adminGate(userId: string, clubId: string) {
@@ -33,7 +33,8 @@ export async function assertSuperAdmin(uid: string, message = "Solo un superadmi
 export async function assertClubAdmin(uid: string, clubId: string) {
   const gate = await adminGate(uid, clubId);
   if (gate.platformAdmin) return;
-  if (gate.clubMember?.role === "ADMIN") return;
+  // Un club eliminado (borrado lógico) ya no da permisos a sus miembros.
+  if (gate.clubMember?.role === "ADMIN" && !gate.clubMember.club?.deletedAt) return;
   throw new HttpsError(
     "permission-denied",
     "Solo el presidente o un superadmin puede invitar.",
@@ -52,12 +53,15 @@ export async function platformBrand() {
 }
 
 type MailRecipients = {
+  deletedAt?: string | null;
   clubMembers_on_club: { email: string }[];
   clubInvites_on_club: { email: string }[];
 };
 
 /** Correos de los Presidentes; si nadie aceptó aún, los de sus invitaciones. */
 export function presidentEmails(club: MailRecipients) {
+  // A un club eliminado ya no se le envían avisos.
+  if (club.deletedAt) return [];
   const clean = (rows: { email: string }[]) => [
     ...new Set(
       rows.map((row) => row.email.trim().toLowerCase()).filter((email) => email.includes("@")),

@@ -82,6 +82,8 @@ export interface ClubSummary {
   location?: string;
   presidentPhone?: string;
   active: boolean;
+  /** Motivo de la desactivación; vacío mientras el club está activo. */
+  disabledReason?: string;
 }
 
 export interface GoalStat {

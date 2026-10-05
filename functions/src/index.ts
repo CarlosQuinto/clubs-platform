@@ -101,11 +101,11 @@ export const sendClubInvite = onCall(CALLABLE, async (request) => {
   await assertClubAdmin(request.auth.uid, clubId);
 
   const found = await sql().executeQuery<
-    { club?: { id: string; name: string; slug: string } | null },
+    { club?: { id: string; name: string; slug: string; deletedAt?: string | null } | null },
     { clubId: string }
   >("ClubMailInfo", { clubId });
   const club = found.data.club;
-  if (!club) throw new HttpsError("not-found", "El club no existe.");
+  if (!club || club.deletedAt) throw new HttpsError("not-found", "El club no existe.");
 
   const key = emailKey(email);
   const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";

@@ -14,6 +14,8 @@ export interface ClubInfo {
   logoUrl?: string;
   presidentPhone?: string;
   active?: boolean;
+  /** Motivo de la desactivación; vacío mientras el club está activo. */
+  disabledReason?: string;
   createdAt?: any;
 }
 
@@ -215,6 +217,7 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
       logoUrl: club.logoUrl || "",
       presidentPhone: club.presidentPhone,
       active: club.active,
+      disabledReason: club.disabledReason || "",
     },
     players: club.players_on_club.map((player) => ({
       ...player,

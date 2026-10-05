@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { Shield, X, Edit2, UploadCloud, LogIn, ArrowLeft } from "lucide-react";
+import { Shield, X, Edit2, UploadCloud, LogIn, ArrowLeft, AlertTriangle } from "lucide-react";
 import { useClubModel, ClubModelProvider } from "./useClubScreen";
 import StatsScopeBar from "./StatsScopeBar";
 import AvailabilityPanel from "./AvailabilityPanel";
@@ -332,6 +332,48 @@ function ClubShell() {
           </div>
         </div>
       </header>
+
+      {clubInfo?.active === false && (
+        <div
+          role="status"
+          style={{
+            backgroundColor: C.amberLight,
+            borderBottom: `1px solid ${C.amber}`,
+            padding: isMobile ? "0.75rem 1rem" : "0.9rem 1.5rem",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "800px",
+              margin: "0 auto",
+              display: "flex",
+              gap: "0.65rem",
+              alignItems: "flex-start",
+              fontSize: "0.85rem",
+              color: C.gray700,
+              lineHeight: 1.45,
+            }}
+          >
+            <AlertTriangle size={18} color={C.amber} style={{ flexShrink: 0, marginTop: "0.1rem" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", minWidth: 0 }}>
+              <strong style={{ color: C.gray900 }}>Este club está deshabilitado.</strong>
+              {clubInfo.disabledReason ? (
+                <span style={{ overflowWrap: "anywhere" }}>Motivo: {clubInfo.disabledReason}</span>
+              ) : null}
+              <span>
+                Si crees que es un error,{" "}
+                <Link
+                  to="/contacto#formulario"
+                  style={{ color: C.navy900, fontWeight: 700 }}
+                >
+                  comunícate con la administración de la plataforma
+                </Link>
+                .
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AdSlot placement="club" layout="club" />
 

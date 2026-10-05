@@ -86,6 +86,7 @@ export function toSearchAdminClubs(rows: unknown[] | null | undefined): ClubSumm
         name,
         localityId: localityId || undefined,
         active: record.active !== false,
+        disabledReason: typeof record.disabledReason === "string" ? record.disabledReason : "",
       },
     ];
   });

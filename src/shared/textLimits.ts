@@ -288,6 +288,16 @@ export function isPlatformMotto(value: string) {
   return isCopyText(value, 50);
 }
 
+/** Motivo para desactivar un club: obligatorio, de 5 a 100, con la puntuación de los textos públicos. */
+export function disableReason(value: string) {
+  return copyText(value, 100);
+}
+
+export function isDisableReason(value: string) {
+  const clean = value.trim();
+  return clean.length >= 5 && clean.length <= 100 && COPY_RE.test(clean);
+}
+
 export function coverHeadline(value: string) {
   return copyText(value, 35);
 }

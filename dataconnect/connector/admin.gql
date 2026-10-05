@@ -54,13 +54,14 @@ query AdminClubs
     id
     name
   }
-  clubs(orderBy: [{ name: ASC }]) {
+  clubs(where: { deletedAt: { isNull: true } }, orderBy: [{ name: ASC }]) {
     id
     slug
     name
     location @retired
     presidentPhone @retired
     active
+    disabledReason
     locality { id name @retired }
   }
 }
@@ -72,9 +73,11 @@ query SearchAdminClubs($term: String!) @auth(level: USER) {
              c.slug,
              c.name,
              c.active,
+             c.disabled_reason AS "disabledReason",
              c.locality_id AS "localityId"
       FROM clubs c
-      WHERE char_length(btrim($1)) BETWEEN 3 AND 30
+      WHERE c.deleted_at IS NULL
+        AND char_length(btrim($1)) BETWEEN 3 AND 30
         AND btrim($1) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
         AND translate(lower(c.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny')
           LIKE '%' || translate(lower(btrim($1)), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%'
@@ -406,19 +409,29 @@ mutation InsertClubHero($userId: String! = "", $id: UUID!, $clubId: String!, $ur
   )
 }
 
-mutation SetClubActive($userId: String! = "" $id: String! $active: Boolean!) @auth(level: USER) {
+mutation SetClubActive($userId: String! = "" $id: String! $active: Boolean! $reason: String! = "") @auth(level: USER) {
   query {
     platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
       user { id }
     }
   }
+  # Desactivar exige un motivo (se muestra en la página del club); activar lo borra.
   club: _executeReturningFirst(
     sql: """
-      UPDATE clubs SET active = $2
-      WHERE id = $1
+      UPDATE clubs
+      SET active = $2,
+          disabled_reason = CASE WHEN $2 THEN NULL ELSE btrim($3) END
+      WHERE id = $1 AND deleted_at IS NULL
+        AND (
+          $2
+          OR (
+            char_length(btrim($3)) BETWEEN 5 AND 100
+            AND btrim($3) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)*$'
+          )
+        )
       RETURNING id
     """
-    params: [$id, $active]
+    params: [$id, $active, $reason]
   )
 }
 
@@ -428,28 +441,23 @@ mutation DeleteClub($userId: String! = "" $id: String!) @auth(level: USER) {
       user { id }
     }
   }
+  # Borrado lógico: jugadores, partidos y finanzas se conservan para el historial de la liga.
+  # Los miembros se quedan (sin acceso, el club ya no se lista) por si se restaura por SQL.
+  # Sigue con _executeReturningFirst: cambiar su tipo (Any → Int) rompería clientes publicados.
   invites: _executeReturningFirst(
     sql: "DELETE FROM club_invites WHERE club_id = $1 RETURNING email_key AS id"
     params: [$id]
   )
-  heroes: _executeReturningFirst(
-    sql: "DELETE FROM club_hero_images WHERE club_id = $1 RETURNING club_id AS id"
-    params: [$id]
-  )
-  members: _executeReturningFirst(
-    sql: "DELETE FROM club_members WHERE club_id = $1 RETURNING user_id AS id"
-    params: [$id]
-  )
-  windows: _executeReturningFirst(
-    sql: "DELETE FROM club_availability_windows WHERE club_id = $1 RETURNING id::text AS id"
-    params: [$id]
-  )
-  lineups: _executeReturningFirst(
-    sql: "DELETE FROM club_default_lineups WHERE club_id = $1 RETURNING club_id AS id"
+  signups: _execute(
+    sql: "DELETE FROM signup_invites WHERE club_id = $1"
     params: [$id]
   )
   club: _executeReturningFirst(
-    sql: "DELETE FROM clubs WHERE id = $1 RETURNING id"
+    sql: """
+      UPDATE clubs SET active = false, deleted_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING id
+    """
     params: [$id]
   )
 }

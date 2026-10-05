@@ -812,6 +812,7 @@ export interface AdminClubsData {
     slug: string;
     name: string;
     active: boolean;
+    disabledReason?: string | null;
     locality?: {
       id: string;
     } & Locality_Key;
@@ -2413,6 +2414,7 @@ export interface ClubScreenData {
     presidentPhone: string;
     logoUrl?: string | null;
     active: boolean;
+    disabledReason?: string | null;
     locality?: {
       id: string;
       name: string;
@@ -7347,6 +7349,7 @@ export interface SetClubActiveVariables {
   userId?: string;
   id: string;
   active: boolean;
+  reason?: string;
 }
 ```
 ### Return Type
@@ -7376,13 +7379,14 @@ const setClubActiveVars: SetClubActiveVariables = {
   userId: ..., // optional
   id: ..., 
   active: ..., 
+  reason: ..., // optional
 };
 
 // Call the `setClubActive()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await setClubActive(setClubActiveVars);
 // Variables can be defined inline as well.
-const { data } = await setClubActive({ userId: ..., id: ..., active: ..., });
+const { data } = await setClubActive({ userId: ..., id: ..., active: ..., reason: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -7410,12 +7414,13 @@ const setClubActiveVars: SetClubActiveVariables = {
   userId: ..., // optional
   id: ..., 
   active: ..., 
+  reason: ..., // optional
 };
 
 // Call the `setClubActiveRef()` function to get a reference to the mutation.
 const ref = setClubActiveRef(setClubActiveVars);
 // Variables can be defined inline as well.
-const ref = setClubActiveRef({ userId: ..., id: ..., active: ..., });
+const ref = setClubActiveRef({ userId: ..., id: ..., active: ..., reason: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -7488,10 +7493,7 @@ export interface DeleteClubData {
     };
   };
   invites?: unknown | null;
-  heroes?: unknown | null;
-  members?: unknown | null;
-  windows?: unknown | null;
-  lineups?: unknown | null;
+  signups?: number | null;
   club?: unknown | null;
 }
 ```
@@ -7519,10 +7521,7 @@ const { data } = await deleteClub(dataConnect, deleteClubVars);
 
 console.log(data.query);
 console.log(data.invites);
-console.log(data.heroes);
-console.log(data.members);
-console.log(data.windows);
-console.log(data.lineups);
+console.log(data.signups);
 console.log(data.club);
 
 // Or, you can use the `Promise` API.
@@ -7530,10 +7529,7 @@ deleteClub(deleteClubVars).then((response) => {
   const data = response.data;
   console.log(data.query);
   console.log(data.invites);
-  console.log(data.heroes);
-  console.log(data.members);
-  console.log(data.windows);
-  console.log(data.lineups);
+  console.log(data.signups);
   console.log(data.club);
 });
 ```
@@ -7565,10 +7561,7 @@ const { data } = await executeMutation(ref);
 
 console.log(data.query);
 console.log(data.invites);
-console.log(data.heroes);
-console.log(data.members);
-console.log(data.windows);
-console.log(data.lineups);
+console.log(data.signups);
 console.log(data.club);
 
 // Or, you can use the `Promise` API.
@@ -7576,10 +7569,7 @@ executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.query);
   console.log(data.invites);
-  console.log(data.heroes);
-  console.log(data.members);
-  console.log(data.windows);
-  console.log(data.lineups);
+  console.log(data.signups);
   console.log(data.club);
 });
 ```

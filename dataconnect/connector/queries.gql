@@ -1,5 +1,5 @@
 query ClubBySlug($slug: String!) @auth(level: PUBLIC) {
-  clubs(where: { slug: { eq: $slug } }, limit: 1) {
+  clubs(where: { slug: { eq: $slug }, deletedAt: { isNull: true } }, limit: 1) {
     id
     slug
     name
@@ -587,7 +587,7 @@ query LiveAds($today: Date!, $placement: AdPlacementKind!) @auth(level: PUBLIC) 
 }
 
 query MyMemberships($userId: String!) @auth(level: USER) {
-  clubMembers(where: { user: { id: { eq: $userId } } }) {
+  clubMembers(where: { user: { id: { eq: $userId } }, club: { deletedAt: { isNull: true } } }) {
     role
     email
     club { id slug name logoUrl }
@@ -596,14 +596,14 @@ query MyMemberships($userId: String!) @auth(level: USER) {
 
 # Clubes de la sesión para el selector de espacios; solo lee las filas de auth.uid.
 query MySpaces @auth(level: USER) {
-  clubMembers(where: { userId: { eq_expr: "auth.uid" } }) {
+  clubMembers(where: { userId: { eq_expr: "auth.uid" }, club: { deletedAt: { isNull: true } } }) {
     role
     club { id slug name logoUrl }
   }
 }
 
 query MyOpenClubInvites($emailKey: String!) @auth(level: USER) {
-  clubInvites(where: { emailKey: { eq: $emailKey }, kind: { ne: ACCEPT } }) {
+  clubInvites(where: { emailKey: { eq: $emailKey }, kind: { ne: ACCEPT }, club: { deletedAt: { isNull: true } } }) {
     token
     role
     club { id slug name logoUrl }

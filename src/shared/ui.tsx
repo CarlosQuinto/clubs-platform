@@ -242,7 +242,8 @@ export const PrimaryButton: React.FC<
         color: C.white,
         fontWeight: "600",
         fontSize: "0.8125rem",
-        cursor: "pointer",
+        cursor: props.disabled ? "not-allowed" : "pointer",
+        opacity: props.disabled ? 0.45 : 1,
         letterSpacing: "0.01em",
         ...props.style,
       }}
@@ -265,7 +266,8 @@ export const SecondaryButton: React.FC<
       color: C.gray600,
       fontWeight: "600",
       fontSize: "0.8125rem",
-      cursor: "pointer",
+      cursor: props.disabled ? "not-allowed" : "pointer",
+      opacity: props.disabled ? 0.55 : 1,
       ...props.style,
     }}
   >

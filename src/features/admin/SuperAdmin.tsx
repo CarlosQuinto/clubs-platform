@@ -30,7 +30,9 @@ import {
   adminClubQuery,
   cellPhone,
   clubName,
+  disableReason,
   emailText,
+  isDisableReason,
   localityLabel,
   neighborhood,
   publicSlug,
@@ -168,6 +170,7 @@ function ClubsAdmin({
     name: club.name,
     localityId: club.locality?.id,
     active: club.active,
+    disabledReason: club.disabledReason || "",
   }));
   const [newLocality, setNewLocality] = useState("");
   const [name, setName] = useState("");
@@ -185,6 +188,7 @@ function ClubsAdmin({
     null | { type: "hide" | "show" | "delete"; club: ClubSummary }
   >(null);
   const [deleteSlug, setDeleteSlug] = useState("");
+  const [hideReason, setHideReason] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [localityError, setLocalityError] = useState("");
   const [localityBusy, setLocalityBusy] = useState(false);
@@ -361,7 +365,7 @@ function ClubsAdmin({
       console.error(err);
       setError(
         err instanceof Error && err.message === DATA_REVIEW_MESSAGE
-          ? DATA_REVIEW_MESSAGE
+          ? `${DATA_REVIEW_MESSAGE} Esa URL puede estar en uso por un club eliminado.`
           : "No se pudo crear el club.",
       );
     } finally {
@@ -371,6 +375,7 @@ function ClubsAdmin({
   };
 
   const toggleActive = async (club: ClubSummary) => {
+    setHideReason("");
     setClubAction({ type: club.active ? "hide" : "show", club });
   };
 
@@ -383,6 +388,7 @@ function ClubsAdmin({
     if (actionBusy) return;
     setClubAction(null);
     setDeleteSlug("");
+    setHideReason("");
   };
 
   const confirmClubAction = async () => {
@@ -390,16 +396,18 @@ function ClubsAdmin({
     if (clubAction.type === "delete" && deleteSlug !== clubAction.club.slug) {
       return;
     }
+    if (clubAction.type === "hide" && !isDisableReason(hideReason)) return;
     try {
       setActionBusy(true);
       if (clubAction.type === "delete") {
         await removeClub(clubAction.club.id);
       } else {
-        await setClubVisible(clubAction.club.id, clubAction.type === "show");
+        await setClubVisible(clubAction.club.id, clubAction.type === "show", hideReason);
       }
       screen.reload();
       setClubAction(null);
       setDeleteSlug("");
+      setHideReason("");
     } catch (err) {
       console.error(err);
       alert("No se pudo completar la acción.");
@@ -634,6 +642,11 @@ function ClubsAdmin({
                     club.location ||
                     "Sin localidad"}
                 </div>
+                {!club.active && club.disabledReason && (
+                  <div className="admin-club-item__meta">
+                    Motivo: {club.disabledReason}
+                  </div>
+                )}
               </div>
               <div className="admin-club-item__actions">
                 <SecondaryButton
@@ -692,7 +705,7 @@ function ClubsAdmin({
         }
         message={
           clubAction?.type === "delete"
-            ? `Se elimina el documento de ${clubAction.club.name} (/${clubAction.club.slug}). Los datos internos (jugadores, agenda…) dejarán de ser accesibles. Esta acción no se puede deshacer.`
+            ? `${clubAction.club.name} (/${clubAction.club.slug}) desaparecerá de la plataforma y sus administradores perderán el acceso. Sus partidos y resultados se conservan en el historial de la liga. La URL queda reservada.`
             : clubAction?.type === "hide"
               ? `${clubAction.club.name} dejará de aparecer como equipo activo y no se podrá inscribir en torneos nuevos. Puedes volver a activarlo después.`
               : `${clubAction?.club.name || ""} volverá a aparecer como equipo activo.`
@@ -707,7 +720,8 @@ function ClubsAdmin({
         danger={clubAction?.type !== "show"}
         busy={actionBusy}
         confirmDisabled={
-          clubAction?.type === "delete" && deleteSlug !== clubAction.club.slug
+          (clubAction?.type === "delete" && deleteSlug !== clubAction.club.slug) ||
+          (clubAction?.type === "hide" && !isDisableReason(hideReason))
         }
         onCancel={closeClubAction}
         onConfirm={() => void confirmClubAction()}
@@ -717,7 +731,24 @@ function ClubsAdmin({
             <FormInput
               value={deleteSlug}
               onChange={(e) => setDeleteSlug(e.target.value)}
-              placeholder={clubAction.club.slug}
+              autoComplete="off"
+            />
+          </Field>
+        )}
+        {clubAction?.type === "hide" && (
+          <Field
+            label="Motivo (visible en la página del club)"
+            tip={
+              hideReason.trim() && hideReason.trim().length < 5
+                ? "Escribe al menos 5 caracteres."
+                : ""
+            }
+            count={`${hideReason.length}/100`}
+          >
+            <FormInput
+              value={hideReason}
+              maxLength={100}
+              onChange={(e) => setHideReason(disableReason(e.target.value))}
               autoComplete="off"
             />
           </Field>

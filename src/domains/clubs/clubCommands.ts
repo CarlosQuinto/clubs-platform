@@ -114,8 +114,13 @@ export async function addClub(input: {
   return id;
 }
 
-export async function setClubVisible(id: string, active: boolean) {
-  const result = await setClubActive(dataConnect, { userId: sessionUserId(), id, active });
+export async function setClubVisible(id: string, active: boolean, reason = "") {
+  const result = await setClubActive(dataConnect, {
+    userId: sessionUserId(),
+    id,
+    active,
+    reason: active ? "" : reason.trim(),
+  });
   savedRow(result.data.club);
 }
 

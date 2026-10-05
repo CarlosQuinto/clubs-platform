@@ -6,6 +6,7 @@ query FunctionsAdminGate($userId: String!, $clubId: String!) @auth(level: NO_ACC
   }
   clubMember(key: { clubId: $clubId, userId: $userId }) {
     role
+    club { deletedAt }
   }
 }
 
@@ -21,6 +22,7 @@ query ClubMailInfo($clubId: String!) @auth(level: NO_ACCESS) {
     id
     name
     slug
+    deletedAt
   }
 }
 
@@ -54,12 +56,14 @@ query MatchScheduleNotice($matchId: String!) @auth(level: NO_ACCESS) {
     homeClub {
       id
       name
+      deletedAt
       clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
       clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
     }
     awayClub {
       id
       name
+      deletedAt
       clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
       clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
     }
@@ -91,6 +95,7 @@ query TournamentEnrollmentNotice($tournamentId: String!) @auth(level: NO_ACCESS)
         id
         name
         slug
+        deletedAt
         clubMembers_on_club(where: { role: { eq: ADMIN } }) { email }
         clubInvites_on_club(where: { role: { eq: ADMIN } }) { email }
       }

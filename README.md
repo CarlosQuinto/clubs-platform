@@ -411,6 +411,10 @@ Todo está en PostgreSQL, definido en [`dataconnect/schema/schema.gql`](dataconn
 | Galería | `albums`, `gallery_photos` |
 | Anuncios y entrada | `ads`, `ad_placements`, `inquiries`, `team_applications` |
 
+**Eliminar un club es un borrado lógico** (`DeleteClub`): se borran sus invitaciones pendientes (`club_invites`, `signup_invites`) y se marca `clubs.deleted_at` con `active = false`. El club desaparece de `/admin`, del directorio, del selector de torneos y del selector de espacios, y `/<slug>` muestra «Club no encontrado». Sus jugadores, partidos, podios y finanzas se conservan, así que la tabla, los goleadores y el historial de los rivales no cambian. El slug queda reservado. Los miembros se conservan sin acceso; para restaurar el club: `UPDATE clubs SET deleted_at = NULL, active = true WHERE slug = '<slug>';`.
+
+Desactivar un club (botón del ojo en `/admin`) pone `clubs.active = false` y exige un motivo en `clubs.disabled_reason` (de 5 a 100 caracteres, letras, números y `. , : ; ¡ ! ¿ ? ( ) ' " -`, sin dobles espacios; la misma regla en `textLimits.ts` y en el SQL de `SetClubActive`). El club sale de `/equipos`, del registro de equipos y de la inscripción a torneos, pero su página sigue abierta y muestra a todos un aviso con el motivo y un enlace a `/contacto`. Activarlo borra el motivo.
+
 Enums principales: `MemberRole` (`ADMIN`, `DT`, `PRENSA`, `TESORERO`), `TournamentStatus` (`UPCOMING`, `ACTIVE`, `FINISHED`), `MatchStatus` (`UNSCHEDULED`, `SCHEDULED`, `PLAYED`), `FootballType` (`FUT_7`, `FUT_9`, `FUT_11`), `CourtHoldSource` (`MATCH`, `MANUAL`), `AdStatus`, `AdPlacementKind`, `TeamApplicationStatus`, `InviteKind`.
 
 Vistas SQL (`@view`):

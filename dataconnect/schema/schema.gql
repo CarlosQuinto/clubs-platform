@@ -176,7 +176,8 @@ type Season @table(name: "seasons", key: "id")
 type Club @table(name: "clubs", key: "id")
   @unique(fields: ["slug"])
   @index(fields: ["localityId"])
-  @index(fields: ["active"]) {
+  @index(fields: ["active"])
+  @index(fields: ["deletedAt"]) {
   id: String! @col(dataType: "varchar(128)")
   slug: String! @col(dataType: "varchar(40)")
   name: String! @col(dataType: "varchar(160)")
@@ -186,8 +187,12 @@ type Club @table(name: "clubs", key: "id")
   presidentPhone: String! @col(dataType: "varchar(40)") @default(value: "")
   logoUrl: String
   active: Boolean! @default(value: true)
+  # Motivo visible en la página del club mientras está desactivado.
+  disabledReason: String
   createdBy: User
   createdAt: Timestamp! @default(expr: "request.time")
+  # Borrado lógico: el club se oculta, conserva su historial y su slug queda reservado.
+  deletedAt: Timestamp
 }
 
 type ClubHeroImage @table(name: "club_hero_images")

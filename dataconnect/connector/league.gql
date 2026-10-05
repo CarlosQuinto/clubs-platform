@@ -102,7 +102,7 @@ query MatchSlotHints(
 
 query ClubScreen($slug: String!)
   @auth(level: PUBLIC, insecureReason: "La página pública del equipo es visible para todos.") {
-  clubs(where: { slug: { eq: $slug } }, limit: 1) {
+  clubs(where: { slug: { eq: $slug }, deletedAt: { isNull: true } }, limit: 1) {
     id
     slug
     name
@@ -111,6 +111,7 @@ query ClubScreen($slug: String!)
     presidentPhone
     logoUrl
     active
+    disabledReason
     locality { id name }
     clubHeroImages_on_club(orderBy: [{ position: ASC }]) { url }
     clubDefaultLineups_on_club { mode formation positions }
