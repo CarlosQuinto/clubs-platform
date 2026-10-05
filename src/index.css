@@ -307,6 +307,21 @@
   padding-left: 2.55rem !important;
 }
 
+.contact-field--message textarea {
+  resize: none;
+  padding-bottom: 1.7rem !important;
+}
+
+.contact-field__count {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: #8d877c;
+  pointer-events: none;
+}
+
 .contact-form .contact-field select {
   appearance: none;
   -webkit-appearance: none;
@@ -4668,7 +4683,7 @@ button {
 }
 
 .court-form__field textarea {
-  resize: vertical;
+  resize: none;
   min-height: 4.6rem;
 }
 

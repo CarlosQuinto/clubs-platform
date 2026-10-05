@@ -52,6 +52,29 @@ query TeamsPage
   }
 }
 
+query SearchClubs($term: String!)
+  @auth(level: PUBLIC, insecureReason: "El directorio de equipos es público.") {
+  clubs: _select(
+    sql: """
+      SELECT c.name,
+             c.slug,
+             c.logo_url AS "logoUrl",
+             c.location,
+             c.president_phone AS "presidentPhone",
+             COALESCE(l.name, '') AS "localityName"
+      FROM clubs c
+      LEFT JOIN localities l ON l.id = c.locality_id
+      WHERE c.active
+        AND char_length(btrim($1)) BETWEEN 3 AND 30
+        AND btrim($1) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.''"-]+)*$'
+        AND translate(lower(c.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny')
+          LIKE '%' || translate(lower(btrim($1)), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%'
+      ORDER BY c.name
+    """
+    params: [$term]
+  )
+}
+
 query ContactPage
   @auth(level: PUBLIC, insecureReason: "El WhatsApp de contacto es público.") {
   platformSettings(id: "config") {

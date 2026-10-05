@@ -1,6 +1,8 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import {
   gmailConfigured,
   inviteEmailHtml,
@@ -28,7 +30,8 @@ const auth = getAuth();
 
 const APP_URL = process.env.APP_URL || "https://clubs-platform-aem9u.web.app";
 const ROLES = ["admin", "dt", "prensa", "tesorero"] as const;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/;
+const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 
 const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");
@@ -81,7 +84,14 @@ export const sendClubInvite = onCall(CALLABLE, async (request) => {
   const email = String(request.data?.email || "").trim().toLowerCase();
   const role = String(request.data?.role || "").trim();
   const token = String(request.data?.token || "").trim();
-  if (!clubId || !email || !token || !ROLES.includes(role as (typeof ROLES)[number])) {
+  const hold = request.data?.hold === true;
+  if (
+    !clubId ||
+    email.length < 6 ||
+    email.length > 320 ||
+    !TOKEN_RE.test(token) ||
+    !ROLES.includes(role as (typeof ROLES)[number])
+  ) {
     throw new HttpsError("invalid-argument", "Datos de invitación incompletos.");
   }
   if (!EMAIL_RE.test(email)) {
@@ -100,6 +110,9 @@ export const sendClubInvite = onCall(CALLABLE, async (request) => {
   const key = emailKey(email);
   const kind: InviteKind = (await userExists(email)) ? "accept" : "signup";
   const urls = inviteUrls(clubId, email, key, token, kind, club.slug || clubId);
+  if (hold) {
+    return { kind, mailed: false, url: urls.copyUrl, held: true };
+  }
   const { name: platformName } = await platformBrand();
   const content = {
     kind,
@@ -343,4 +356,36 @@ export const requestPasswordReset = onCall(CALLABLE, async (request) => {
     else await sendFirebasePasswordReset(email);
   }
   return { ok: true };
+});
+
+function imageKind(head: Buffer) {
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    head.length >= 8 &&
+    head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return "image/png";
+  }
+  if (
+    head.length >= 12 &&
+    head.toString("ascii", 0, 4) === "RIFF" &&
+    head.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+/** Foto de cancha: lee la cabecera real del archivo y borra lo que no sea JPEG, PNG o WEBP. */
+export const checkCourtPhoto = onObjectFinalized(async (event) => {
+  const path = event.data.name || "";
+  if (!path.startsWith("platform/courts/")) return;
+  const file = getStorage().bucket(event.data.bucket).file(path);
+  const [head] = await file.download({ start: 0, end: 11 });
+  const kind = imageKind(head);
+  if (!kind || kind !== event.data.contentType) {
+    await file.delete({ ignoreNotFound: true });
+  }
 });

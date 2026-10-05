@@ -7,14 +7,16 @@ export type SendInviteResult = {
   kind: InviteKind;
   mailed: boolean;
   url: string;
+  held?: boolean;
 };
 
-/** Correo de invitación a un club. La invitación se guarda aparte en SQL. */
+/** Correo de invitación a un club. Con hold, solo resuelve el tipo y no envía. */
 export async function sendClubInvite(params: {
   clubId: string;
   email: string;
   role: string;
   token: string;
+  hold?: boolean;
 }) {
   const fn = httpsCallable<typeof params, SendInviteResult>(functions, "sendClubInvite");
   return (await fn(params)).data;

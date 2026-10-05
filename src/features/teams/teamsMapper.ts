@@ -31,10 +31,38 @@ function inScope(
   return true;
 }
 
-export function filterClubs(clubs: ClubCardView[], query: string) {
-  const needle = fold(query);
-  if (!needle) return clubs;
-  return clubs.filter((club) => fold(club.name).includes(needle));
+export function clubSearchKey(value: string) {
+  return fold(value);
+}
+
+export function clubsMatching(clubs: ClubCardView[], key: string) {
+  if (!key) return clubs;
+  return clubs.filter((club) => fold(club.name).includes(key));
+}
+
+function textOf(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function toSearchClubs(rows: unknown[] | null | undefined): ClubCardView[] {
+  if (!rows) return [];
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const record = row as Record<string, unknown>;
+    const name = textOf(record.name);
+    const slug = textOf(record.slug);
+    if (!name) return [];
+    const phone = textOf(record.presidentPhone);
+    const locality = textOf(record.localityName) || textOf(record.location) || (slug ? `/${slug}` : "");
+    return [{
+      href: hrefFor(slug) || "/",
+      name,
+      locality,
+      logoUrl: textOf(record.logoUrl) || null,
+      phoneLabel: phone ? `Presidente: ${phone}` : null,
+      phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
+    }];
+  });
 }
 
 function emptyStanding(club: ClubSide): Omit<StandingRowView, "rank"> {

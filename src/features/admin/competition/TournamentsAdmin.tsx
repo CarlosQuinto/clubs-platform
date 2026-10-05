@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trophy } from "lucide-react";
-import { clampIsoDate, todayIso } from "../../../domains/courts/courts";
-import { lettersAndNumbers } from "../../../shared/textLimits";
+import { isIsoDate, todayIso } from "../../../domains/courts/courts";
+import {
+  categoryName,
+  isCategoryName,
+  isTournamentName,
+  isTournamentNote,
+  tournamentName,
+  tournamentNote,
+} from "../../../shared/textLimits";
 import { addCategory, addTournament } from "../../../domains/competition/competitionCommands";
 import {
   FOOTBALL_TYPES,
   MATCH_DURATIONS,
-  asFootballType,
-  asMatchDuration,
   type Category,
   type FootballType,
   type MatchDurationMinutes,
@@ -45,6 +50,8 @@ export default function TournamentsAdmin({
   const [startDate, setStartDate] = useState(todayIso);
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const creating = useRef(false);
   const navigate = useNavigate();
   const activeSeasons = useMemo(
     () => seasons.filter((s) => s.active),
@@ -54,6 +61,21 @@ export default function TournamentsAdmin({
   const selectedSeason = activeSeasons.find((s) => s.id === seasonId);
   const startMin = selectedSeason?.startDate || undefined;
   const startMax = selectedSeason?.endDate || undefined;
+  const dateOutsideSeason = Boolean(
+    selectedSeason &&
+      isIsoDate(startDate) &&
+      ((startMin && startDate < startMin) || (startMax && startDate > startMax)),
+  );
+  const canCreate =
+    isTournamentName(name) &&
+    Boolean(selectedSeason) &&
+    selectedCats.length > 0 &&
+    isIsoDate(startDate) &&
+    !dateOutsideSeason &&
+    isTournamentNote(description) &&
+    FOOTBALL_TYPES.includes(footballType) &&
+    MATCH_DURATIONS.includes(duration) &&
+    !busy;
 
   useEffect(() => {
     if (seasonId && !activeSeasons.some((s) => s.id === seasonId)) {
@@ -61,63 +83,41 @@ export default function TournamentsAdmin({
     }
   }, [seasonId, activeSeasons]);
 
-  useEffect(() => {
-    if (!selectedSeason) return;
-    setStartDate((current) =>
-      clampIsoDate(current || todayIso(), selectedSeason.startDate, selectedSeason.endDate),
-    );
-  }, [selectedSeason]);
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = name.trim();
-    if (!clean || !seasonId || selectedCats.length === 0) {
-      alert("Nombre, temporada y al menos una categoría.");
-      return;
-    }
-    if (!startDate) {
-      alert("Elige la fecha de inicio del torneo.");
-      return;
-    }
-    if ((startMin && startDate < startMin) || (startMax && startDate > startMax)) {
-      alert("La fecha de inicio tiene que estar dentro de la temporada.");
-      return;
-    }
-    if (!activeSeasons.some((s) => s.id === seasonId)) {
-      alert("Elige una temporada activa.");
-      return;
-    }
+    if (creating.current || !canCreate || !selectedSeason) return;
+    creating.current = true;
+    setBusy(true);
+    setError("");
     try {
-      setBusy(true);
       const groupId = crypto.randomUUID();
       const football =
         footballType === 7 ? "FUT_7" : footballType === 9 ? "FUT_9" : "FUT_11";
       for (const categoryId of selectedCats) {
         await addTournament({
-          name: clean,
+          name: name.trim(),
           seasonId,
           categoryId,
           groupId,
           footballType: football,
           durationMinutes: duration,
           startDate,
-          description: description.trim() || "",
+          description: description.trim(),
         });
       }
       onChange();
       setName("");
       setDescription("");
       setSelectedCats([]);
-      setStartDate(
-        clampIsoDate(todayIso(), selectedSeason?.startDate, selectedSeason?.endDate),
-      );
+      setStartDate(todayIso());
       setDuration(60);
       setFootballType(7);
       navigate("/torneos");
     } catch (err) {
       console.error(err);
-      alert("No se pudo crear el torneo.");
+      setError("No se pudo crear el torneo.");
     } finally {
+      creating.current = false;
       setBusy(false);
     }
   };
@@ -137,8 +137,11 @@ export default function TournamentsAdmin({
           <Field label="Nombre">
             <FormInput
               value={name}
-              maxLength={20}
-              onChange={(e) => setName(lettersAndNumbers(e.target.value, 20))}
+              maxLength={50}
+              onChange={(e) => {
+                setName(tournamentName(e.target.value));
+                setError("");
+              }}
               placeholder="Ej. Liga Municipal"
               required
             />
@@ -146,7 +149,11 @@ export default function TournamentsAdmin({
           <Field label="Temporada">
             <FormSelect
               value={seasonId}
-              onChange={(e) => setSeasonId(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSeasonId(activeSeasons.some((s) => s.id === next) ? next : "");
+                setError("");
+              }}
               required
             >
               <option value="">Selecciona...</option>
@@ -163,7 +170,10 @@ export default function TournamentsAdmin({
             <div style={{ maxWidth: 420 }}>
               <SegmentedControl
                 value={String(footballType)}
-                onChange={(v) => setFootballType(asFootballType(Number(v)))}
+                onChange={(v) => {
+                  const next = Number(v);
+                  if (next === 7 || next === 9 || next === 11) setFootballType(next);
+                }}
                 options={FOOTBALL_TYPES.map((n) => ({
                   label: `Fútbol ${n}`,
                   value: String(n),
@@ -175,7 +185,12 @@ export default function TournamentsAdmin({
             <div style={{ maxWidth: 420 }}>
               <SegmentedControl
                 value={String(duration)}
-                onChange={(v) => setDuration(asMatchDuration(Number(v)))}
+                onChange={(v) => {
+                  const next = Number(v);
+                  if (next === 30 || next === 60 || next === 90 || next === 120) {
+                    setDuration(next);
+                  }
+                }}
                 options={MATCH_DURATIONS.map((minutes) => ({
                   label: `${minutes} min`,
                   value: String(minutes),
@@ -189,9 +204,17 @@ export default function TournamentsAdmin({
               value={startDate}
               min={startMin}
               max={startMax}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setError("");
+              }}
               required
             />
+            {dateOutsideSeason && (
+              <span style={{ color: C.red, fontSize: "0.72rem" }}>
+                La fecha de inicio tiene que estar dentro de la temporada.
+              </span>
+            )}
           </Field>
         </div>
         <Field label="Categorías">
@@ -207,12 +230,16 @@ export default function TournamentsAdmin({
             rows={2}
             maxLength={100}
             value={description}
-            onChange={(e) => setDescription(lettersAndNumbers(e.target.value, 100))}
+            onChange={(e) => setDescription(tournamentNote(e.target.value))}
+            style={{ resize: "none" }}
           />
         </Field>
+        {error && (
+          <p style={{ margin: 0, color: C.red, fontSize: "0.72rem" }}>{error}</p>
+        )}
         <PrimaryButton
           type="submit"
-          disabled={busy}
+          disabled={!canCreate}
           style={{
             display: "flex",
             alignItems: "center",
@@ -243,6 +270,8 @@ function CategoryPicker({
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const creatingRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const selected = categories.filter((c) => selectedIds.includes(c.id));
@@ -270,17 +299,18 @@ function CategoryPicker({
 
   const createCategory = async () => {
     const clean = newName.trim();
-    if (!clean || creating) return;
+    if (creatingRef.current || !isCategoryName(clean)) return;
     const existing = categories.find(
       (c) => c.name.toLowerCase() === clean.toLowerCase(),
     );
     if (existing) {
-      addId(existing.id);
-      setNewName("");
+      setError("Esa categoría ya existe.");
       return;
     }
+    creatingRef.current = true;
+    setCreating(true);
+    setError("");
     try {
-      setCreating(true);
       const nextOrder =
         categories.reduce((max, c) => Math.max(max, c.order ?? 0), 0) + 1;
       const id = await addCategory(clean, nextOrder);
@@ -289,8 +319,9 @@ function CategoryPicker({
       setNewName("");
     } catch (err) {
       console.error(err);
-      alert("No se pudo crear la categoría.");
+      setError("No se pudo crear la categoría.");
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
@@ -433,8 +464,11 @@ function CategoryPicker({
             <div style={{ display: "flex", gap: "0.35rem" }}>
               <FormInput
                 value={newName}
-                maxLength={20}
-                onChange={(e) => setNewName(lettersAndNumbers(e.target.value, 20))}
+                maxLength={40}
+                onChange={(e) => {
+                  setNewName(categoryName(e.target.value));
+                  setError("");
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
@@ -445,13 +479,18 @@ function CategoryPicker({
               />
               <PrimaryButton
                 type="button"
-                disabled={creating || !newName.trim()}
+                disabled={creating || !isCategoryName(newName)}
                 onClick={() => void createCategory()}
                 style={{ whiteSpace: "nowrap", padding: "0.45rem 0.7rem" }}
               >
-                {creating ? "…" : "Crear"}
+                {creating ? "Creando..." : "Crear"}
               </PrimaryButton>
             </div>
+            {error && (
+              <p style={{ margin: "0.35rem 0 0", color: C.red, fontSize: "0.72rem" }}>
+                {error}
+              </p>
+            )}
           </div>
         )}
       </div>

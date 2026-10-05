@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   Crown,
@@ -25,15 +25,32 @@ import InviteSignupLink from "../shell/InviteSignupLink";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { useAuth } from "../../domains/auth/AuthContext";
-import { normalizeSlug, RESERVED_SLUGS } from "../../shared/paths";
-import { digitsOnly, isEmail, lettersAndNumbers } from "../../shared/textLimits";
+import { normalizeSlug } from "../../shared/paths";
+import {
+  adminClubQuery,
+  cellPhone,
+  clubName,
+  emailText,
+  localityLabel,
+  neighborhood,
+  publicSlug,
+} from "../../shared/textLimits";
 import {
   addClub,
   addLocality,
+  DATA_REVIEW_MESSAGE,
+  findAdminClubs,
   loadClubs,
   removeClub,
   setClubVisible,
 } from "../../domains/clubs/clubCommands";
+import {
+  adminClubSearchKey,
+  clubsMatchingName,
+  toSearchAdminClubs,
+  validateLocality,
+  validateNewClub,
+} from "./clubsAdminMapper";
 import { useAdminQuery } from "./useAdminQuery";
 import {
   DEFAULT_CLUB_DESCRIPTION,
@@ -155,7 +172,7 @@ function ClubsAdmin({
   const [newLocality, setNewLocality] = useState("");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
+  const slugEdited = useRef(false);
   const [localityId, setLocalityId] = useState("");
   const [location, setLocation] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
@@ -169,22 +186,79 @@ function ClubsAdmin({
   >(null);
   const [deleteSlug, setDeleteSlug] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [localityError, setLocalityError] = useState("");
+  const [localityBusy, setLocalityBusy] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
+  const [searchHits, setSearchHits] = useState<ClubSummary[] | null>(null);
   const [clubPage, setClubPage] = useState(0);
+  const creating = useRef(false);
+  const addingLocality = useRef(false);
+  const searchCache = useRef(new Map<string, ClubSummary[]>());
+  const searchAbort = useRef<AbortController | null>(null);
+  const loggedSearchMiss = useRef(false);
 
   const localityName =
     localities.find((l) => l.id === localityId)?.name || "";
+  const term = clubQuery.trim();
+  const searchKey = adminClubSearchKey(term);
+  const searching = term.length >= 3;
+  const clubReady =
+    typeof validateNewClub(
+      { name, slug, localityId, location, adminEmail, presidentPhone },
+      localityName,
+    ) !== "string";
+  const localityReady = typeof validateLocality(newLocality) !== "string";
+
+  useEffect(() => {
+    if (!searching) {
+      searchAbort.current?.abort();
+      searchAbort.current = null;
+      setSearchHits(null);
+      return;
+    }
+    const cached = searchCache.current.get(searchKey);
+    if (cached) {
+      searchAbort.current?.abort();
+      searchAbort.current = null;
+      setSearchHits(cached);
+      return;
+    }
+    searchAbort.current?.abort();
+    searchAbort.current = null;
+    setSearchHits(null);
+    const timer = window.setTimeout(() => {
+      const controller = new AbortController();
+      searchAbort.current?.abort();
+      searchAbort.current = controller;
+      setSearchHits(null);
+      void findAdminClubs(term)
+        .then((rows) => {
+          if (controller.signal.aborted) return;
+          const found = toSearchAdminClubs(rows);
+          searchCache.current.set(searchKey, found);
+          setSearchHits(found);
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          if (!loggedSearchMiss.current) {
+            loggedSearchMiss.current = true;
+            console.error(err);
+          }
+          setSearchHits(null);
+        });
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      searchAbort.current?.abort();
+    };
+  }, [searching, searchKey, term]);
 
   const filteredClubs = useMemo(() => {
-    const q = clubQuery.trim().toLowerCase();
-    const list = [...clubs].sort((a, b) => a.name.localeCompare(b.name));
-    if (!q) return list;
-    return list.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.slug || "").toLowerCase().includes(q),
-    );
-  }, [clubs, clubQuery]);
+    const list = [...clubs].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    if (!searching) return list;
+    const source = searchHits !== null ? searchHits : clubsMatchingName(list, searchKey);
+    return [...source].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [clubs, searching, searchHits, searchKey]);
 
   const clubPageCount = Math.max(1, Math.ceil(filteredClubs.length / CLUB_PAGE_SIZE));
   const safeClubPage = Math.min(clubPage, clubPageCount - 1);
@@ -194,85 +268,104 @@ function ClubsAdmin({
   );
 
   const handleName = (value: string) => {
-    const next = lettersAndNumbers(value, 30);
+    const next = clubName(value);
     setName(next);
     setError("");
-    if (!slugTouched) setSlug(normalizeSlug(next));
+    if (!slugEdited.current) setSlug(normalizeSlug(next));
   };
 
-  const missingClubHint = () => {
-    const missing: string[] = [];
-    if (!name.trim()) missing.push("el nombre");
-    if (normalizeSlug(slug).length < 3) missing.push("la URL");
-    if (!localityId) missing.push("la localidad");
-    if (missing.length === 0) return "";
-    if (missing.length === 1) {
-      return missing[0] === "la localidad"
-        ? "Selecciona la localidad."
-        : `Escribe ${missing[0]}.`;
-    }
-    const last = missing[missing.length - 1];
-    const head = missing.slice(0, -1).join(", ");
-    return `Escribe ${head} y ${last === "la localidad" ? "selecciona la localidad" : last}.`;
+  const handleSlug = (value: string, field: EventTarget | null) => {
+    if (field !== document.activeElement) return;
+    slugEdited.current = true;
+    setSlug(publicSlug(value));
+    setError("");
   };
 
   const handleAddLocality = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = newLocality.trim().slice(0, 30);
-    if (!clean) return;
-    await addLocality(clean);
-    screen.reload();
-    setNewLocality("");
+    if (addingLocality.current) return;
+    const result = validateLocality(newLocality);
+    if (typeof result === "string") {
+      setLocalityError(result);
+      return;
+    }
+    if (localities.some((item) => item.name.toLowerCase() === result.name.toLowerCase())) {
+      setLocalityError("Esa localidad ya existe.");
+      return;
+    }
+    addingLocality.current = true;
+    setLocalityBusy(true);
+    setLocalityError("");
+    try {
+      await addLocality(result.name);
+      screen.reload();
+      setNewLocality("");
+    } catch (err) {
+      console.error(err);
+      setLocalityError(
+        err instanceof Error && err.message === DATA_REVIEW_MESSAGE
+          ? DATA_REVIEW_MESSAGE
+          : "No se pudo añadir la localidad.",
+      );
+    } finally {
+      addingLocality.current = false;
+      setLocalityBusy(false);
+    }
   };
 
   const handleCreateClub = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating.current) return;
     setError("");
     setSuccess("");
     setLastSignupEmail("");
-    const cleanName = name.trim();
-    const cleanSlug = normalizeSlug(slug);
-    const hint = missingClubHint();
-    if (hint) return setError(hint);
-    if (RESERVED_SLUGS.includes(cleanSlug))
-      return setError("Esa URL está reservada.");
-    const cleanEmail = adminEmail.trim().toLowerCase();
-    if (cleanEmail && !isEmail(cleanEmail)) {
-      return setError("El correo del administrador no es válido.");
+    const result = validateNewClub(
+      { name, slug, localityId, location, adminEmail, presidentPhone },
+      localityName,
+    );
+    if (typeof result === "string") {
+      setError(result);
+      return;
     }
+    if (clubs.some((club) => club.slug === result.slug)) {
+      setError(`Ya existe un club en /${result.slug}.`);
+      return;
+    }
+    creating.current = true;
+    setBusy(true);
     try {
-      setBusy(true);
-      if (clubs.some((club) => club.slug === cleanSlug)) {
-        setError(`Ya existe un club en /${cleanSlug}.`);
-        return;
-      }
       await addClub({
-        slug: cleanSlug,
-        name: cleanName,
-        localityId,
-        location: location.trim() || localityName,
-        presidentPhone: presidentPhone.trim(),
+        slug: result.slug,
+        name: result.name,
+        localityId: result.localityId,
+        location: result.location,
+        presidentPhone: result.presidentPhone,
         description: DEFAULT_CLUB_DESCRIPTION,
         heroUrl: DEFAULT_HERO_IMAGE,
-        adminEmail: cleanEmail,
+        adminEmail: result.adminEmail,
       });
-      if (cleanEmail) setLastSignupEmail(cleanEmail);
+      if (result.adminEmail) setLastSignupEmail(result.adminEmail);
       screen.reload();
       setSuccess(
-        cleanEmail
-          ? `Club creado en /${cleanSlug}. Envíale al presidente la URL para crear su cuenta.`
-          : `Club creado en /${cleanSlug}.`,
+        result.adminEmail
+          ? `Club creado en /${result.slug}. Envíale al presidente la URL para crear su cuenta.`
+          : `Club creado en /${result.slug}.`,
       );
       setName("");
       setSlug("");
-      setSlugTouched(false);
+      slugEdited.current = false;
       setLocation("");
       setAdminEmail("");
       setPresidentPhone("");
     } catch (err) {
       console.error(err);
-      setError("No se pudo crear el club.");
+      setError(
+        err instanceof Error && err.message === DATA_REVIEW_MESSAGE
+          ? DATA_REVIEW_MESSAGE
+          : "No se pudo crear el club.",
+      );
     } finally {
+      creating.current = false;
       setBusy(false);
     }
   };
@@ -349,13 +442,9 @@ function ClubsAdmin({
               >
                 <FormInput
                   value={slug}
-                  onChange={(e) => {
-                    setSlugTouched(true);
-                    setSlug(e.target.value);
-                    setError("");
-                  }}
-                  onBlur={() => setSlug(normalizeSlug(slug))}
-                  placeholder="jogabonitofc"
+                  maxLength={40}
+                  onChange={(e) => handleSlug(e.target.value, e.target)}
+                  placeholder="joga-bonito-fc"
                 />
               </Field>
               <Field label="Localidad">
@@ -377,8 +466,11 @@ function ClubsAdmin({
               <Field label="Barrio / escuela (opcional)">
                 <FormInput
                   value={location}
-                  maxLength={30}
-                  onChange={(e) => setLocation(lettersAndNumbers(e.target.value, 30))}
+                  maxLength={50}
+                  onChange={(e) => {
+                    setLocation(neighborhood(e.target.value));
+                    setError("");
+                  }}
                   placeholder="Ej. Col. Centro, CETIS 4"
                 />
               </Field>
@@ -390,7 +482,11 @@ function ClubsAdmin({
               <FormInput
                 type="email"
                 value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
+                maxLength={320}
+                onChange={(e) => {
+                  setAdminEmail(emailText(e.target.value));
+                  setError("");
+                }}
                 placeholder="presidente@club.com"
               />
             </Field>
@@ -401,8 +497,11 @@ function ClubsAdmin({
               <FormInput
                 type="tel"
                 value={presidentPhone}
-                maxLength={15}
-                onChange={(e) => setPresidentPhone(digitsOnly(e.target.value, 15))}
+                maxLength={16}
+                onChange={(e) => {
+                  setPresidentPhone(cellPhone(e.target.value));
+                  setError("");
+                }}
                 placeholder="Ej. 6221234567"
               />
             </Field>
@@ -419,7 +518,7 @@ function ClubsAdmin({
             {lastSignupEmail && <InviteSignupLink email={lastSignupEmail} />}
             <PrimaryButton
               type="submit"
-              disabled={busy}
+              disabled={!clubReady || busy}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -449,17 +548,26 @@ function ClubsAdmin({
           >
             <FormInput
               value={newLocality}
-              maxLength={30}
-              onChange={(e) => setNewLocality(e.target.value.slice(0, 30))}
+              maxLength={50}
+              onChange={(e) => {
+                setNewLocality(localityLabel(e.target.value));
+                setLocalityError("");
+              }}
               placeholder="Ej. Guaymas, Sonora"
             />
             <SecondaryButton
               type="submit"
+              disabled={!localityReady || localityBusy}
               style={{ whiteSpace: "nowrap", padding: "0.4rem 0.7rem" }}
             >
-              Añadir
+              {localityBusy ? "Añadiendo..." : "Añadir"}
             </SecondaryButton>
           </form>
+          {localityError ? (
+            <p style={{ margin: "0 0 0.65rem", color: C.red, fontSize: "0.72rem" }}>
+              {localityError}
+            </p>
+          ) : null}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
             {localities.map((l) => (
               <Badge key={l.id} color="gray">
@@ -496,8 +604,9 @@ function ClubsAdmin({
             <FormInput
               type="search"
               value={clubQuery}
+              maxLength={30}
               onChange={(e) => {
-                setClubQuery(e.target.value);
+                setClubQuery(adminClubQuery(e.target.value));
                 setClubPage(0);
               }}
               placeholder="Buscar por nombre"

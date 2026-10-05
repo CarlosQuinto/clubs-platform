@@ -38,6 +38,18 @@ export function todayIso(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+/** Fecha real de calendario en YYYY-MM-DD. 30 de febrero no pasa. */
+export function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 /** Acota una fecha YYYY-MM-DD. Un extremo vacío no limita. */
 export function clampIsoDate(value: string, min?: string, max?: string): string {
   let next = value;

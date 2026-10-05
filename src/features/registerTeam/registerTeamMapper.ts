@@ -1,5 +1,5 @@
 import { type RegisterTeamPageData } from "../../infrastructure/dataconnect";
-import { EMAIL_RE } from "../../domains/platform/social";
+import { isCellPhone, isPersonName, isRegisterEmail, isTeamLabel } from "../../shared/textLimits";
 import type { ClubCardView } from "../teams/teamsViewState";
 
 export interface RegisterTeamDraft {
@@ -37,10 +37,10 @@ export function validateRegisterTeam(draft: RegisterTeamDraft): string | Registe
   const captainEmail = draft.captainEmail.trim().toLowerCase();
   const captainPhone = draft.captainPhone.trim();
   const teamName = draft.teamName.trim();
-  if (captainName.length < 2) return "Escribe el nombre completo.";
-  if (!EMAIL_RE.test(captainEmail)) return "El correo no es válido.";
-  if (captainPhone.replace(/\D/g, "").length < 7) return "El teléfono no es válido.";
-  if (teamName.length < 2) return "Escribe el nombre del equipo.";
+  if (!isPersonName(captainName)) return "Escribe el nombre completo.";
+  if (!isCellPhone(captainPhone)) return "El teléfono no es válido.";
+  if (!isRegisterEmail(captainEmail)) return "El correo no es válido.";
+  if (!isTeamLabel(teamName)) return "Escribe el nombre del equipo.";
   if (!draft.consent) return "Debes aceptar los términos y la política de privacidad.";
   return { captainName, captainEmail, captainPhone, teamName };
 }

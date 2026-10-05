@@ -11,7 +11,18 @@ mutation SubmitInquiry(
       INSERT INTO inquiries (
         id, name, email, phone, topic, message, status, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'NEW'::inquiry_status, CURRENT_TIMESTAMP)
+      SELECT $1, initcap(btrim($2)), lower(btrim($3)), btrim($4), btrim($5),
+        btrim(regexp_replace($6, ' {2,}', ' ', 'g')),
+        'NEW'::inquiry_status, CURRENT_TIMESTAMP
+      WHERE char_length(btrim($2)) BETWEEN 3 AND 40
+        AND btrim($2) ~ '^([A-Za-zÀ-ÖØ-öø-ÿ]+)( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'
+        AND char_length(btrim($3)) BETWEEN 6 AND 320
+        AND btrim($3) = lower(btrim($3))
+        AND btrim($3) ~ '^[^[:space:]@]+@[^[:space:]@]+\.[a-z]{2,}$'
+        AND btrim($4) ~ '^\+?[0-9]{10,15}$'
+        AND btrim($5) IN ('Torneos', 'Renta de canchas', 'Disponibilidad')
+        AND char_length(btrim(regexp_replace($6, ' {2,}', ' ', 'g'))) BETWEEN 10 AND 200
+        AND btrim(regexp_replace($6, ' {2,}', ' ', 'g')) ~ '^[A-Za-z0-9À-ÖØ-öø-ÿ,.?¿!¡'' \n-]+$'
       RETURNING id
     """
     params: [$id, $name, $email, $phone, $topic, $message]
@@ -30,9 +41,15 @@ mutation SubmitTeamApplication(
       INSERT INTO team_applications (
         id, captain_name, captain_email, captain_phone, team_name, status, created_at
       )
-      VALUES (
-        $1, $2, $3, $4, $5, 'PENDING'::team_application_status, CURRENT_TIMESTAMP
-      )
+      SELECT $1, $2, $3, $4, $5, 'PENDING'::team_application_status, CURRENT_TIMESTAMP
+      WHERE char_length($2) BETWEEN 3 AND 40
+        AND $2 ~ '^([A-Za-zÀ-ÖØ-öø-ÿ]+)( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'
+        AND char_length($3) BETWEEN 6 AND 320
+        AND $3 = lower($3)
+        AND $3 ~ '^[^[:space:]@]+@[^[:space:]@]+\.[a-z]{2,}$'
+        AND $4 ~ '^\+?[0-9]{10,15}$'
+        AND char_length($5) BETWEEN 3 AND 30
+        AND $5 ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.''"-]+)*$'
       RETURNING id
     """
     params: [$id, $captainName, $captainEmail, $captainPhone, $teamName]

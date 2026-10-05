@@ -41,7 +41,17 @@ import {
 import { platformStoragePath } from "../../../shared/paths";
 import { saveMatchSchedule } from "../../../domains/matches/matchCommands";
 import { sendCourtBookingNotice } from "../../../infrastructure/functions/callables";
-import { isEmail } from "../../../shared/textLimits";
+import {
+  courtName,
+  courtNote,
+  isCourtName,
+  isCourtNote,
+  isEmail,
+  isMoneyText,
+  moneyLabel,
+  moneyText,
+} from "../../../shared/textLimits";
+import { IMAGE_ACCEPT, isAllowedImage } from "../../../shared/imageFile";
 import { uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 import { asMatchDuration, type Court, type CourtHold, type CourtSlotMinutes, type TimeWindow } from "../../../shared/types";
 import { formatFriendlyDate, formatFriendlyTime } from "../../../shared/helpers";
@@ -59,14 +69,13 @@ import {
 
 const COURT_TEXT_LIMIT = 15;
 
+const PHOTO_ERROR = "La foto tiene que ser JPG, PNG o WEBP de hasta 5 MB.";
+
 function courtSaveHint(name: string, description: string, rate: string) {
   const missing: string[] = [];
-  if (!name.trim()) missing.push("el nombre");
-  if (!description.trim()) missing.push("la descripción");
-  const hourlyRate = Number(rate);
-  if (rate.trim() === "" || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
-    missing.push("el costo por hora");
-  }
+  if (!isCourtName(name)) missing.push("el nombre (3 a 15)");
+  if (!isCourtNote(description)) missing.push("la descripción (3 a 15)");
+  if (!isMoneyText(rate)) missing.push("el costo por hora");
   if (missing.length === 0) return "";
   if (missing.length === 1) return `Escribe ${missing[0]}.`;
   if (missing.length === 2) return `Escribe ${missing[0]} y ${missing[1]}.`;
@@ -114,10 +123,6 @@ async function mailBooking(input: {
     console.error(err);
     return false;
   }
-}
-
-function clipCourtText(value: string) {
-  return value.slice(0, COURT_TEXT_LIMIT);
 }
 
 function deleteCourtMessage(name: string, matches: number, rentals: number, linked: boolean) {
@@ -177,6 +182,10 @@ export default function CourtsAdmin() {
   const [draftFile, setDraftFile] = useState<File | null>(null);
   const [draftPreview, setDraftPreview] = useState("");
   const [draftBusy, setDraftBusy] = useState(false);
+  const [draftPhotoError, setDraftPhotoError] = useState("");
+  const [draftError, setDraftError] = useState("");
+  const savingCourt = useRef(false);
+  const photoTicket = useRef(0);
 
   const saveConfig = async () => {
     const clean = readWindows(windows);
@@ -202,12 +211,14 @@ export default function CourtsAdmin() {
   };
 
   const clearPhoto = () => {
+    photoTicket.current += 1;
     setDraftPreview((current) => {
       if (current.startsWith("blob:")) URL.revokeObjectURL(current);
       return "";
     });
     setDraftFile(null);
     setDraftImageUrl("");
+    setDraftPhotoError("");
   };
 
   const openAddCourt = () => {
@@ -215,15 +226,19 @@ export default function CourtsAdmin() {
     setDraftDescription("");
     setDraftRate("");
     setDraftFootball(true);
+    setDraftError("");
     clearPhoto();
     setCourtModal("add");
   };
 
   const openEditCourt = (court: Court) => {
-    setDraftName(clipCourtText(court.name));
-    setDraftDescription(clipCourtText(court.description));
-    setDraftRate(String(court.hourlyRate));
+    setDraftName(courtName(court.name));
+    setDraftDescription(courtNote(court.description));
+    setDraftRate(moneyText(String(court.hourlyRate)));
     setDraftFootball(court.football !== false);
+    setDraftError("");
+    setDraftPhotoError("");
+    photoTicket.current += 1;
     setDraftPreview((current) => {
       if (current.startsWith("blob:")) URL.revokeObjectURL(current);
       return court.imageUrl?.trim() || "";
@@ -233,7 +248,16 @@ export default function CourtsAdmin() {
     setCourtModal(court);
   };
 
-  const pickPhoto = (file: File) => {
+  const pickPhoto = async (file: File) => {
+    const ticket = ++photoTicket.current;
+    const allowed = await isAllowedImage(file).catch(() => false);
+    if (ticket !== photoTicket.current) return;
+    if (!allowed) {
+      setDraftFile(null);
+      setDraftPhotoError(PHOTO_ERROR);
+      return;
+    }
+    setDraftPhotoError("");
     setDraftPreview((current) => {
       if (current.startsWith("blob:")) URL.revokeObjectURL(current);
       return URL.createObjectURL(file);
@@ -242,11 +266,14 @@ export default function CourtsAdmin() {
   };
 
   const saveCourtModal = async () => {
-    const cleanName = clipCourtText(draftName.trim());
-    const cleanDescription = clipCourtText(draftDescription.trim());
-    const hourlyRate = Number(draftRate);
-    if (courtSaveHint(draftName, draftDescription, draftRate)) return;
+    if (savingCourt.current) return;
+    if (courtSaveHint(draftName, draftDescription, draftRate) || draftPhotoError) return;
+    const cleanName = draftName.trim();
+    const cleanDescription = draftDescription.trim();
+    const hourlyRate = Math.round(Number(draftRate) * 100) / 100;
+    savingCourt.current = true;
     setDraftBusy(true);
+    setDraftError("");
     try {
       let imageUrl = draftImageUrl.trim();
       if (draftFile) {
@@ -285,8 +312,9 @@ export default function CourtsAdmin() {
       setCourtModal(null);
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar la cancha.");
+      setDraftError("No se pudo guardar la cancha.");
     } finally {
+      savingCourt.current = false;
       setDraftBusy(false);
     }
   };
@@ -373,11 +401,22 @@ export default function CourtsAdmin() {
         football={draftFootball}
         preview={draftPreview}
         busy={draftBusy}
-        onName={setDraftName}
-        onDescription={setDraftDescription}
-        onRate={setDraftRate}
+        photoError={draftPhotoError}
+        error={draftError}
+        onName={(value) => {
+          setDraftName(value);
+          setDraftError("");
+        }}
+        onDescription={(value) => {
+          setDraftDescription(value);
+          setDraftError("");
+        }}
+        onRate={(value) => {
+          setDraftRate(value);
+          setDraftError("");
+        }}
         onFootball={setDraftFootball}
-        onPhoto={pickPhoto}
+        onPhoto={(file) => void pickPhoto(file)}
         onClearPhoto={clearPhoto}
         onSave={() => void saveCourtModal()}
         onCancel={() => {
@@ -396,8 +435,8 @@ export default function CourtsAdmin() {
           }
           void upsertCourt({
             id: courtModal.id,
-            name: clipCourtText(courtModal.name),
-            description: clipCourtText(courtModal.description),
+            name: courtName(courtModal.name).trim(),
+            description: courtNote(courtModal.description).trim(),
             hourlyRate: courtModal.hourlyRate,
             football: courtModal.football !== false,
             imageUrl: courtModal.imageUrl || "",
@@ -437,6 +476,8 @@ function CourtFormModal({
   football,
   preview,
   busy,
+  photoError,
+  error,
   onName,
   onDescription,
   onRate,
@@ -456,6 +497,8 @@ function CourtFormModal({
   football: boolean;
   preview: string;
   busy: boolean;
+  photoError: string;
+  error: string;
   onName: (value: string) => void;
   onDescription: (value: string) => void;
   onRate: (value: string) => void;
@@ -468,18 +511,13 @@ function CourtFormModal({
   onDelete: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [saveHint, setSaveHint] = useState("");
   useModalLock(open ? onCancel : null);
-  useEffect(() => {
-    setSaveHint("");
-  }, [name, description, rate, open]);
   if (!open) return null;
 
-  const trySave = () => {
-    const hint = courtSaveHint(name, description, rate);
-    setSaveHint(hint);
-    if (!hint) onSave();
-  };
+  const missing = courtSaveHint(name, description, rate);
+  const touched = Boolean(name || description || rate);
+  const saveHint = touched ? missing : "";
+  const ready = !missing && !photoError && !busy;
 
   return (
     <div
@@ -532,7 +570,7 @@ function CourtFormModal({
                 disabled={busy}
                 maxLength={COURT_TEXT_LIMIT}
                 placeholder="Cancha 1"
-                onChange={(event) => onName(clipCourtText(event.target.value))}
+                onChange={(event) => onName(courtName(event.target.value))}
               />
             </span>
           </label>
@@ -546,7 +584,7 @@ function CourtFormModal({
                 maxLength={COURT_TEXT_LIMIT}
                 rows={2}
                 placeholder="Pasto sintético"
-                onChange={(event) => onDescription(clipCourtText(event.target.value))}
+                onChange={(event) => onDescription(courtNote(event.target.value))}
               />
             </span>
           </label>
@@ -555,12 +593,13 @@ function CourtFormModal({
             <span className="court-form__field">
               <CircleDollarSign size={16} aria-hidden="true" />
               <FormInput
-                type="number"
-                min={0}
-                value={rate}
+                inputMode="decimal"
+                autoComplete="off"
+                maxLength={14}
+                value={moneyLabel(rate)}
                 disabled={busy}
-                placeholder="400"
-                onChange={(event) => onRate(event.target.value)}
+                placeholder="400.00"
+                onChange={(event) => onRate(moneyText(event.target.value))}
               />
             </span>
           </label>
@@ -607,7 +646,12 @@ function CourtFormModal({
                   <Upload size={15} />
                   Elegir archivo
                 </button>
-                <p>Opcional. Sin foto se muestra la cancha por defecto.</p>
+                <p>Opcional. JPG, PNG o WEBP de hasta 5 MB. Sin foto se muestra la cancha por defecto.</p>
+                {photoError ? (
+                  <p style={{ color: C.red }} role="alert">
+                    {photoError}
+                  </p>
+                ) : null}
                 {preview ? (
                   <button type="button" className="court-form__remove" disabled={busy} onClick={onClearPhoto}>
                     Quitar foto
@@ -617,7 +661,7 @@ function CourtFormModal({
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                accept={IMAGE_ACCEPT}
                 hidden
                 disabled={busy}
                 onChange={(event) => {
@@ -648,14 +692,14 @@ function CourtFormModal({
               Cancelar
             </button>
             <span className="court-form__save">
-              {saveHint ? (
+              {error || saveHint ? (
                 <span className="court-form__hint" role="tooltip">
-                  {saveHint}
+                  {error || saveHint}
                 </span>
               ) : null}
-              <PrimaryButton variant="green" disabled={busy} onClick={trySave}>
+              <PrimaryButton variant="green" disabled={!ready} onClick={onSave}>
                 <Save size={15} />
-                {busy ? "Guardando…" : "Guardar"}
+                {busy ? "Guardando..." : "Guardar"}
               </PrimaryButton>
             </span>
           </div>

@@ -2401,6 +2401,22 @@ export interface ScheduleOfficialMatchVariables {
   courtId?: string | null;
 }
 
+export interface SearchAdminClubsData {
+  clubs?: unknown[] | null;
+}
+
+export interface SearchAdminClubsVariables {
+  term: string;
+}
+
+export interface SearchClubsData {
+  clubs?: unknown[] | null;
+}
+
+export interface SearchClubsVariables {
+  term: string;
+}
+
 export interface Season_Key {
   id: string;
   __typename?: 'Season_Key';
@@ -3050,6 +3066,18 @@ export const adminClubsRef: AdminClubsRef;
 
 export function adminClubs(options?: ExecuteQueryOptions): QueryPromise<AdminClubsData, undefined>;
 export function adminClubs(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<AdminClubsData, undefined>;
+
+interface SearchAdminClubsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: SearchAdminClubsVariables): QueryRef<SearchAdminClubsData, SearchAdminClubsVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: SearchAdminClubsVariables): QueryRef<SearchAdminClubsData, SearchAdminClubsVariables>;
+  operationName: string;
+}
+export const searchAdminClubsRef: SearchAdminClubsRef;
+
+export function searchAdminClubs(vars: SearchAdminClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchAdminClubsData, SearchAdminClubsVariables>;
+export function searchAdminClubs(dc: DataConnect, vars: SearchAdminClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchAdminClubsData, SearchAdminClubsVariables>;
 
 interface AdminClubPeopleRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -4382,6 +4410,18 @@ export const teamsPageRef: TeamsPageRef;
 
 export function teamsPage(options?: ExecuteQueryOptions): QueryPromise<TeamsPageData, undefined>;
 export function teamsPage(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<TeamsPageData, undefined>;
+
+interface SearchClubsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: SearchClubsVariables): QueryRef<SearchClubsData, SearchClubsVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: SearchClubsVariables): QueryRef<SearchClubsData, SearchClubsVariables>;
+  operationName: string;
+}
+export const searchClubsRef: SearchClubsRef;
+
+export function searchClubs(vars: SearchClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchClubsData, SearchClubsVariables>;
+export function searchClubs(dc: DataConnect, vars: SearchClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchClubsData, SearchClubsVariables>;
 
 interface ContactPageRef {
   /* Allow users to create refs without passing in DataConnect */

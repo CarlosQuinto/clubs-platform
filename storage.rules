@@ -21,9 +21,20 @@ service firebase.storage {
       return signedIn() && (request.resource == null || isImage());
     }
 
+    function isCourtPhoto() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    match /platform/courts/{file} {
+      allow read: if true;
+      allow write: if signedIn() && (request.resource == null || isCourtPhoto());
+    }
+
+    // Las reglas se suman: courts queda fuera para que solo valga isCourtPhoto.
     match /platform/{folder}/{file} {
       allow read: if true;
-      allow write: if canWrite();
+      allow write: if folder != 'courts' && canWrite();
     }
 
     match /clubs/{clubId}/logos/{file} {

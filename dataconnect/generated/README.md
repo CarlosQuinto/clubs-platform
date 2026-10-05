@@ -14,6 +14,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*SignupInviteByEmail*](#signupinvitebyemail)
   - [*ClubInviteLookup*](#clubinvitelookup)
   - [*AdminClubs*](#adminclubs)
+  - [*SearchAdminClubs*](#searchadminclubs)
   - [*AdminClubPeople*](#adminclubpeople)
   - [*AdminCompetition*](#admincompetition)
   - [*AdminCover*](#admincover)
@@ -28,6 +29,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*ClubScreen*](#clubscreen)
   - [*ClubBySlug*](#clubbyslug)
   - [*TeamsPage*](#teamspage)
+  - [*SearchClubs*](#searchclubs)
   - [*ContactPage*](#contactpage)
   - [*PlatformClaimOpen*](#platformclaimopen)
   - [*PlatformChrome*](#platformchrome)
@@ -867,6 +869,115 @@ console.log(data.clubs);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.localities);
+  console.log(data.clubs);
+});
+```
+
+## SearchAdminClubs
+You can execute the `SearchAdminClubs` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+searchAdminClubs(vars: SearchAdminClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchAdminClubsData, SearchAdminClubsVariables>;
+
+interface SearchAdminClubsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: SearchAdminClubsVariables): QueryRef<SearchAdminClubsData, SearchAdminClubsVariables>;
+}
+export const searchAdminClubsRef: SearchAdminClubsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+searchAdminClubs(dc: DataConnect, vars: SearchAdminClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchAdminClubsData, SearchAdminClubsVariables>;
+
+interface SearchAdminClubsRef {
+  ...
+  (dc: DataConnect, vars: SearchAdminClubsVariables): QueryRef<SearchAdminClubsData, SearchAdminClubsVariables>;
+}
+export const searchAdminClubsRef: SearchAdminClubsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the searchAdminClubsRef:
+```typescript
+const name = searchAdminClubsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `SearchAdminClubs` query requires an argument of type `SearchAdminClubsVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface SearchAdminClubsVariables {
+  term: string;
+}
+```
+### Return Type
+Recall that executing the `SearchAdminClubs` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `SearchAdminClubsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface SearchAdminClubsData {
+  clubs?: unknown[] | null;
+}
+```
+### Using `SearchAdminClubs`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, searchAdminClubs, SearchAdminClubsVariables } from '@clubs-platform/dataconnect';
+
+// The `SearchAdminClubs` query requires an argument of type `SearchAdminClubsVariables`:
+const searchAdminClubsVars: SearchAdminClubsVariables = {
+  term: ..., 
+};
+
+// Call the `searchAdminClubs()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await searchAdminClubs(searchAdminClubsVars);
+// Variables can be defined inline as well.
+const { data } = await searchAdminClubs({ term: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await searchAdminClubs(dataConnect, searchAdminClubsVars);
+
+console.log(data.clubs);
+
+// Or, you can use the `Promise` API.
+searchAdminClubs(searchAdminClubsVars).then((response) => {
+  const data = response.data;
+  console.log(data.clubs);
+});
+```
+
+### Using `SearchAdminClubs`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, searchAdminClubsRef, SearchAdminClubsVariables } from '@clubs-platform/dataconnect';
+
+// The `SearchAdminClubs` query requires an argument of type `SearchAdminClubsVariables`:
+const searchAdminClubsVars: SearchAdminClubsVariables = {
+  term: ..., 
+};
+
+// Call the `searchAdminClubsRef()` function to get a reference to the query.
+const ref = searchAdminClubsRef(searchAdminClubsVars);
+// Variables can be defined inline as well.
+const ref = searchAdminClubsRef({ term: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = searchAdminClubsRef(dataConnect, searchAdminClubsVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.clubs);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
   console.log(data.clubs);
 });
 ```
@@ -2886,6 +2997,115 @@ executeQuery(ref).then((response) => {
   console.log(data.categories);
   console.log(data.tournaments);
   console.log(data.matches);
+});
+```
+
+## SearchClubs
+You can execute the `SearchClubs` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+searchClubs(vars: SearchClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchClubsData, SearchClubsVariables>;
+
+interface SearchClubsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: SearchClubsVariables): QueryRef<SearchClubsData, SearchClubsVariables>;
+}
+export const searchClubsRef: SearchClubsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+searchClubs(dc: DataConnect, vars: SearchClubsVariables, options?: ExecuteQueryOptions): QueryPromise<SearchClubsData, SearchClubsVariables>;
+
+interface SearchClubsRef {
+  ...
+  (dc: DataConnect, vars: SearchClubsVariables): QueryRef<SearchClubsData, SearchClubsVariables>;
+}
+export const searchClubsRef: SearchClubsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the searchClubsRef:
+```typescript
+const name = searchClubsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `SearchClubs` query requires an argument of type `SearchClubsVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface SearchClubsVariables {
+  term: string;
+}
+```
+### Return Type
+Recall that executing the `SearchClubs` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `SearchClubsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface SearchClubsData {
+  clubs?: unknown[] | null;
+}
+```
+### Using `SearchClubs`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, searchClubs, SearchClubsVariables } from '@clubs-platform/dataconnect';
+
+// The `SearchClubs` query requires an argument of type `SearchClubsVariables`:
+const searchClubsVars: SearchClubsVariables = {
+  term: ..., 
+};
+
+// Call the `searchClubs()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await searchClubs(searchClubsVars);
+// Variables can be defined inline as well.
+const { data } = await searchClubs({ term: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await searchClubs(dataConnect, searchClubsVars);
+
+console.log(data.clubs);
+
+// Or, you can use the `Promise` API.
+searchClubs(searchClubsVars).then((response) => {
+  const data = response.data;
+  console.log(data.clubs);
+});
+```
+
+### Using `SearchClubs`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, searchClubsRef, SearchClubsVariables } from '@clubs-platform/dataconnect';
+
+// The `SearchClubs` query requires an argument of type `SearchClubsVariables`:
+const searchClubsVars: SearchClubsVariables = {
+  term: ..., 
+};
+
+// Call the `searchClubsRef()` function to get a reference to the query.
+const ref = searchClubsRef(searchClubsVars);
+// Variables can be defined inline as well.
+const ref = searchClubsRef({ term: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = searchClubsRef(dataConnect, searchClubsVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.clubs);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.clubs);
 });
 ```
 

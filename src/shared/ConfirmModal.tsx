@@ -15,6 +15,7 @@ export default function ConfirmModal({
   confirmHint,
   dangerAction,
   readOnly = false,
+  zIndex = 80,
   onConfirm,
   onCancel,
 }: {
@@ -32,6 +33,7 @@ export default function ConfirmModal({
   /** Oculta confirmar y la acción de peligro. Cancelar sigue cerrando. */
   readOnly?: boolean;
   dangerAction?: { label: string; onClick: () => void };
+  zIndex?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -47,7 +49,7 @@ export default function ConfirmModal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 80,
+        zIndex,
         backgroundColor: "rgba(20, 18, 15, 0.45)",
         display: "flex",
         alignItems: "center",

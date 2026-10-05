@@ -5,6 +5,7 @@ import {
   QueryFetchPolicy,
   submitInquiry,
 } from "../../infrastructure/dataconnect";
+import { cellPhone, contactMessage, emailText, personName } from "../../shared/textLimits";
 import { CONTACT_TOPICS, toContactWhatsapp, validateContact } from "./contactMapper";
 import type { ContactFormView } from "./contactViewState";
 
@@ -25,6 +26,7 @@ const EMPTY: ContactFormView = {
 export function useContact() {
   const [form, setForm] = useState<ContactFormView>(EMPTY);
   const request = useRef(0);
+  const sending = useRef(false);
 
   const load = useCallback(() => {
     const ticket = request.current + 1;
@@ -52,41 +54,52 @@ export function useContact() {
 
   const onSubmit = (event: { preventDefault: () => void }) => {
     event.preventDefault();
+    if (sending.current) return;
     const result = validateContact(form);
     if (typeof result === "string") {
       setForm((current) => ({ ...current, error: result }));
       return;
     }
+    sending.current = true;
     setForm((current) => ({ ...current, busy: true, error: null }));
     void submitInquiry(dataConnect, { id: crypto.randomUUID(), ...result })
       .then((response) => {
         if (!response.data.inquiry) {
           setForm((current) => ({
-            ...current,
-            busy: false,
-            error: "No se pudo enviar. Inténtalo de nuevo.",
+            ...EMPTY,
+            whatsapp: current.whatsapp,
+            error: "Los datos no pasaron la revisión. Vuelve a llenar el formulario.",
           }));
           return;
         }
-        setForm((current) => ({ ...current, busy: false, sent: true }));
+        setForm((current) => ({
+          ...EMPTY,
+          whatsapp: current.whatsapp,
+          sent: true,
+        }));
       })
       .catch((err: unknown) => {
         console.error(err);
         setForm((current) => ({
           ...current,
           busy: false,
-          error: "No se pudo enviar. Inténtalo de nuevo.",
+          error: "No se pudo enviar la solicitud. Inténtalo de nuevo.",
         }));
+      })
+      .finally(() => {
+        sending.current = false;
       });
   };
 
   return {
     ...form,
-    onName: (value: string) => setField("name", value),
-    onPhone: (value: string) => setField("phone", value),
-    onEmail: (value: string) => setField("email", value),
-    onTopic: (value: string) => setField("topic", value),
-    onMessage: (value: string) => setField("message", value),
+    ready: typeof validateContact(form) !== "string",
+    onName: (value: string) => setField("name", personName(value)),
+    onPhone: (value: string) => setField("phone", cellPhone(value)),
+    onEmail: (value: string) => setField("email", emailText(value)),
+    onTopic: (value: string) =>
+      setField("topic", CONTACT_TOPICS.some((item) => item.value === value) ? value : ""),
+    onMessage: (value: string) => setField("message", contactMessage(value)),
     onConsent: (value: boolean) =>
       setForm((current) => ({ ...current, consent: value, error: null })),
     onSubmit,

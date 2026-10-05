@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Mail, MessageCircle, Phone, Sparkles, User } from "lucide-react";
-import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
+import PlatformLayout from "../shell/PlatformLayout";
 import PageHeroBanner from "../shell/PageHeroBanner";
 import PublicFormBand from "../shell/PublicFormBand";
 import WhatsAppCard from "../shell/WhatsAppCard";
@@ -41,7 +41,7 @@ export default function ContactView() {
                 onChange={(event) => form.onName(event.target.value)}
                 placeholder="Nombre"
                 required
-                maxLength={119}
+                maxLength={40}
                 autoComplete="name"
               />
             </Field>
@@ -52,7 +52,8 @@ export default function ContactView() {
                 onChange={(event) => form.onPhone(event.target.value)}
                 placeholder="Teléfono"
                 required
-                maxLength={29}
+                maxLength={16}
+                inputMode="tel"
                 autoComplete="tel"
               />
             </Field>
@@ -63,7 +64,7 @@ export default function ContactView() {
                 onChange={(event) => form.onEmail(event.target.value)}
                 placeholder="Email"
                 required
-                maxLength={119}
+                maxLength={320}
                 autoComplete="email"
               />
             </Field>
@@ -73,7 +74,7 @@ export default function ContactView() {
                 onChange={(event) => form.onTopic(event.target.value)}
                 required
               >
-                <option value="">Tema</option>
+                <option value="">Selecciona un tema...</option>
                 {form.topics.map((topic) => (
                   <option key={topic.value} value={topic.value}>
                     {topic.label}
@@ -81,15 +82,16 @@ export default function ContactView() {
                 ))}
               </select>
             </Field>
-            <Field icon={<MessageCircle size={16} />}>
+            <Field icon={<MessageCircle size={16} />} className="contact-field--message">
               <textarea
                 rows={5}
                 value={form.message}
                 onChange={(event) => form.onMessage(event.target.value)}
                 placeholder="Mensaje"
                 required
-                maxLength={1999}
+                maxLength={200}
               />
+              <span className="contact-field__count">{form.message.length}/200</span>
             </Field>
             <label className="public-consent">
               <input
@@ -100,21 +102,18 @@ export default function ContactView() {
               />
               <span>
                 He leído y acepto los{" "}
-                <Link to="/terminos" onClick={(event) => { event.stopPropagation(); markScrollTopAfterNav(); }}>
+                <a href="/terminos" target="_blank" rel="noopener noreferrer">
                   términos, condiciones
-                </Link>{" "}
+                </a>{" "}
                 y la{" "}
-                <Link
-                  to="/aviso-de-privacidad"
-                  onClick={(event) => { event.stopPropagation(); markScrollTopAfterNav(); }}
-                >
+                <a href="/aviso-de-privacidad" target="_blank" rel="noopener noreferrer">
                   política de privacidad
-                </Link>{" "}
+                </a>{" "}
                 para el tratamiento de mis datos personales.
               </span>
             </label>
             {form.error ? <p className="public-form-error">{form.error}</p> : null}
-            <button type="submit" className="public-submit" disabled={form.busy}>
+            <button type="submit" className="public-submit" disabled={!form.ready || form.busy}>
               {form.busy ? "Enviando..." : "Enviar"}
             </button>
           </form>
@@ -125,9 +124,17 @@ export default function ContactView() {
   );
 }
 
-function Field({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+function Field({
+  icon,
+  children,
+  className,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="contact-field">
+    <label className={className ? `contact-field ${className}` : "contact-field"}>
       <span className="contact-field__icon" aria-hidden="true">
         {icon}
       </span>

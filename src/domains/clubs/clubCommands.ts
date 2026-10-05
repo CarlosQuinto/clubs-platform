@@ -14,6 +14,7 @@ import {
   removeClubMember,
   saveClubInvite,
   saveSignupInvite,
+  searchAdminClubs,
   setClubActive,
   setClubMemberRole,
   signupInviteByEmail,
@@ -21,6 +22,8 @@ import {
 import { sessionUserId } from "../../infrastructure/auth";
 import { savedRow } from "../../shared/saved";
 import { emailKey as toEmailKey } from "../../shared/paths";
+
+export const DATA_REVIEW_MESSAGE = "Los datos no pasaron la revisión.";
 
 export async function loadClubs(): Promise<AdminClubsData> {
   return (await adminClubs(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })).data;
@@ -45,7 +48,17 @@ export async function addLocality(name: string) {
     id: crypto.randomUUID(),
     name,
   });
+  if (!result.data.locality) throw new Error(DATA_REVIEW_MESSAGE);
   savedRow(result.data.locality);
+}
+
+export async function findAdminClubs(term: string) {
+  const result = await searchAdminClubs(
+    dataConnect,
+    { term },
+    { fetchPolicy: QueryFetchPolicy.SERVER_ONLY },
+  );
+  return result.data.clubs;
 }
 
 export async function addClub(input: {
@@ -69,6 +82,7 @@ export async function addClub(input: {
     presidentPhone: input.presidentPhone,
     description: input.description,
   });
+  if (!result.data.club) throw new Error(DATA_REVIEW_MESSAGE);
   savedRow(result.data.club);
   await insertClubHero(dataConnect, {
     userId: sessionUserId(),
@@ -79,7 +93,7 @@ export async function addClub(input: {
   if (input.adminEmail) {
     const email = input.adminEmail.trim().toLowerCase();
     const key = toEmailKey(email);
-    await saveClubInvite(dataConnect, {
+    const savedInvite = await saveClubInvite(dataConnect, {
       clubId: id,
       emailKey: key,
       email,
@@ -87,6 +101,8 @@ export async function addClub(input: {
       token: crypto.randomUUID().replace(/-/g, ""),
       kind: "SIGNUP",
     });
+    if (!savedInvite.data.invite) throw new Error(DATA_REVIEW_MESSAGE);
+    savedRow(savedInvite.data.invite);
     await saveSignupInvite(dataConnect, {
       emailKey: key,
       email,

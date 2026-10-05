@@ -19,7 +19,7 @@ import {
 } from "../../domains/clubs/clubInvite";
 import { ROLE_LABELS } from "../../domains/auth/roles";
 
-const INVALID = "La invitación no es válida o ya no está pendiente.";
+const INVALID = "Enlace caducado o inválido.";
 
 export default function InviteRespond() {
   const { user, loading: authLoading } = useAuth();

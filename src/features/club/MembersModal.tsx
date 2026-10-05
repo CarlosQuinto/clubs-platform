@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, UserPlus, Mail, Trash2, UserCog } from "lucide-react";
 import { useClub } from "../../domains/clubs/ClubContext";
@@ -7,12 +7,13 @@ import {
   changeMemberRole,
   dropClubInvite,
   dropMember,
+  DATA_REVIEW_MESSAGE,
   inviteClubAdmin,
   loadClubPeople,
 } from "../../domains/clubs/clubCommands";
 import { MemberRole } from "../../infrastructure/dataconnect";
 import { emailKey } from "../../shared/paths";
-import { isEmail } from "../../shared/textLimits";
+import { emailText, isRegisterEmail } from "../../shared/textLimits";
 import { inviteRespondPath } from "../../domains/clubs/clubInvite";
 import { sendClubInvite, type InviteKind } from "../../infrastructure/functions/callables";
 import { signupUrl } from "../../domains/clubs/signupInvite";
@@ -20,6 +21,7 @@ import { Role, ROLES, ROLE_LABELS } from "../../domains/auth/roles";
 import InviteSignupLink, {
   CopySignupUrlButton,
 } from "../shell/InviteSignupLink";
+import ConfirmModal from "../../shared/ConfirmModal";
 import { useModalLock } from "../../shared/useModalLock";
 import {
   C,
@@ -83,8 +85,11 @@ export default function MembersModal({
   const [lastInviteUrl, setLastInviteUrl] = useState("");
   const [lastInviteKind, setLastInviteKind] = useState<InviteKind | "">("");
   const [lastMailed, setLastMailed] = useState(true);
+  const [cancelInvite, setCancelInvite] = useState<Invite | null>(null);
+  const [canceling, setCanceling] = useState(false);
+  const sending = useRef(false);
 
-  useModalLock(onClose);
+  useModalLock(cancelInvite ? null : onClose);
 
   const reload = async () => {
     const data = await loadClubPeople(clubId);
@@ -119,55 +124,66 @@ export default function MembersModal({
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (sending.current) return;
     setError("");
     const clean = email.trim().toLowerCase();
-    if (!isEmail(clean)) {
+    if (!isRegisterEmail(clean)) {
       setError("Escribe un correo válido.");
       return;
     }
-    if (members.some((m) => m.email === clean)) {
-      setError("Esa persona ya es administrador del club.");
+    if (!ROLE_SQL[role]) {
+      setError("Elige un rol.");
       return;
     }
+    const taken =
+      members.some((m) => m.email.toLowerCase() === clean) ||
+      invites.some((inv) => inv.email.toLowerCase() === clean);
+    if (taken) {
+      setError("Este correo ya tiene un rol o invitación en el club.");
+      return;
+    }
+    sending.current = true;
+    setBusy(true);
     try {
-      setBusy(true);
       const token = crypto.randomUUID().replace(/-/g, "");
       const key = emailKey(clean);
-      const sent = await sendClubInvite({ clubId, email: clean, role, token }).catch(() => null);
+      const preview = await sendClubInvite({
+        clubId,
+        email: clean,
+        role,
+        token,
+        hold: true,
+      });
       await inviteClubAdmin({
         clubId,
         emailKey: key,
         email: clean,
         role: ROLE_SQL[role],
         token,
-        kind: sent?.kind === "accept" ? "ACCEPT" : "SIGNUP",
+        kind: preview.kind === "accept" ? "ACCEPT" : "SIGNUP",
         platform: false,
       });
+      const sent = preview.held
+        ? await sendClubInvite({ clubId, email: clean, role, token }).catch(() => null)
+        : preview;
       await reload();
       setLastInvite(clean);
       setLastInviteUrl(sent?.url || inviteRespondPath(clubId, key, token));
-      setLastInviteKind(sent?.kind || "signup");
+      setLastInviteKind(sent?.kind || preview.kind);
       setLastMailed(sent?.mailed ?? false);
       setEmail("");
       setRole("admin");
     } catch (err) {
       console.error(err);
-      const code = (err as { code?: string }).code || "";
-      if (code.includes("already-exists")) {
-        setError("Esa persona ya es administrador del club.");
-      } else if (code.includes("unauthenticated")) {
-        setError("Inicia sesión de nuevo para invitar.");
-      } else if (code.includes("permission-denied")) {
-        setError("Solo el presidente o un superadmin puede invitar.");
-      } else {
-        setError("No se pudo crear la invitación.");
-      }
+      setError(inviteError(err));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   };
 
   const changeRole = async (m: Member, newRole: Role) => {
+    if (!ROLE_SQL[newRole]) return;
     await changeMemberRole(clubId, m.id, ROLE_SQL[newRole]);
     await reload();
   };
@@ -183,13 +199,25 @@ export default function MembersModal({
     }
   };
 
-  const removeInvite = async (inv: Invite) => {
-    await dropClubInvite(clubId, inv.id);
-    await reload();
-    if (lastInvite === inv.email) setLastInvite("");
+  const confirmCancel = async () => {
+    if (!cancelInvite || canceling) return;
+    setCanceling(true);
+    setError("");
+    try {
+      await dropClubInvite(clubId, cancelInvite.id);
+      if (lastInvite === cancelInvite.email) setLastInvite("");
+      setCancelInvite(null);
+      await reload();
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo cancelar la invitación.");
+    } finally {
+      setCanceling(false);
+    }
   };
 
   return createPortal(
+    <>
     <div
       onClick={onClose}
       style={{
@@ -248,17 +276,24 @@ export default function MembersModal({
         <form onSubmit={handleInvite} className="members-invite">
           <FormInput
             type="email"
+            required
+            maxLength={320}
+            autoComplete="email"
             placeholder="correo@ejemplo.com"
             value={email}
             onChange={(e) => {
-              setEmail(e.target.value);
+              setEmail(emailText(e.target.value));
               setError("");
             }}
           />
           <div className="members-invite__row">
             <FormSelect
+              required
               value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (ROLES.some((item) => item.value === next)) setRole(next as Role);
+              }}
             >
               {ROLES.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -268,7 +303,7 @@ export default function MembersModal({
             </FormSelect>
             <PrimaryButton
               type="submit"
-              disabled={busy || !isEmail(email.trim())}
+              disabled={busy || !isRegisterEmail(email) || !ROLE_SQL[role]}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -282,9 +317,9 @@ export default function MembersModal({
             </PrimaryButton>
           </div>
         </form>
-        {(error || (email.trim() && !isEmail(email.trim()))) && (
+        {error && (
           <p style={{ color: C.red, fontSize: "0.72rem", margin: "0.35rem 0 0" }}>
-            {error || "Escribe un correo válido."}
+            {error}
           </p>
         )}
         {lastInvite && (
@@ -357,7 +392,12 @@ export default function MembersModal({
             </div>
             <FormSelect
               value={m.role}
-              onChange={(e) => changeRole(m, e.target.value as Role)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (ROLES.some((item) => item.value === next)) {
+                  void changeRole(m, next as Role);
+                }
+              }}
               style={{ width: "auto", padding: "0.35rem 0.5rem", fontSize: "0.75rem" }}
             >
               {ROLES.map((r) => (
@@ -403,15 +443,50 @@ export default function MembersModal({
                   : signupUrl(inv.email)
               }
             />
-            <IconButton title="Cancelar invitación" onClick={() => removeInvite(inv)}>
+            <IconButton
+              title="Cancelar invitación"
+              disabled={canceling}
+              onClick={() => setCancelInvite(inv)}
+            >
               <Trash2 size={14} />
             </IconButton>
           </Row>
         ))}
       </div>
-    </div>,
+    </div>
+    <ConfirmModal
+      open={Boolean(cancelInvite)}
+      title="Cancelar invitación"
+      message="¿Seguro que deseas cancelar esta invitación?"
+      confirmLabel="Cancelar invitación"
+      cancelLabel="Volver"
+      danger
+      busy={canceling}
+      zIndex={10001}
+      onConfirm={() => void confirmCancel()}
+      onCancel={() => {
+        if (!canceling) setCancelInvite(null);
+      }}
+    />
+    </>,
     document.body,
   );
+}
+
+function inviteError(err: unknown) {
+  if (err instanceof Error && err.message === DATA_REVIEW_MESSAGE) {
+    return "No se pudo crear la invitación.";
+  }
+  const code = (err as { code?: string }).code || "";
+  if (code.includes("already-exists")) {
+    return "Este correo ya tiene un rol o invitación en el club.";
+  }
+  if (code.includes("unauthenticated")) return "Inicia sesión de nuevo para invitar.";
+  if (code.includes("permission-denied")) {
+    return "Solo el presidente o un superadmin puede invitar.";
+  }
+  if (code.includes("invalid-argument")) return "Escribe un correo válido.";
+  return "No se pudo crear la invitación.";
 }
 
 const SectionTitle = ({

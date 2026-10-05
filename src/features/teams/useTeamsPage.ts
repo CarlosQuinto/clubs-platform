@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dataConnect, QueryFetchPolicy, teamsPage } from "../../infrastructure/dataconnect";
+import { dataConnect, QueryFetchPolicy, searchClubs, teamsPage } from "../../infrastructure/dataconnect";
+import { teamLabel } from "../../shared/textLimits";
 import { CLUB_PAGE_SIZE } from "../shell/ClubDirectoryList";
-import { filterClubs, toTeamsPage } from "./teamsMapper";
-import type { TeamsPageModel, TeamsScopeView } from "./teamsViewState";
+import { clubSearchKey, clubsMatching, toSearchClubs, toTeamsPage } from "./teamsMapper";
+import type { ClubCardView, TeamsPageModel, TeamsScopeView } from "./teamsViewState";
 
 const DESKTOP_QUERY = "(min-width: 800px)";
 const DESKTOP_PAGE_SIZE = 15;
@@ -27,9 +28,16 @@ export function useTeamsPage() {
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<TeamsPageModel | null>(null);
   const [query, setQuery] = useState("");
+  const [searchHits, setSearchHits] = useState<ClubCardView[] | null>(null);
   const [scope, setScope] = useState<TeamsScopeView>({ seasonId: "", categoryId: "" });
   const scopeReady = useRef(false);
   const request = useRef(0);
+  const searchCache = useRef(new Map<string, ClubCardView[]>());
+  const searchAbort = useRef<AbortController | null>(null);
+  const loggedSearchMiss = useRef(false);
+  const term = query.trim();
+  const searchKey = clubSearchKey(term);
+  const searching = term.length >= 3;
   const pageSize = useDirectoryPageSize();
   const [dirLimit, setDirLimit] = useState(pageSize);
   const [standingsLimit, setStandingsLimit] = useState(STANDINGS_PAGE);
@@ -66,6 +74,42 @@ export function useTeamsPage() {
   }, [load]);
 
   useEffect(() => {
+    if (!searching) {
+      searchAbort.current?.abort();
+      searchAbort.current = null;
+      setSearchHits(null);
+      return;
+    }
+    const cached = searchCache.current.get(searchKey);
+    if (cached) {
+      searchAbort.current?.abort();
+      searchAbort.current = null;
+      setSearchHits(cached);
+      return;
+    }
+    const controller = new AbortController();
+    searchAbort.current?.abort();
+    searchAbort.current = controller;
+    setSearchHits(null);
+    void searchClubs(dataConnect, { term }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        const clubs = toSearchClubs(result.data.clubs);
+        searchCache.current.set(searchKey, clubs);
+        setSearchHits(clubs);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        if (!loggedSearchMiss.current) {
+          loggedSearchMiss.current = true;
+          console.error(err);
+        }
+        setSearchHits(null);
+      });
+    return () => controller.abort();
+  }, [searching, searchKey, term]);
+
+  useEffect(() => {
     if (prevQuery.current !== query) {
       prevQuery.current = query;
       prevPageSize.current = pageSize;
@@ -78,10 +122,12 @@ export function useTeamsPage() {
     }
   }, [query, pageSize]);
 
-  const directory = useMemo(
-    () => (model ? filterClubs(model.clubs, query) : []),
-    [model, query],
-  );
+  const directory = useMemo(() => {
+    if (!model) return [];
+    if (!searching) return model.clubs;
+    if (searchHits !== null) return searchHits;
+    return clubsMatching(model.clubs, searchKey);
+  }, [model, searching, searchHits, searchKey]);
   const standings = useMemo(
     () => (model ? model.standingsFor(scope) : []),
     [model, scope],
@@ -92,16 +138,17 @@ export function useTeamsPage() {
     error,
     query,
     directory: directory.slice(0, dirLimit),
-    directoryEmptyLabel: query.trim()
-      ? "Ningún equipo coincide con esa búsqueda."
-      : null,
+    directoryEmptyLabel:
+      searching && model && directory.length === 0
+        ? "Ningún equipo coincide con esa búsqueda."
+        : null,
     hasMoreDirectory: directory.length > dirLimit,
     seasons: model?.seasons ?? [],
     categories: model?.categories ?? [],
     scope,
     standings: standings.slice(0, standingsLimit),
     hasMoreStandings: standings.length > standingsLimit,
-    onSearch: setQuery,
+    onSearch: (value: string) => setQuery(teamLabel(value)),
     onMoreDirectory: () => setDirLimit((count) => count + pageSize),
     onScopeChange: (next: TeamsScopeView) => {
       setScope(next);

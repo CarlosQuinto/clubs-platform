@@ -42,7 +42,7 @@ export default function RegisterTeamView() {
                 onChange={(event) => form.onCaptainName(event.target.value)}
                 placeholder="Nombre completo"
                 required
-                maxLength={119}
+                maxLength={40}
                 autoComplete="name"
               />
             </Field>
@@ -53,7 +53,8 @@ export default function RegisterTeamView() {
                 onChange={(event) => form.onCaptainPhone(event.target.value)}
                 placeholder="Teléfono celular"
                 required
-                maxLength={29}
+                maxLength={16}
+                inputMode="tel"
                 autoComplete="tel"
               />
             </Field>
@@ -64,7 +65,7 @@ export default function RegisterTeamView() {
                 onChange={(event) => form.onCaptainEmail(event.target.value)}
                 placeholder="Correo electrónico"
                 required
-                maxLength={119}
+                maxLength={320}
                 autoComplete="email"
               />
             </Field>
@@ -74,7 +75,7 @@ export default function RegisterTeamView() {
                 onChange={(event) => form.onTeamName(event.target.value)}
                 placeholder="Nombre del equipo"
                 required
-                maxLength={79}
+                maxLength={30}
               />
             </Field>
             <label className="public-consent">
@@ -100,7 +101,7 @@ export default function RegisterTeamView() {
               </span>
             </label>
             {form.error ? <p className="public-form-error">{form.error}</p> : null}
-            <button type="submit" className="public-submit" disabled={form.busy}>
+            <button type="submit" className="public-submit" disabled={!form.ready || form.busy}>
               {form.busy ? "Enviando..." : "Enviar"}
             </button>
           </form>

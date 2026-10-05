@@ -5,6 +5,7 @@ import {
   registerTeamPage,
   submitTeamApplication,
 } from "../../infrastructure/dataconnect";
+import { cellPhone, emailText, personName, teamLabel } from "../../shared/textLimits";
 import { toRegisterTeamClubs, validateRegisterTeam } from "./registerTeamMapper";
 import type { RegisterTeamFormView } from "./registerTeamViewState";
 
@@ -24,6 +25,7 @@ export function useRegisterTeam() {
   const [form, setForm] = useState<RegisterTeamFormView>(EMPTY);
   const [clubsLoading, setClubsLoading] = useState(true);
   const request = useRef(0);
+  const sending = useRef(false);
 
   const loadClubs = useCallback(() => {
     const ticket = request.current + 1;
@@ -52,11 +54,13 @@ export function useRegisterTeam() {
 
   const onSubmit = (event: { preventDefault: () => void }) => {
     event.preventDefault();
+    if (sending.current) return;
     const result = validateRegisterTeam(form);
     if (typeof result === "string") {
       setForm((current) => ({ ...current, error: result }));
       return;
     }
+    sending.current = true;
     setForm((current) => ({ ...current, busy: true, error: null }));
     void submitTeamApplication(dataConnect, {
       id: crypto.randomUUID(),
@@ -65,9 +69,9 @@ export function useRegisterTeam() {
       .then((response) => {
         if (!response.data.application) {
           setForm((current) => ({
-            ...current,
-            busy: false,
-            error: "No se pudo enviar la solicitud. Inténtalo de nuevo.",
+            ...EMPTY,
+            clubs: current.clubs,
+            error: "Los datos no pasaron la revisión. Vuelve a llenar el formulario.",
           }));
           return;
         }
@@ -84,16 +88,20 @@ export function useRegisterTeam() {
           busy: false,
           error: "No se pudo enviar la solicitud. Inténtalo de nuevo.",
         }));
+      })
+      .finally(() => {
+        sending.current = false;
       });
   };
 
   return {
     ...form,
     clubsLoading,
-    onCaptainName: (value: string) => setField("captainName", value),
-    onCaptainEmail: (value: string) => setField("captainEmail", value),
-    onCaptainPhone: (value: string) => setField("captainPhone", value),
-    onTeamName: (value: string) => setField("teamName", value),
+    ready: typeof validateRegisterTeam(form) !== "string",
+    onCaptainName: (value: string) => setField("captainName", personName(value)),
+    onCaptainEmail: (value: string) => setField("captainEmail", emailText(value)),
+    onCaptainPhone: (value: string) => setField("captainPhone", cellPhone(value)),
+    onTeamName: (value: string) => setField("teamName", teamLabel(value)),
     onConsent: (value: boolean) =>
       setForm((current) => ({ ...current, consent: value, error: null, sent: false })),
     onSubmit,

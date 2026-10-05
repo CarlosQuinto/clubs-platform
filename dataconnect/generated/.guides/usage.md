@@ -14,7 +14,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { amIPlatformAdmin, platformAdminById, clubAdminGate, signupInviteByEmail, clubInviteLookup, adminClubs, adminClubPeople, adminCompetition, adminCover, adminAds } from '@clubs-platform/dataconnect';
+import { amIPlatformAdmin, platformAdminById, clubAdminGate, signupInviteByEmail, clubInviteLookup, adminClubs, searchAdminClubs, adminClubPeople, adminCompetition, adminCover } from '@clubs-platform/dataconnect';
 
 
 // Operation AmIPlatformAdmin: 
@@ -35,6 +35,9 @@ const { data } = await ClubInviteLookup(dataConnect, clubInviteLookupVars);
 // Operation AdminClubs: 
 const { data } = await AdminClubs(dataConnect);
 
+// Operation SearchAdminClubs:  For variables, look at type SearchAdminClubsVars in ../index.d.ts
+const { data } = await SearchAdminClubs(dataConnect, searchAdminClubsVars);
+
 // Operation AdminClubPeople:  For variables, look at type AdminClubPeopleVars in ../index.d.ts
 const { data } = await AdminClubPeople(dataConnect, adminClubPeopleVars);
 
@@ -43,9 +46,6 @@ const { data } = await AdminCompetition(dataConnect);
 
 // Operation AdminCover: 
 const { data } = await AdminCover(dataConnect);
-
-// Operation AdminAds: 
-const { data } = await AdminAds(dataConnect);
 
 
 ```

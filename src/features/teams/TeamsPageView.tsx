@@ -35,6 +35,7 @@ export default function TeamsPageView() {
                 onChange={(event) => screen.onSearch(event.target.value)}
                 placeholder="Buscar por nombre de equipo"
                 aria-label="Buscar por nombre de equipo"
+                maxLength={30}
               />
             </label>
             <Directory

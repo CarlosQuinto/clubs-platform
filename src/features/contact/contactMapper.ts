@@ -1,12 +1,11 @@
 import { type ContactPageData } from "../../infrastructure/dataconnect";
-import { EMAIL_RE } from "../../domains/platform/social";
+import { isCellPhone, isContactMessage, isPersonName, isRegisterEmail } from "../../shared/textLimits";
 import type { ContactTopicView } from "./contactViewState";
 
 export const CONTACT_TOPICS: ContactTopicView[] = [
-  { value: "torneos", label: "Torneos y ligas" },
-  { value: "renta", label: "Renta de cancha" },
-  { value: "disponibilidad", label: "Consulta de disponibilidad" },
-  { value: "otro", label: "Otro" },
+  { value: "Torneos", label: "Torneos" },
+  { value: "Renta de canchas", label: "Renta de canchas" },
+  { value: "Disponibilidad", label: "Disponibilidad" },
 ];
 
 export interface ContactDraft {
@@ -32,16 +31,16 @@ export function toContactWhatsapp(data: ContactPageData): string | null {
 }
 
 export function validateContact(draft: ContactDraft): string | ContactPayload {
-  const name = draft.name.trim().slice(0, 119);
+  const name = draft.name.trim();
   const email = draft.email.trim().toLowerCase();
   const phone = draft.phone.trim();
-  const topic = CONTACT_TOPICS.find((item) => item.value === draft.topic)?.label || "";
-  const message = draft.message.trim();
-  if (name.length < 2) return "Escribe tu nombre.";
-  if (phone.replace(/\D/g, "").length < 7) return "El teléfono no es válido.";
-  if (!EMAIL_RE.test(email)) return "El correo no es válido.";
+  const topic = CONTACT_TOPICS.find((item) => item.value === draft.topic)?.value || "";
+  const message = draft.message.trim().replace(/ {2,}/g, " ");
+  if (!isPersonName(name)) return "Escribe tu nombre.";
+  if (!isCellPhone(phone)) return "El teléfono no es válido.";
+  if (!isRegisterEmail(email)) return "El correo no es válido.";
   if (!topic) return "Selecciona un tema.";
-  if (message.length < 3) return "Escribe un mensaje.";
+  if (!isContactMessage(message)) return "Escribe un mensaje.";
   if (!draft.consent) return "Debes aceptar los términos y la política de privacidad.";
   return { name, email, phone, topic, message };
 }

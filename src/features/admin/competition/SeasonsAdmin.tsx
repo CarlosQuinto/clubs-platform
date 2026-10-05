@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CalendarRange, Trash2 } from "lucide-react";
 import { addSeason, removeSeason, toggleSeason } from "../../../domains/competition/competitionCommands";
+import { isIsoDate } from "../../../domains/courts/courts";
 import type { Season } from "../../../shared/types";
-import { seasonLabel } from "../../../shared/textLimits";
+import { isSeasonLabel, seasonLabel } from "../../../shared/textLimits";
 import Field from "../Field";
 import {
   Badge,
@@ -37,6 +38,12 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const creating = useRef(false);
+  const datesReady = isIsoDate(startDate) && isIsoDate(endDate);
+  const endBeforeStart = datesReady && endDate <= startDate;
+  const canCreate = isSeasonLabel(name) && datesReady && endDate > startDate && !busy;
 
   const ordered = useMemo(
     () =>
@@ -51,18 +58,28 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = name.trim();
-    if (!clean) return;
-    await addSeason({
-      name: clean,
-      startDate: startDate || null,
-      endDate: endDate || null,
-      active: true,
-    });
-    onChange();
-    setName("");
-    setStartDate("");
-    setEndDate("");
+    if (creating.current || !canCreate) return;
+    creating.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await addSeason({
+        name,
+        startDate,
+        endDate,
+        active: true,
+      });
+      onChange();
+      setName("");
+      setStartDate("");
+      setEndDate("");
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo crear la temporada.");
+    } finally {
+      creating.current = false;
+      setBusy(false);
+    }
   };
 
   const handleDelete = async (season: Season) => {
@@ -86,7 +103,10 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
           <FormInput
             value={name}
             maxLength={11}
-            onChange={(e) => setName(seasonLabel(e.target.value))}
+            onChange={(e) => {
+              setName(seasonLabel(e.target.value));
+              setError("");
+            }}
             placeholder="Ej. 2026-2027"
             required
           />
@@ -95,24 +115,41 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
           <Field label="Inicio">
             <FormInput
               type="date"
+              required
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setError("");
+              }}
             />
           </Field>
           <Field label="Fin">
             <FormInput
               type="date"
+              required
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setError("");
+              }}
             />
           </Field>
         </div>
+        {endBeforeStart && (
+          <p style={{ margin: 0, color: C.red, fontSize: "0.72rem" }}>
+            La fecha de fin tiene que ser posterior a la de inicio.
+          </p>
+        )}
+        {error && (
+          <p style={{ margin: 0, color: C.red, fontSize: "0.72rem" }}>{error}</p>
+        )}
         <PrimaryButton
           type="submit"
+          disabled={!canCreate}
           className="seasons-form__submit"
           style={{ alignSelf: "end" }}
         >
-          Crear
+          {busy ? "Creando..." : "Crear"}
         </PrimaryButton>
       </form>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>

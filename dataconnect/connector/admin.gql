@@ -65,6 +65,25 @@ query AdminClubs
   }
 }
 
+query SearchAdminClubs($term: String!) @auth(level: USER) {
+  clubs: _select(
+    sql: """
+      SELECT c.id,
+             c.slug,
+             c.name,
+             c.active,
+             c.locality_id AS "localityId"
+      FROM clubs c
+      WHERE char_length(btrim($1)) BETWEEN 3 AND 30
+        AND btrim($1) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND translate(lower(c.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny')
+          LIKE '%' || translate(lower(btrim($1)), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%'
+      ORDER BY c.name
+    """
+    params: [$term]
+  )
+}
+
 query AdminClubPeople($clubId: String!) @auth(level: USER) {
   clubMembers(where: { club: { id: { eq: $clubId } } }) {
     email
@@ -299,10 +318,17 @@ mutation CreateLocality($userId: String! = "" $id: String! $name: String!) @auth
   locality: _executeReturningFirst(
     sql: """
       INSERT INTO localities (id, name, created_at)
-      VALUES ($1, btrim($2), CURRENT_TIMESTAMP)
+      SELECT $1, initcap(btrim(regexp_replace($2, ' {2,}', ' ', 'g'))), CURRENT_TIMESTAMP
+      WHERE char_length(btrim(regexp_replace($2, ' {2,}', ' ', 'g'))) BETWEEN 3 AND 50
+        AND btrim(regexp_replace($2, ' {2,}', ' ', 'g')) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ,]+)( [A-Za-z0-9À-ÖØ-öø-ÿ,]+)*$'
+        AND NOT EXISTS (
+          SELECT 1 FROM localities
+          WHERE lower(name) = lower(btrim(regexp_replace($2, ' {2,}', ' ', 'g')))
+        )
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
       RETURNING id
     """
-    params: [$id, $name]
+    params: [$id, $name, { _expr: "auth.uid" }]
   )
 }
 
@@ -327,8 +353,27 @@ mutation CreateClub(
       INSERT INTO clubs (
         id, slug, name, description, locality_id, location, president_phone, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+      SELECT $1, $2, btrim($3), $4, $5, btrim($6), btrim($7), CURRENT_TIMESTAMP
+      WHERE char_length(btrim($3)) BETWEEN 3 AND 30
+        AND btrim($3) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.-]+)*$'
+        AND char_length($2) BETWEEN 3 AND 40
+        AND $2 ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+        AND $2 NOT IN (
+          'admin', 'login', 'registro', 'invitar', 'registrar-equipo', 'contacto',
+          'solicitudes', 'clubes', 'equipos', 'torneos', 'temporadas', 'categorias',
+          'canchas', 'api'
+        )
+        AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = $2)
+        AND EXISTS (SELECT 1 FROM localities WHERE id = $5)
+        AND (
+          btrim($6) = ''
+          OR (
+            char_length(btrim($6)) BETWEEN 3 AND 50
+            AND btrim($6) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ,.]+)( [A-Za-z0-9À-ÖØ-öø-ÿ,.]+)*$'
+          )
+        )
+        AND (btrim($7) = '' OR btrim($7) ~ '^\+?[0-9]{10,15}$')
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $8)
       RETURNING id
     """
     params: [
@@ -339,6 +384,7 @@ mutation CreateClub(
       $localityId
       $location
       $presidentPhone
+      { _expr: "auth.uid" }
     ]
   )
 }
@@ -419,10 +465,49 @@ mutation SaveClubInvite(
   invite: _executeReturningFirst(
     sql: """
       INSERT INTO club_invites (club_id, email_key, email, role, token, kind, created_at)
-      VALUES ($1, $2, $3, $4::member_role, $5, $6::invite_kind, CURRENT_TIMESTAMP)
+      SELECT $1, $2, lower(btrim($3)),
+        CASE $4
+          WHEN 'ADMIN' THEN 'ADMIN'::member_role
+          WHEN 'DT' THEN 'DT'::member_role
+          WHEN 'PRENSA' THEN 'PRENSA'::member_role
+          WHEN 'TESORERO' THEN 'TESORERO'::member_role
+        END,
+        $5,
+        CASE $6
+          WHEN 'SIGNUP' THEN 'SIGNUP'::invite_kind
+          WHEN 'ACCEPT' THEN 'ACCEPT'::invite_kind
+        END,
+        CURRENT_TIMESTAMP
+      WHERE char_length(btrim($3)) BETWEEN 6 AND 320
+        AND btrim($3) = lower(btrim($3))
+        AND btrim($3) ~ '^[^[:space:]@]+@[^[:space:]@]+\.[a-z]{2,}$'
+        AND $2 = replace(lower(btrim($3)), '.', ',')
+        AND $4 IN ('ADMIN', 'DT', 'PRENSA', 'TESORERO')
+        AND $5 ~ '^[A-Za-z0-9]{16,64}$'
+        AND $6 IN ('SIGNUP', 'ACCEPT')
+        AND NOT EXISTS (
+          SELECT 1 FROM club_members
+          WHERE club_id = $1 AND lower(email) = lower(btrim($3))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM club_invites
+          WHERE club_id = $1 AND (email_key = $2 OR lower(email) = lower(btrim($3)))
+        )
+        AND (
+          SELECT count(*) FROM club_invites
+          WHERE club_id = $1
+            AND created_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+        ) < 20
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $7)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = $1 AND user_id = $7 AND role::text = 'ADMIN'
+          )
+        )
       RETURNING email_key AS id
     """
-    params: [$clubId, $emailKey, $email, $role, $token, $kind]
+    params: [$clubId, $emailKey, $email, $role, $token, $kind, { _expr: "auth.uid" }]
   )
 }
 
@@ -466,7 +551,15 @@ mutation ClearSignupInvite($emailKey: String!) @auth(level: USER) {
     sql: """
       DELETE FROM signup_invites
       WHERE email_key = $1
-        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+        AND (
+          EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+          OR EXISTS (
+            SELECT 1 FROM club_members
+            WHERE club_id = signup_invites.club_id
+              AND user_id = $2
+              AND role::text = 'ADMIN'
+          )
+        )
       RETURNING email_key AS id
     """
     params: [$emailKey, { _expr: "auth.uid" }]
@@ -476,8 +569,14 @@ mutation ClearSignupInvite($emailKey: String!) @auth(level: USER) {
 mutation SetClubMemberRole($clubId: String!, $userId: String!, $role: String!) @auth(level: USER) {
   member: _executeReturningFirst(
     sql: """
-      UPDATE club_members SET role = $3::member_role
+      UPDATE club_members SET role = CASE $3
+        WHEN 'ADMIN' THEN 'ADMIN'::member_role
+        WHEN 'DT' THEN 'DT'::member_role
+        WHEN 'PRENSA' THEN 'PRENSA'::member_role
+        WHEN 'TESORERO' THEN 'TESORERO'::member_role
+      END
       WHERE club_id = $1 AND user_id = $2
+        AND $3 IN ('ADMIN', 'DT', 'PRENSA', 'TESORERO')
         AND (
           EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
           OR EXISTS (
@@ -599,10 +698,16 @@ mutation CreateSeason(
   season: _executeReturningFirst(
     sql: """
       INSERT INTO seasons (id, name, start_date, end_date, active)
-      VALUES ($1, $2, $3, $4, $5)
+      SELECT $1, $2, $3::date, $4::date, $5
+      WHERE char_length($2) BETWEEN 4 AND 11
+        AND $2 ~ '^[0-9]+(-[0-9]+)*$'
+        AND $3 IS NOT NULL
+        AND $4 IS NOT NULL
+        AND $4::date > $3::date
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $6)
       RETURNING id
     """
-    params: [$id, $name, $startDate, $endDate, $active]
+    params: [$id, $name, $startDate, $endDate, $active, { _expr: "auth.uid" }]
   )
 }
 
@@ -653,10 +758,19 @@ mutation CreateCategory(
   category: _executeReturningFirst(
     sql: """
       INSERT INTO categories (id, name, sort_order)
-      VALUES ($1, $2, $3)
+      SELECT $1, initcap(btrim(regexp_replace($2, ' {2,}', ' ', 'g'))), $3
+      WHERE char_length(btrim($2)) BETWEEN 3 AND 40
+        AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND $3 >= 0
+        AND $3 <= 1000
+        AND NOT EXISTS (
+          SELECT 1 FROM categories
+          WHERE lower(name) = lower(btrim(regexp_replace($2, ' {2,}', ' ', 'g')))
+        )
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
       RETURNING id
     """
-    params: [$id, $name, $sortOrder]
+    params: [$id, $name, $sortOrder, { _expr: "auth.uid" }]
   )
 }
 
@@ -680,7 +794,9 @@ mutation CreateTournament(
   grouped: _executeReturningFirst(
     sql: """
       INSERT INTO tournament_groups (id, label)
-      VALUES ($1, $2)
+      SELECT $1, btrim($2)
+      WHERE char_length(btrim($2)) BETWEEN 3 AND 50
+        AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label
       RETURNING id
     """
@@ -692,10 +808,32 @@ mutation CreateTournament(
         id, name, season_id, category_id, group_id, status,
         legs, football_type, duration_minutes, start_date, description, created_at
       )
-      VALUES (
-        $1, $2, $3, $4, $5, 'UPCOMING'::tournament_status,
-        2, $6::football_type, $7, $8, $9, CURRENT_TIMESTAMP
-      )
+      SELECT
+        $1, btrim($2), $3, $4, $5, 'UPCOMING'::tournament_status,
+        2,
+        CASE $6
+          WHEN 'FUT_7' THEN 'FUT_7'::football_type
+          WHEN 'FUT_9' THEN 'FUT_9'::football_type
+          WHEN 'FUT_11' THEN 'FUT_11'::football_type
+        END,
+        $7, $8::date, btrim($9), CURRENT_TIMESTAMP
+      WHERE char_length(btrim($2)) BETWEEN 3 AND 50
+        AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND $6 IN ('FUT_7', 'FUT_9', 'FUT_11')
+        AND $7 IN (30, 60, 90, 120)
+        AND $8 IS NOT NULL
+        AND (
+          btrim($9) = ''
+          OR btrim($9) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,¡!¿?-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,¡!¿?-]+)*$'
+        )
+        AND char_length(btrim($9)) <= 100
+        AND EXISTS (SELECT 1 FROM categories WHERE id = $4)
+        AND EXISTS (
+          SELECT 1 FROM seasons s
+          WHERE s.id = $3
+            AND (s.start_date IS NULL OR $8::date >= s.start_date)
+            AND (s.end_date IS NULL OR $8::date <= s.end_date)
+        )
       RETURNING id
     """
     params: [
@@ -864,7 +1002,27 @@ mutation SaveCourt(
       INSERT INTO courts (
         id, name, description, hourly_rate, football, image_url, sort_order, active
       )
-      VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8)
+      SELECT
+        $1,
+        initcap(btrim($2)),
+        btrim($3),
+        round($4::numeric, 2),
+        $5,
+        NULLIF(btrim($6), ''),
+        $7,
+        $8
+      WHERE char_length(btrim($2)) BETWEEN 3 AND 15
+        AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND char_length(btrim($3)) BETWEEN 3 AND 15
+        AND btrim($3) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,-]+)*$'
+        AND $4 >= 0
+        AND round($4::numeric, 2) <= 99999999.99
+        AND (
+          btrim($6) = ''
+          OR (char_length($6) <= 2048 AND $6 ~ '^https://[^[:space:]<>"'']+$')
+        )
+        AND $7 BETWEEN 0 AND 100000
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $9)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -884,6 +1042,7 @@ mutation SaveCourt(
       $imageUrl
       $sortOrder
       $active
+      { _expr: "auth.uid" }
     ]
   )
 }
