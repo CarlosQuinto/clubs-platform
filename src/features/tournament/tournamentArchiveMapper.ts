@@ -1,4 +1,6 @@
 import { FootballType, type TournamentArchiveData, TournamentStatus } from "../../infrastructure/dataconnect";
+import { tournamentPhase } from "../../domains/competition/tournamentPhase";
+import { todayIso } from "../../domains/platform/ads";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatCalendarDate } from "./tournamentMapper";
 import type {
@@ -29,11 +31,19 @@ function clubCount(rows: { _count: number }[]): number {
   return typeof count === "number" && Number.isFinite(count) ? count : rows.length;
 }
 
-function toCard(tournament: TournamentRow, joinBase: string): TournamentCardView {
+function phaseOf(tournament: TournamentRow, today: string) {
+  return tournamentPhase(
+    tournament.status,
+    tournament.startDate || tournament.season.startDate,
+    today,
+  );
+}
+
+function toCard(tournament: TournamentRow, joinBase: string, today: string): TournamentCardView {
   const clubs = clubCount(tournament.tournamentClubs_on_tournament);
   const clubLabel = clubs === 1 ? "1 club" : `${clubs} clubes`;
   const begins = formatCalendarDate(tournament.startDate || tournament.season.startDate);
-  const upcoming = tournament.status === TournamentStatus.UPCOMING;
+  const upcoming = phaseOf(tournament, today) === "upcoming";
   const joinHref =
     tournament.status === TournamentStatus.FINISHED || !joinBase
       ? null
@@ -56,7 +66,10 @@ function toCard(tournament: TournamentRow, joinBase: string): TournamentCardView
   };
 }
 
-export function toTournamentArchive(data: TournamentArchiveData): TournamentArchiveView {
+export function toTournamentArchive(
+  data: TournamentArchiveData,
+  today = todayIso(),
+): TournamentArchiveView {
   const joinBase = data.platformSettings?.whatsapp?.trim() || "";
   const active: TournamentCardView[] = [];
   const upcoming: TournamentCardView[] = [];
@@ -64,13 +77,14 @@ export function toTournamentArchive(data: TournamentArchiveData): TournamentArch
   const finishedSeasons: string[] = [];
 
   for (const tournament of data.tournaments) {
-    const card = toCard(tournament, joinBase);
-    if (!tournament.season.active || tournament.status === TournamentStatus.FINISHED) {
+    const card = toCard(tournament, joinBase, today);
+    const phase = phaseOf(tournament, today);
+    if (!tournament.season.active || phase === "finished") {
       finished.push(card);
       finishedSeasons.push(tournament.season.name);
       continue;
     }
-    if (tournament.status === TournamentStatus.UPCOMING) upcoming.push(card);
+    if (phase === "upcoming") upcoming.push(card);
     else active.push(card);
   }
 

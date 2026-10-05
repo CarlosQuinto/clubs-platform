@@ -5,6 +5,7 @@ import {
   PLATFORM_DESCRIPTION,
   PLATFORM_HEADLINE,
 } from "../../domains/clubs/clubDefaults";
+import { tournamentPhase } from "../../domains/competition/tournamentPhase";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
@@ -46,11 +47,23 @@ function clubCount(rows: { _count: number }[]): number {
   return typeof count === "number" && Number.isFinite(count) ? count : rows.length;
 }
 
-function toTournamentCard(tournament: TournamentRow, joinBase: string): HomeTournamentCard {
+function phaseOf(tournament: TournamentRow, today: string) {
+  return tournamentPhase(
+    tournament.status,
+    tournament.startDate || tournament.season.startDate,
+    today,
+  );
+}
+
+function toTournamentCard(
+  tournament: TournamentRow,
+  joinBase: string,
+  today: string,
+): HomeTournamentCard {
   const clubs = clubCount(tournament.tournamentClubs_on_tournament);
   const clubLabel = clubs === 1 ? "1 club" : `${clubs} clubes`;
   const begins = formatCalendarDate(tournament.startDate || tournament.season.startDate);
-  const upcoming = tournament.status === TournamentStatus.UPCOMING;
+  const upcoming = phaseOf(tournament, today) === "upcoming";
   const joinHref =
     tournament.status === TournamentStatus.FINISHED || !joinBase
       ? null
@@ -131,9 +144,10 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
   const active: HomeTournamentCard[] = [];
   const upcoming: HomeTournamentCard[] = [];
   for (const tournament of data.tournaments) {
-    const card = toTournamentCard(tournament, joinBase);
-    if (tournament.status === TournamentStatus.UPCOMING) upcoming.push(card);
-    else if (tournament.status === TournamentStatus.ACTIVE) active.push(card);
+    const card = toTournamentCard(tournament, joinBase, today);
+    const phase = phaseOf(tournament, today);
+    if (phase === "upcoming") upcoming.push(card);
+    else if (phase === "active") active.push(card);
   }
   const byName = (a: HomeTournamentCard, b: HomeTournamentCard) => a.name.localeCompare(b.name, "es");
   active.sort(byName);
