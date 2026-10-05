@@ -3,19 +3,17 @@ import {
   type AdminAdminsData,
   adminCover,
   type AdminCoverData,
-  clearHeroImages,
   dataConnect,
   QueryFetchPolicy,
   removePlatformAdmin,
   removePlatformAdminInvite,
-  saveHeroImage,
+  replaceHeroImages as replaceHeroImagesMutation,
   savePlatformAdminInvite,
   savePlatformCover,
   savePlatformHeader,
   savePlatformSocial,
   saveSignupInvite,
 } from "../../infrastructure/dataconnect";
-import { sessionUserId } from "../../infrastructure/auth";
 import { savedRow } from "../../shared/saved";
 
 export async function loadCover(): Promise<AdminCoverData> {
@@ -24,7 +22,6 @@ export async function loadCover(): Promise<AdminCoverData> {
 
 export async function saveHeader(name: string, motto: string, logoUrl: string) {
   const result = await savePlatformHeader(dataConnect, {
-    userId: sessionUserId(),
     name,
     motto,
     logoUrl,
@@ -34,7 +31,6 @@ export async function saveHeader(name: string, motto: string, logoUrl: string) {
 
 export async function saveCoverText(headline: string, tagline: string) {
   const result = await savePlatformCover(dataConnect, {
-    userId: sessionUserId(),
     headline,
     tagline,
   });
@@ -48,25 +44,17 @@ export async function saveSocial(input: {
   youtube: string;
   whatsapp: string;
 }) {
-  const result = await savePlatformSocial(dataConnect, {
-    userId: sessionUserId(),
-    ...input,
-  });
+  const result = await savePlatformSocial(dataConnect, input);
   savedRow(result.data.settings);
 }
 
+/** Fotos del carrusel de portada como máximo. El SQL rechaza la séptima. */
+export const MAX_HERO_IMAGES = 6;
+
+/** Reemplaza el carrusel completo en una sola sentencia. */
 export async function replaceHeroImages(urls: string[]) {
-  const userId = sessionUserId();
-  await clearHeroImages(dataConnect, { userId });
-  for (let index = 0; index < urls.length; index += 1) {
-    const result = await saveHeroImage(dataConnect, {
-      userId,
-      id: crypto.randomUUID(),
-      position: index,
-      url: urls[index],
-    });
-    savedRow(result.data.image);
-  }
+  const result = await replaceHeroImagesMutation(dataConnect, { urls: urls.join(" ") });
+  savedRow(result.data.images);
 }
 
 export async function loadAdmins(): Promise<AdminAdminsData> {

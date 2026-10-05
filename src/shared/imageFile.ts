@@ -1,9 +1,12 @@
 export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
-/** Lee la cabecera real del archivo: JPEG, PNG o WEBP. La extensión y el tipo del navegador no cuentan. */
-export async function isAllowedImage(file: File) {
-  if (file.size === 0 || file.size >= IMAGE_MAX_BYTES) return false;
+/**
+ * Lee la cabecera real del archivo: JPEG, PNG o WEBP. La extensión y el tipo del navegador no cuentan.
+ * `maxBytes` es el tope del archivo original; lo que llega a Storage sale ya comprimido.
+ */
+export async function isAllowedImage(file: File, maxBytes = IMAGE_MAX_BYTES) {
+  if (file.size === 0 || file.size >= maxBytes) return false;
   const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const jpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
   const png =

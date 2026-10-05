@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -7,9 +7,11 @@ import {
   Shield,
   Trash2,
   UploadCloud,
+  X as XIcon,
 } from "lucide-react";
 import { platformStoragePath } from "../../../shared/paths";
 import {
+  MAX_HERO_IMAGES,
   replaceHeroImages,
   saveCoverText,
   saveHeader,
@@ -23,6 +25,28 @@ import {
   PLATFORM_HEADLINE,
   PLATFORM_NAME,
 } from "../../../domains/clubs/clubDefaults";
+import {
+  canonicalWebUrl,
+  coverHeadline,
+  coverTagline,
+  isCoverHeadline,
+  isCoverTagline,
+  isFacebook,
+  isInstagram,
+  isPlatformMotto,
+  isPlatformName,
+  isWebUrl,
+  isWhatsapp,
+  isX,
+  isYoutube,
+  platformMotto,
+  platformName,
+  socialHandle,
+  webUrl,
+  whatsappText,
+} from "../../../shared/textLimits";
+import { IMAGE_ACCEPT, isAllowedImage } from "../../../shared/imageFile";
+import ConfirmModal from "../../../shared/ConfirmModal";
 import Field from "../Field";
 import { invalidatePlatformBanner } from "../../shell/usePlatformBanner";
 import { invalidatePlatformChrome } from "../../shell/usePlatformChrome";
@@ -41,83 +65,89 @@ interface Props {
   onSaved?: () => void;
 }
 
+type Area = "header" | "cover" | "social";
+
 const LIMIT = {
-  name: 20,
-  motto: 30,
+  name: 30,
+  motto: 50,
+  logoUrl: 1000,
   headline: 35,
   tagline: 120,
-  instagram: 150,
-  facebook: 150,
-  x: 150,
-  youtube: 150,
-  whatsapp: 20,
+  imageUrl: 2000,
+  social: 150,
+  whatsapp: 13,
 } as const;
 
-function clip(value: string, max: number) {
-  return value.slice(0, max);
+/** Topes del archivo original; se comprime antes de llegar a Storage. */
+const LOGO_FILE_MAX_BYTES = 10 * 1024 * 1024;
+const CAROUSEL_FILE_MAX_BYTES = 50 * 1024 * 1024;
+const URL_TIP = "Usa una URL que empiece con http:// o https://, sin espacios.";
+
+function isStoredImage(url: string) {
+  return url.includes("firebasestorage.googleapis.com");
+}
+
+/** Valores guardados, ya limpios, contra los que se compara cada formulario. */
+function savedValues(config?: PlatformCover | null) {
+  return {
+    name: config?.name || PLATFORM_NAME,
+    motto: config?.motto || "",
+    logoUrl: config?.logoUrl || "",
+    headline: config?.headline || PLATFORM_HEADLINE,
+    tagline: config?.tagline || PLATFORM_DESCRIPTION,
+    instagram: config?.social?.instagram || "",
+    facebook: config?.social?.facebook || "",
+    x: config?.social?.x || "",
+    youtube: config?.social?.youtube || "",
+    whatsapp: whatsappText(config?.social?.whatsapp || ""),
+  };
 }
 
 export default function HeroAdmin({ config, onSaved }: Props) {
   const savedImages = config?.heroImages || [];
-  const [name, setName] = useState(clip(config?.name || PLATFORM_NAME, LIMIT.name));
-  const [motto, setMotto] = useState(clip(config?.motto || "", LIMIT.motto));
-  const [logoUrl, setLogoUrl] = useState(config?.logoUrl || "");
-  const [headline, setHeadline] = useState(
-    clip(config?.headline || PLATFORM_HEADLINE, LIMIT.headline),
-  );
-  const [tagline, setTagline] = useState(
-    clip(config?.tagline || PLATFORM_DESCRIPTION, LIMIT.tagline),
-  );
-  const [instagram, setInstagram] = useState(
-    clip(config?.social?.instagram || "", LIMIT.instagram),
-  );
-  const [facebook, setFacebook] = useState(
-    clip(config?.social?.facebook || "", LIMIT.facebook),
-  );
-  const [x, setX] = useState(clip(config?.social?.x || "", LIMIT.x));
-  const [youtube, setYoutube] = useState(
-    clip(config?.social?.youtube || "", LIMIT.youtube),
-  );
-  const [whatsapp, setWhatsapp] = useState(
-    clip(config?.social?.whatsapp || "", LIMIT.whatsapp),
-  );
+  // Clave de texto: el config llega como objeto nuevo en cada carga y no debe borrar lo escrito.
+  const savedKey = JSON.stringify(savedValues(config));
+  const saved = useMemo(() => JSON.parse(savedKey) as ReturnType<typeof savedValues>, [savedKey]);
+  const [name, setName] = useState(saved.name);
+  const [motto, setMotto] = useState(saved.motto);
+  const [logoUrl, setLogoUrl] = useState(saved.logoUrl);
+  const [logoUploaded, setLogoUploaded] = useState(isStoredImage(saved.logoUrl));
+  const [headline, setHeadline] = useState(saved.headline);
+  const [tagline, setTagline] = useState(saved.tagline);
+  const [instagram, setInstagram] = useState(saved.instagram);
+  const [facebook, setFacebook] = useState(saved.facebook);
+  const [x, setX] = useState(saved.x);
+  const [youtube, setYoutube] = useState(saved.youtube);
+  const [whatsapp, setWhatsapp] = useState(saved.whatsapp);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState<Area | null>(null);
+  const [imagesBusy, setImagesBusy] = useState(false);
+  const [logoError, setLogoError] = useState("");
+  const [carouselError, setCarouselError] = useState("");
+  const [confirmGeneric, setConfirmGeneric] = useState(false);
+  const savingRef = useRef(false);
   const [notice, setNotice] = useState<{
-    area: "header" | "cover" | "social";
+    area: Area;
     text: string;
     ok: boolean;
   } | null>(null);
 
   useEffect(() => {
-    setName(clip(config?.name || PLATFORM_NAME, LIMIT.name));
-    setMotto(clip(config?.motto || "", LIMIT.motto));
-    setLogoUrl(config?.logoUrl || "");
-    setHeadline(clip(config?.headline || PLATFORM_HEADLINE, LIMIT.headline));
-    setTagline(clip(config?.tagline || PLATFORM_DESCRIPTION, LIMIT.tagline));
-    setInstagram(clip(config?.social?.instagram || "", LIMIT.instagram));
-    setFacebook(clip(config?.social?.facebook || "", LIMIT.facebook));
-    setX(clip(config?.social?.x || "", LIMIT.x));
-    setYoutube(clip(config?.social?.youtube || "", LIMIT.youtube));
-    setWhatsapp(clip(config?.social?.whatsapp || "", LIMIT.whatsapp));
-  }, [
-    config?.name,
-    config?.motto,
-    config?.logoUrl,
-    config?.headline,
-    config?.tagline,
-    config?.social?.instagram,
-    config?.social?.facebook,
-    config?.social?.x,
-    config?.social?.youtube,
-    config?.social?.whatsapp,
-  ]);
+    setName(saved.name);
+    setMotto(saved.motto);
+    setLogoUrl(saved.logoUrl);
+    setLogoUploaded(isStoredImage(saved.logoUrl));
+    setHeadline(saved.headline);
+    setTagline(saved.tagline);
+    setInstagram(saved.instagram);
+    setFacebook(saved.facebook);
+    setX(saved.x);
+    setYoutube(saved.youtube);
+    setWhatsapp(saved.whatsapp);
+  }, [saved]);
 
-  const flash = (
-    area: "header" | "cover" | "social",
-    text: string,
-    ok = true,
-  ) => {
+  const flash = (area: Area, text: string, ok = true) => {
     setNotice({ area, text, ok });
     window.setTimeout(() => setNotice(null), 2500);
   };
@@ -128,52 +158,91 @@ export default function HeroAdmin({ config, onSaved }: Props) {
     onSaved?.();
   };
 
-  const fail = (area: "header" | "cover" | "social", err: unknown) => {
+  const fail = (area: Area, err: unknown) => {
     console.error(err);
-    const text = err instanceof Error && err.message ? err.message : "No se pudo guardar.";
-    flash(area, text, false);
+    flash(area, "No se pudo guardar. Revisa los datos e inténtalo de nuevo.", false);
   };
 
-  const saveImages = async (next: string[]) => {
-    await replaceHeroImages(next);
-    afterSave();
-  };
-
-  const saveHeaderForm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /** Un solo guardado a la vez por pantalla; el ref frena el doble clic antes del render. */
+  const run = async (area: Area, task: () => Promise<void>) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(area);
     try {
-      await saveHeader(
-        clip(name.trim() || PLATFORM_NAME, LIMIT.name),
-        clip(motto.trim(), LIMIT.motto),
-        logoUrl.trim(),
-      );
-      afterSave();
-      flash("header", "Header guardado.");
+      await task();
     } catch (err) {
-      fail("header", err);
+      fail(area, err);
+    } finally {
+      savingRef.current = false;
+      setSaving(null);
     }
   };
 
-  const saveCover = async (e: React.FormEvent) => {
+  // Header
+  const nameTip = isPlatformName(name)
+    ? ""
+    : name.trim()
+      ? "De 2 a 30 letras o números."
+      : "Escribe el nombre.";
+  const mottoTip = isPlatformMotto(motto) ? "" : "Hasta 50 caracteres: letras, números y . , ¡! ¿?";
+  const logoTip = !logoUrl || isWebUrl(logoUrl, LIMIT.logoUrl) ? "" : URL_TIP;
+  const headerDirty =
+    name.trim() !== saved.name || motto.trim() !== saved.motto || logoUrl !== saved.logoUrl;
+  const headerReady =
+    headerDirty && !nameTip && !mottoTip && !logoTip && !saving && !busy;
+
+  const saveHeaderForm = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
+    if (!headerReady) return;
+    void run("header", async () => {
+      await saveHeader(name.trim(), motto.trim(), logoUrl ? canonicalWebUrl(logoUrl) : "");
+      afterSave();
+      flash("header", "Header guardado.");
+    });
+  };
+
+  // Portada
+  const headlineTip = isCoverHeadline(headline) ? "" : "Hasta 35 caracteres: letras, números y puntuación.";
+  const taglineTip = isCoverTagline(tagline) ? "" : "Hasta 120 caracteres: letras, números y puntuación.";
+  const coverDirty =
+    (headline.trim() || PLATFORM_HEADLINE) !== saved.headline ||
+    (tagline.trim() || PLATFORM_DESCRIPTION) !== saved.tagline;
+  const coverReady = coverDirty && !headlineTip && !taglineTip && !saving;
+
+  const saveCover = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coverReady) return;
+    void run("cover", async () => {
       await saveCoverText(
-        clip(headline.trim() || PLATFORM_HEADLINE, LIMIT.headline),
-        clip(tagline.trim() || PLATFORM_DESCRIPTION, LIMIT.tagline),
+        headline.trim() || PLATFORM_HEADLINE,
+        tagline.trim() || PLATFORM_DESCRIPTION,
       );
       afterSave();
       flash("cover", "Portada guardada.");
-    } catch (err) {
-      fail("cover", err);
+    });
+  };
+
+  // Carrusel
+  const carouselFull = savedImages.length >= MAX_HERO_IMAGES;
+  const urlTip = url && !isWebUrl(url, LIMIT.imageUrl) ? URL_TIP : "";
+  const canAddUrl = Boolean(url) && !urlTip && !carouselFull && !busy && !imagesBusy;
+
+  const saveImages = async (next: string[]) => {
+    if (next.length > MAX_HERO_IMAGES) throw new Error(`Máximo ${MAX_HERO_IMAGES} fotos.`);
+    setImagesBusy(true);
+    try {
+      await replaceHeroImages(next);
+      afterSave();
+    } finally {
+      setImagesBusy(false);
     }
   };
 
   const addUrl = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = url.trim();
-    if (!clean) return;
+    if (!canAddUrl) return;
     try {
-      await saveImages([...savedImages, clean]);
+      await saveImages([...savedImages, canonicalWebUrl(url)]);
       setUrl("");
       flash("cover", "Imagen añadida.");
     } catch (err) {
@@ -182,6 +251,13 @@ export default function HeroAdmin({ config, onSaved }: Props) {
   };
 
   const upload = async (file: File, kind: "carousel" | "logo") => {
+    const setError = kind === "logo" ? setLogoError : setCarouselError;
+    const maxBytes = kind === "logo" ? LOGO_FILE_MAX_BYTES : CAROUSEL_FILE_MAX_BYTES;
+    if (!(await isAllowedImage(file, maxBytes))) {
+      setError(`La imagen tiene que ser JPG, PNG o WEBP de hasta ${kind === "logo" ? 10 : 50} MB.`);
+      return;
+    }
+    setError("");
     try {
       setBusy(true);
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -194,19 +270,15 @@ export default function HeroAdmin({ config, onSaved }: Props) {
         },
       );
       if (kind === "logo") {
+        // Solo llena el campo: se guarda con "Guardar header".
         setLogoUrl(download);
-        await saveHeader(
-          clip(name.trim() || PLATFORM_NAME, LIMIT.name),
-          clip(motto.trim(), LIMIT.motto),
-          download,
-        );
-        afterSave();
+        setLogoUploaded(true);
       } else {
         await saveImages([...savedImages, download]);
       }
     } catch (err) {
       console.error(err);
-      alert("No se pudo subir la imagen. Revisa que hayas iniciado sesión.");
+      setError("No se pudo subir la imagen. Revisa que hayas iniciado sesión.");
     } finally {
       setBusy(false);
     }
@@ -214,7 +286,7 @@ export default function HeroAdmin({ config, onSaved }: Props) {
 
   const moveImage = async (index: number, dir: -1 | 1) => {
     const next = index + dir;
-    if (next < 0 || next >= savedImages.length) return;
+    if (next < 0 || next >= savedImages.length || imagesBusy) return;
     const copy = [...savedImages];
     const [item] = copy.splice(index, 1);
     copy.splice(next, 0, item);
@@ -225,8 +297,54 @@ export default function HeroAdmin({ config, onSaved }: Props) {
     }
   };
 
+  const applyGenericImages = async () => {
+    setConfirmGeneric(false);
+    try {
+      await saveImages([...DEFAULT_PLATFORM_HERO_IMAGES]);
+      flash("cover", "Se pusieron las fotos genéricas.");
+    } catch (err) {
+      fail("cover", err);
+    }
+  };
+
+  // Redes
+  const socialTips = {
+    instagram: isInstagram(instagram) ? "" : "Usa @usuario o https://instagram.com/usuario.",
+    facebook: isFacebook(facebook) ? "" : "Usa el nombre de la página o https://facebook.com/pagina.",
+    x: isX(x) ? "" : "Usa @usuario o https://x.com/usuario (también twitter.com).",
+    youtube: isYoutube(youtube) ? "" : "Usa @canal o https://youtube.com/@canal, /c/ o /channel/.",
+    whatsapp: isWhatsapp(whatsapp) ? "" : "Escribe de 10 a 13 dígitos.",
+  };
+  const socialDirty =
+    instagram !== saved.instagram ||
+    facebook !== saved.facebook ||
+    x !== saved.x ||
+    youtube !== saved.youtube ||
+    whatsapp.trim() !== saved.whatsapp.trim();
+  const socialReady =
+    socialDirty && Object.values(socialTips).every((tip) => !tip) && !saving;
+
+  const saveSocialForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!socialReady) return;
+    void run("social", async () => {
+      await saveSocial({
+        instagram,
+        facebook,
+        x,
+        youtube,
+        whatsapp: whatsapp.replace(/\D/g, ""),
+      });
+      afterSave();
+      flash("social", "Redes guardadas.");
+    });
+  };
+
   const displayImages =
     savedImages.length > 0 ? savedImages : DEFAULT_PLATFORM_HERO_IMAGES;
+  const logoPreview = logoUrl && !logoTip ? logoUrl : "";
+  const logoUploadLocked = busy || (!logoUploaded && Boolean(logoUrl));
+  const carouselUploadLocked = busy || imagesBusy || carouselFull;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -236,6 +354,7 @@ export default function HeroAdmin({ config, onSaved }: Props) {
         </p>
         <form
           onSubmit={saveHeaderForm}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
         >
           <div className="header-brand-row">
@@ -253,9 +372,9 @@ export default function HeroAdmin({ config, onSaved }: Props) {
                 flexShrink: 0,
               }}
             >
-              {logoUrl ? (
+              {logoPreview ? (
                 <img
-                  src={logoUrl}
+                  src={logoPreview}
                   alt=""
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
@@ -272,58 +391,85 @@ export default function HeroAdmin({ config, onSaved }: Props) {
                 minWidth: 0,
               }}
             >
-              <Field label="Logo">
+              <Field
+                label="Logo"
+                hint={logoUploaded && logoUrl ? "Viene del logo subido. Quítalo para pegar otra URL." : "Opcional."}
+                tip={logoError || logoTip}
+              >
                 <FormInput
                   value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
+                  onChange={(e) => setLogoUrl(webUrl(e.target.value, LIMIT.logoUrl))}
                   placeholder="URL del logo o súbelo"
+                  maxLength={LIMIT.logoUrl}
+                  readOnly={logoUploaded && Boolean(logoUrl)}
+                  aria-invalid={Boolean(logoError || logoTip)}
                 />
               </Field>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  width: "fit-content",
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: RADIUS.md,
-                  border: `1px solid ${C.gray300}`,
-                  backgroundColor: C.white,
-                  color: C.gray600,
-                  fontWeight: 600,
-                  fontSize: "0.8rem",
-                  cursor: busy ? "not-allowed" : "pointer",
-                }}
-              >
-                <UploadCloud size={14} /> {busy ? "Subiendo..." : "Subir logo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={busy}
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void upload(file, "logo");
-                    e.target.value = "";
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <label
+                  title={!logoUploaded && logoUrl ? "Borra la URL del logo para subir un archivo." : undefined}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                    width: "fit-content",
+                    padding: "0.4rem 0.8rem",
+                    borderRadius: RADIUS.md,
+                    border: `1px solid ${C.gray300}`,
+                    backgroundColor: C.white,
+                    color: C.gray600,
+                    fontWeight: 600,
+                    fontSize: "0.8rem",
+                    cursor: logoUploadLocked ? "not-allowed" : "pointer",
+                    opacity: logoUploadLocked && !busy ? 0.5 : 1,
                   }}
-                />
-              </label>
+                >
+                  <UploadCloud size={14} /> {busy ? "Subiendo..." : "Subir logo"}
+                  <input
+                    type="file"
+                    accept={IMAGE_ACCEPT}
+                    disabled={logoUploadLocked}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void upload(file, "logo");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {logoUploaded && logoUrl && (
+                  <SecondaryButton
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setLogoUrl("");
+                      setLogoUploaded(false);
+                      setLogoError("");
+                    }}
+                    style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}
+                  >
+                    <XIcon size={14} /> Quitar logo
+                  </SecondaryButton>
+                )}
+              </div>
             </div>
           </div>
-          <Field label="Nombre">
+          <Field label="Nombre" tip={name !== saved.name ? nameTip : ""}>
             <FormInput
               value={name}
               maxLength={LIMIT.name}
-              onChange={(e) => setName(clip(e.target.value, LIMIT.name))}
+              onChange={(e) => setName(platformName(e.target.value))}
               placeholder={PLATFORM_NAME}
+              aria-invalid={name !== saved.name && Boolean(nameTip)}
             />
           </Field>
-          <Field label="Lema">
+          <Field label="Lema" hint="Opcional." tip={mottoTip}>
             <FormInput
               value={motto}
               maxLength={LIMIT.motto}
-              onChange={(e) => setMotto(clip(e.target.value, LIMIT.motto))}
+              onChange={(e) => setMotto(platformMotto(e.target.value))}
               placeholder="Pasión por el fútbol, comunidad en cada partido."
+              aria-invalid={Boolean(mottoTip)}
             />
           </Field>
           {notice?.area === "header" && (
@@ -331,8 +477,8 @@ export default function HeroAdmin({ config, onSaved }: Props) {
               {notice.text}
             </p>
           )}
-          <PrimaryButton type="submit" style={{ width: "fit-content" }}>
-            Guardar header
+          <PrimaryButton type="submit" disabled={!headerReady} style={{ width: "fit-content" }}>
+            {saving === "header" ? "Guardando..." : "Guardar header"}
           </PrimaryButton>
         </form>
       </SectionCard>
@@ -343,23 +489,31 @@ export default function HeroAdmin({ config, onSaved }: Props) {
         </p>
         <form
           onSubmit={saveCover}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
         >
-          <Field label="Título">
+          <Field label="Título" tip={headlineTip} count={`${headline.length}/${LIMIT.headline}`}>
             <FormInput
               value={headline}
               maxLength={LIMIT.headline}
-              onChange={(e) => setHeadline(clip(e.target.value, LIMIT.headline))}
+              onChange={(e) => setHeadline(coverHeadline(e.target.value))}
               placeholder={PLATFORM_HEADLINE}
+              aria-invalid={Boolean(headlineTip)}
             />
           </Field>
-          <Field label="Texto debajo del título">
+          <Field
+            label="Texto debajo del título"
+            tip={taglineTip}
+            count={`${tagline.length}/${LIMIT.tagline}`}
+          >
             <FormTextarea
               rows={3}
               value={tagline}
               maxLength={LIMIT.tagline}
-              onChange={(e) => setTagline(clip(e.target.value, LIMIT.tagline))}
+              onChange={(e) => setTagline(coverTagline(e.target.value))}
               placeholder={PLATFORM_DESCRIPTION}
+              aria-invalid={Boolean(taglineTip)}
+              style={{ resize: "none" }}
             />
           </Field>
           {notice?.area === "cover" && (
@@ -367,8 +521,8 @@ export default function HeroAdmin({ config, onSaved }: Props) {
               {notice.text}
             </p>
           )}
-          <PrimaryButton type="submit" style={{ width: "fit-content" }}>
-            Guardar textos
+          <PrimaryButton type="submit" disabled={!coverReady} style={{ width: "fit-content" }}>
+            {saving === "cover" ? "Guardando..." : "Guardar textos"}
           </PrimaryButton>
         </form>
 
@@ -382,11 +536,11 @@ export default function HeroAdmin({ config, onSaved }: Props) {
             letterSpacing: "0.05em",
           }}
         >
-          Fotos del carrusel
+          Fotos del carrusel ({savedImages.length}/{MAX_HERO_IMAGES})
         </div>
         <p style={{ margin: "0 0 0.85rem", fontSize: "0.8rem", color: C.gray500 }}>
-          Agrega, quita u ordena. Si la lista queda vacía se usan imágenes
-          genéricas.
+          Agrega, quita u ordena hasta {MAX_HERO_IMAGES} fotos. Si la lista queda vacía se
+          usan imágenes genéricas.
         </p>
         <div
           style={{
@@ -425,14 +579,14 @@ export default function HeroAdmin({ config, onSaved }: Props) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <OrderBtn
                       label="Subir"
-                      disabled={i === 0}
+                      disabled={i === 0 || imagesBusy}
                       onClick={() => void moveImage(i, -1)}
                     >
                       <ChevronUp size={14} />
                     </OrderBtn>
                     <OrderBtn
                       label="Bajar"
-                      disabled={i === savedImages.length - 1}
+                      disabled={i === savedImages.length - 1 || imagesBusy}
                       onClick={() => void moveImage(i, 1)}
                     >
                       <ChevronDown size={14} />
@@ -440,6 +594,7 @@ export default function HeroAdmin({ config, onSaved }: Props) {
                   </div>
                   <button
                     type="button"
+                    disabled={imagesBusy}
                     onClick={() => {
                       void saveImages(savedImages.filter((_, idx) => idx !== i)).catch((err) =>
                         fail("cover", err),
@@ -453,7 +608,7 @@ export default function HeroAdmin({ config, onSaved }: Props) {
                       borderRadius: RADIUS.full,
                       width: 28,
                       height: 28,
-                      cursor: "pointer",
+                      cursor: imagesBusy ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -466,36 +621,46 @@ export default function HeroAdmin({ config, onSaved }: Props) {
             </div>
           ))}
         </div>
-        {savedImages.length === 0 && (
-          <SecondaryButton
-            type="button"
-            onClick={() => {
-              void saveImages([...DEFAULT_PLATFORM_HERO_IMAGES]).catch((err) =>
-                fail("cover", err),
-              );
-            }}
-            style={{ marginBottom: "0.85rem", width: "fit-content" }}
-          >
-            Empezar con las fotos genéricas
-          </SecondaryButton>
+        <SecondaryButton
+          type="button"
+          disabled={imagesBusy || busy}
+          onClick={() => {
+            if (savedImages.length > 0) setConfirmGeneric(true);
+            else void applyGenericImages();
+          }}
+          style={{ marginBottom: "0.85rem", width: "fit-content" }}
+        >
+          Empezar con las fotos genéricas
+        </SecondaryButton>
+        {carouselFull && (
+          <p style={{ margin: "0 0 0.6rem", color: C.amber, fontSize: "0.75rem" }}>
+            Máximo {MAX_HERO_IMAGES} fotos. Quita una para añadir otra.
+          </p>
         )}
-        <form onSubmit={addUrl} className="cover-add-row">
-          <Field label="Añadir por URL">
+        <form onSubmit={addUrl} noValidate className="cover-add-row">
+          <Field label="Añadir por URL" tip={carouselError || urlTip}>
             <FormInput
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => setUrl(webUrl(e.target.value, LIMIT.imageUrl))}
               placeholder="https://..."
+              maxLength={LIMIT.imageUrl}
+              disabled={carouselFull}
+              aria-invalid={Boolean(carouselError || urlTip)}
             />
           </Field>
-          <PrimaryButton type="submit" className="cover-add-row__btn">
+          <PrimaryButton type="submit" disabled={!canAddUrl} className="cover-add-row__btn">
             Añadir
           </PrimaryButton>
-          <label className="cover-add-row__upload">
+          <label
+            className={
+              carouselUploadLocked ? "cover-add-row__upload is-disabled" : "cover-add-row__upload"
+            }
+          >
             <UploadCloud size={14} /> {busy ? "Subiendo..." : "Subir archivo"}
             <input
               type="file"
-              accept="image/*"
-              disabled={busy}
+              accept={IMAGE_ACCEPT}
+              disabled={carouselUploadLocked}
               style={{ display: "none" }}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -515,62 +680,74 @@ export default function HeroAdmin({ config, onSaved }: Props) {
           Aparecen al pie de la página: «Nos puedes encontrar también en».
         </p>
         <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await saveSocial({
-                instagram: clip(instagram.trim(), LIMIT.instagram),
-                facebook: clip(facebook.trim(), LIMIT.facebook),
-                x: clip(x.trim(), LIMIT.x),
-                youtube: clip(youtube.trim(), LIMIT.youtube),
-                whatsapp: clip(whatsapp.trim(), LIMIT.whatsapp),
-              });
-              afterSave();
-              flash("social", "Redes guardadas.");
-            } catch (err) {
-              fail("social", err);
-            }
-          }}
+          onSubmit={saveSocialForm}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
         >
-          <Field label="Instagram" hint="Usuario o URL. Ej. @orinco o https://instagram.com/orinco">
+          <Field
+            label="Instagram"
+            hint="Usuario o URL. Ej. @orinco o https://instagram.com/orinco"
+            tip={socialTips.instagram}
+          >
             <FormInput
               value={instagram}
-              maxLength={LIMIT.instagram}
-              onChange={(e) => setInstagram(clip(e.target.value, LIMIT.instagram))}
+              maxLength={LIMIT.social}
+              onChange={(e) => setInstagram(socialHandle(e.target.value, LIMIT.social))}
               placeholder="@usuario"
+              aria-invalid={Boolean(socialTips.instagram)}
             />
           </Field>
-          <Field label="Facebook" hint="Página o URL.">
+          <Field
+            label="Facebook"
+            hint="Página o URL. Ej. orinco o https://facebook.com/orinco"
+            tip={socialTips.facebook}
+          >
             <FormInput
               value={facebook}
-              maxLength={LIMIT.facebook}
-              onChange={(e) => setFacebook(clip(e.target.value, LIMIT.facebook))}
+              maxLength={LIMIT.social}
+              onChange={(e) => setFacebook(socialHandle(e.target.value, LIMIT.social))}
               placeholder="https://facebook.com/..."
+              aria-invalid={Boolean(socialTips.facebook)}
             />
           </Field>
-          <Field label="X" hint="Usuario o URL. Ej. @orinco o https://x.com/orinco">
+          <Field
+            label="X"
+            hint="Usuario o URL. Ej. @orinco o https://x.com/orinco"
+            tip={socialTips.x}
+          >
             <FormInput
               value={x}
-              maxLength={LIMIT.x}
-              onChange={(e) => setX(clip(e.target.value, LIMIT.x))}
+              maxLength={LIMIT.social}
+              onChange={(e) => setX(socialHandle(e.target.value, LIMIT.social))}
               placeholder="https://x.com/..."
+              aria-invalid={Boolean(socialTips.x)}
             />
           </Field>
-          <Field label="YouTube" hint="Canal o URL. Ej. @orinco o https://youtube.com/@orinco">
+          <Field
+            label="YouTube"
+            hint="Canal o URL. Ej. @orinco o https://youtube.com/@orinco"
+            tip={socialTips.youtube}
+          >
             <FormInput
               value={youtube}
-              maxLength={LIMIT.youtube}
-              onChange={(e) => setYoutube(clip(e.target.value, LIMIT.youtube))}
+              maxLength={LIMIT.social}
+              onChange={(e) => setYoutube(socialHandle(e.target.value, LIMIT.social))}
               placeholder="https://youtube.com/@..."
+              aria-invalid={Boolean(socialTips.youtube)}
             />
           </Field>
-          <Field label="WhatsApp" hint="Número de la empresa. Ej. 622 123 4567">
+          <Field
+            label="WhatsApp"
+            hint="Número de la empresa. Ej. 622 123 4567"
+            tip={socialTips.whatsapp}
+          >
             <FormInput
               value={whatsapp}
               maxLength={LIMIT.whatsapp}
-              onChange={(e) => setWhatsapp(clip(e.target.value, LIMIT.whatsapp))}
+              inputMode="numeric"
+              onChange={(e) => setWhatsapp(whatsappText(e.target.value))}
               placeholder="622 123 4567"
+              aria-invalid={Boolean(socialTips.whatsapp)}
             />
           </Field>
           {notice?.area === "social" && (
@@ -578,11 +755,22 @@ export default function HeroAdmin({ config, onSaved }: Props) {
               {notice.text}
             </p>
           )}
-          <PrimaryButton type="submit" style={{ width: "fit-content" }}>
-            Guardar redes
+          <PrimaryButton type="submit" disabled={!socialReady} style={{ width: "fit-content" }}>
+            {saving === "social" ? "Guardando..." : "Guardar redes"}
           </PrimaryButton>
         </form>
       </SectionCard>
+
+      <ConfirmModal
+        open={confirmGeneric}
+        title="Usar fotos genéricas"
+        message="¿Estás seguro? Esto reemplazará tus fotos actuales con las imágenes genéricas."
+        confirmLabel="Reemplazar"
+        danger
+        busy={imagesBusy}
+        onConfirm={() => void applyGenericImages()}
+        onCancel={() => setConfirmGeneric(false)}
+      />
     </div>
   );
 }

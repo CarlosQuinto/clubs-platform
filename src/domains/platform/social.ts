@@ -10,31 +10,44 @@ export function hasAnySocial(social?: PlatformSocial | null) {
   );
 }
 
+/** URL completa, o el dominio de la red sin esquema (p. ej. "facebook.com/pagina"). */
+function linkFrom(value: string) {
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^(?:www\.|m\.)?(?:instagram|facebook|x|twitter|youtube)\.com\//i.test(value)) {
+    return `https://${value}`;
+  }
+  return "";
+}
+
 export function instagramUrl(value: string) {
   const v = value.trim();
   if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
+  const link = linkFrom(v);
+  if (link) return link;
   return `https://instagram.com/${v.replace(/^@/, "")}`;
 }
 
 export function facebookUrl(value: string) {
   const v = value.trim();
   if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
+  const link = linkFrom(v);
+  if (link) return link;
   return `https://facebook.com/${v.replace(/^@/, "")}`;
 }
 
 export function xUrl(value: string) {
   const v = value.trim();
   if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
+  const link = linkFrom(v);
+  if (link) return link;
   return `https://x.com/${v.replace(/^@/, "")}`;
 }
 
 export function youtubeUrl(value: string) {
   const v = value.trim();
   if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
+  const link = linkFrom(v);
+  if (link) return link;
   return `https://youtube.com/@${v.replace(/^@/, "")}`;
 }
 

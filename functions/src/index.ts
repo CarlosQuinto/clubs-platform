@@ -345,11 +345,35 @@ export const sendCourtBookingNotice = onCall(CALLABLE, async (request) => {
   return { mailed };
 });
 
-/** Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios. */
+const RESET_WINDOW_SECONDS = 15 * 60;
+const RESET_LIMIT_PER_IP = 10;
+const RESET_LIMIT_PER_EMAIL = 3;
+
+/** Intentos de `id` en la ventana actual, contando este. */
+async function throttleHits(id: string, windowSeconds: number) {
+  const result = await sql().executeMutation<
+    { throttle?: { hits: number } | null },
+    { id: string; windowSeconds: number }
+  >("HitRequestThrottle", { id: id.slice(0, 400), windowSeconds });
+  return Number(result.data.throttle?.hits ?? 0);
+}
+
+/**
+ * Recupera contraseña: solo envía si el correo ya tiene cuenta. Nunca crea usuarios.
+ * Responde igual exista o no la cuenta, y limita por IP y por correo para que no se use para spam.
+ */
 export const requestPasswordReset = onCall(CALLABLE, async (request) => {
   const email = String(request.data?.email || "").trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) {
+  if (email.length > 320 || !EMAIL_RE.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
+  }
+  const ip = request.rawRequest.ip || "unknown";
+  if ((await throttleHits(`reset-ip:${ip}`, RESET_WINDOW_SECONDS)) > RESET_LIMIT_PER_IP) {
+    throw new HttpsError("resource-exhausted", "Demasiadas solicitudes. Espera unos minutos.");
+  }
+  // Por correo no se avisa: un error distinto diría que el correo existe.
+  if ((await throttleHits(`reset-email:${email}`, RESET_WINDOW_SECONDS)) > RESET_LIMIT_PER_EMAIL) {
+    return { ok: true };
   }
   if (await userExists(email)) {
     if (gmailConfigured()) await sendCustomPasswordReset(email);

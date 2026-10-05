@@ -259,7 +259,11 @@ export function authErrorMessage(err: unknown): string {
     case "auth/weak-password":
       return "La contraseña debe tener al menos 6 caracteres.";
     case "auth/too-many-requests":
-      return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+      return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
+    case "auth/user-disabled":
+      return "Esta cuenta está desactivada.";
+    case "auth/network-request-failed":
+      return "Sin conexión. Revisa tu internet e inténtalo de nuevo.";
     default:
       return "Ocurrió un error. Inténtalo de nuevo.";
   }

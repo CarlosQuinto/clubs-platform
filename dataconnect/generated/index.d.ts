@@ -434,21 +434,6 @@ export interface ClearCourtWindowsVariables {
   userId?: string;
 }
 
-export interface ClearHeroImagesData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  cleared: number;
-}
-
-export interface ClearHeroImagesVariables {
-  userId: string;
-}
-
 export interface ClearMatchCourtHoldsData {
   query?: {
     platformAdmin?: {
@@ -2018,6 +2003,14 @@ export interface ReplaceClubEventStatsVariables {
   stats?: unknown | null;
 }
 
+export interface ReplaceHeroImagesData {
+  images?: unknown | null;
+}
+
+export interface ReplaceHeroImagesVariables {
+  urls: string;
+}
+
 export interface ReplaceMatchAttendeesData {
   cleared?: number | null;
   added?: number | null;
@@ -2028,6 +2021,11 @@ export interface ReplaceMatchAttendeesVariables {
   matchId: string;
   clubId: string;
   labels?: unknown | null;
+}
+
+export interface RequestThrottle_Key {
+  id: string;
+  __typename?: 'RequestThrottle_Key';
 }
 
 export interface SaveAdData {
@@ -2133,6 +2131,8 @@ export interface SaveCourtHoldData {
       } & User_Key;
     };
   };
+  saved?: number | null;
+  race?: number | null;
   hold?: unknown | null;
 }
 
@@ -2145,6 +2145,7 @@ export interface SaveCourtHoldVariables {
   endTime: string;
   note: string;
   guestEmail?: string;
+  fresh?: boolean;
 }
 
 export interface SaveCourtSettingsData {
@@ -2222,24 +2223,6 @@ export interface SaveGalleryPhotoVariables {
   takenAt: TimestampString;
 }
 
-export interface SaveHeroImageData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  image: PlatformHeroImage_Key;
-}
-
-export interface SaveHeroImageVariables {
-  userId: string;
-  id: UUIDString;
-  position: number;
-  url: string;
-}
-
 export interface SaveInventoryItemData {
   item?: unknown | null;
 }
@@ -2302,53 +2285,29 @@ export interface SavePlatformAdminInviteVariables {
 }
 
 export interface SavePlatformCoverData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 
 export interface SavePlatformCoverVariables {
-  userId: string;
   headline: string;
   tagline: string;
 }
 
 export interface SavePlatformHeaderData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 
 export interface SavePlatformHeaderVariables {
-  userId: string;
   name: string;
   motto: string;
   logoUrl: string;
 }
 
 export interface SavePlatformSocialData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 
 export interface SavePlatformSocialVariables {
-  userId: string;
   instagram: string;
   facebook: string;
   x: string;
@@ -2432,13 +2391,12 @@ export interface SeasonsData {
   } & Season_Key)[];
 }
 
-export interface SetAdSortOrderData {
+export interface SetAdOrderData {
   ad?: unknown | null;
 }
 
-export interface SetAdSortOrderVariables {
-  id: string;
-  sortOrder: number;
+export interface SetAdOrderVariables {
+  ids: string;
 }
 
 export interface SetAdStatusData {
@@ -3463,29 +3421,17 @@ export const savePlatformSocialRef: SavePlatformSocialRef;
 export function savePlatformSocial(vars: SavePlatformSocialVariables): MutationPromise<SavePlatformSocialData, SavePlatformSocialVariables>;
 export function savePlatformSocial(dc: DataConnect, vars: SavePlatformSocialVariables): MutationPromise<SavePlatformSocialData, SavePlatformSocialVariables>;
 
-interface ClearHeroImagesRef {
+interface ReplaceHeroImagesRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ClearHeroImagesVariables): MutationRef<ClearHeroImagesData, ClearHeroImagesVariables>;
+  (vars: ReplaceHeroImagesVariables): MutationRef<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: ClearHeroImagesVariables): MutationRef<ClearHeroImagesData, ClearHeroImagesVariables>;
+  (dc: DataConnect, vars: ReplaceHeroImagesVariables): MutationRef<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
   operationName: string;
 }
-export const clearHeroImagesRef: ClearHeroImagesRef;
+export const replaceHeroImagesRef: ReplaceHeroImagesRef;
 
-export function clearHeroImages(vars: ClearHeroImagesVariables): MutationPromise<ClearHeroImagesData, ClearHeroImagesVariables>;
-export function clearHeroImages(dc: DataConnect, vars: ClearHeroImagesVariables): MutationPromise<ClearHeroImagesData, ClearHeroImagesVariables>;
-
-interface SaveHeroImageRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: SaveHeroImageVariables): MutationRef<SaveHeroImageData, SaveHeroImageVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: SaveHeroImageVariables): MutationRef<SaveHeroImageData, SaveHeroImageVariables>;
-  operationName: string;
-}
-export const saveHeroImageRef: SaveHeroImageRef;
-
-export function saveHeroImage(vars: SaveHeroImageVariables): MutationPromise<SaveHeroImageData, SaveHeroImageVariables>;
-export function saveHeroImage(dc: DataConnect, vars: SaveHeroImageVariables): MutationPromise<SaveHeroImageData, SaveHeroImageVariables>;
+export function replaceHeroImages(vars: ReplaceHeroImagesVariables): MutationPromise<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
+export function replaceHeroImages(dc: DataConnect, vars: ReplaceHeroImagesVariables): MutationPromise<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
 
 interface SaveCourtSettingsRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -3595,17 +3541,17 @@ export const setAdStatusRef: SetAdStatusRef;
 export function setAdStatus(vars: SetAdStatusVariables): MutationPromise<SetAdStatusData, SetAdStatusVariables>;
 export function setAdStatus(dc: DataConnect, vars: SetAdStatusVariables): MutationPromise<SetAdStatusData, SetAdStatusVariables>;
 
-interface SetAdSortOrderRef {
+interface SetAdOrderRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: SetAdSortOrderVariables): MutationRef<SetAdSortOrderData, SetAdSortOrderVariables>;
+  (vars: SetAdOrderVariables): MutationRef<SetAdOrderData, SetAdOrderVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: SetAdSortOrderVariables): MutationRef<SetAdSortOrderData, SetAdSortOrderVariables>;
+  (dc: DataConnect, vars: SetAdOrderVariables): MutationRef<SetAdOrderData, SetAdOrderVariables>;
   operationName: string;
 }
-export const setAdSortOrderRef: SetAdSortOrderRef;
+export const setAdOrderRef: SetAdOrderRef;
 
-export function setAdSortOrder(vars: SetAdSortOrderVariables): MutationPromise<SetAdSortOrderData, SetAdSortOrderVariables>;
-export function setAdSortOrder(dc: DataConnect, vars: SetAdSortOrderVariables): MutationPromise<SetAdSortOrderData, SetAdSortOrderVariables>;
+export function setAdOrder(vars: SetAdOrderVariables): MutationPromise<SetAdOrderData, SetAdOrderVariables>;
+export function setAdOrder(dc: DataConnect, vars: SetAdOrderVariables): MutationPromise<SetAdOrderData, SetAdOrderVariables>;
 
 interface ClearAdPlacementsRef {
   /* Allow users to create refs without passing in DataConnect */

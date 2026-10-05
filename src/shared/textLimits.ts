@@ -208,3 +208,167 @@ export function isContactMessage(value: string) {
 export function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
+
+// El guion va escapado: holdNote agrega un espacio detrás y "?- " sería un rango inválido.
+const HOLD_NOTE_CHARS = `${LATIN_LETTERS}0-9.,¡!¿?\\-`;
+const HOLD_NOTE_RE = new RegExp(`^[${HOLD_NOTE_CHARS}]+(?: [${HOLD_NOTE_CHARS}]+)*$`);
+const BOOKING_EMAIL_RE = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,10}$/;
+
+/** Quien aparta una cancha: letras y un espacio entre palabras, 30 como máximo. */
+export function holdName(value: string) {
+  return personName(value, 30);
+}
+
+export function isHoldName(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 30 && PERSON_NAME_RE.test(clean);
+}
+
+/** Title Case, como lo guarda el SQL. */
+export function titleCase(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(new RegExp(`(^|[^${LATIN_LETTERS}])([${LATIN_LETTERS}])`, "g"), (_, lead, first) => lead + first.toUpperCase());
+}
+
+export function holdNote(value: string) {
+  return singleSpaces(value.replace(new RegExp(`[^${HOLD_NOTE_CHARS} ]`, "g"), "")).slice(0, 50);
+}
+
+export function isHoldNote(value: string) {
+  const clean = value.trim();
+  if (!clean) return true;
+  return clean.length <= 50 && HOLD_NOTE_RE.test(clean);
+}
+
+/** Correo de apartado: sin espacios, minúsculas y dominio con extensión de 2 a 10 letras. */
+export function isBookingEmail(value: string) {
+  return value.length <= 320 && BOOKING_EMAIL_RE.test(value);
+}
+
+/** Marca de un anuncio: letras, números y un espacio entre palabras, de 2 a 50. */
+export function brandName(value: string) {
+  return spacedLabel(value, 50);
+}
+
+export function isBrandName(value: string) {
+  return isSpacedLabel(value, 2, 50);
+}
+
+/** Nombre de la plataforma en la barra superior: de 2 a 30. */
+export function platformName(value: string) {
+  return spacedLabel(value, 30);
+}
+
+export function isPlatformName(value: string) {
+  return isSpacedLabel(value, 2, 30);
+}
+
+// Textos públicos de la plataforma: puntuación básica y nunca < > que pudieran armar HTML.
+// El guion va escapado (\\-): copyText agrega un espacio detrás y "- " sería un rango inválido.
+const COPY_CHARS = `${LATIN_LETTERS}0-9.,:;¡!¿?()'"\\-`;
+const COPY_RE = new RegExp(`^[${COPY_CHARS}]+(?: [${COPY_CHARS}]+)*$`);
+
+function copyText(value: string, max: number) {
+  return singleSpaces(value.replace(/\s/g, " ").replace(new RegExp(`[^${COPY_CHARS} ]`, "g"), "")).slice(0, max);
+}
+
+function isCopyText(value: string, max: number) {
+  const clean = value.trim();
+  if (!clean) return true;
+  return clean.length <= max && COPY_RE.test(clean);
+}
+
+export function platformMotto(value: string) {
+  return copyText(value, 50);
+}
+
+export function isPlatformMotto(value: string) {
+  return isCopyText(value, 50);
+}
+
+export function coverHeadline(value: string) {
+  return copyText(value, 35);
+}
+
+export function isCoverHeadline(value: string) {
+  return isCopyText(value, 35);
+}
+
+export function coverTagline(value: string) {
+  return copyText(value, 120);
+}
+
+export function isCoverTagline(value: string) {
+  return isCopyText(value, 120);
+}
+
+// Igual que el SQL: http(s), dominio con extensión y nada de espacios ni < > " '.
+const WEB_URL_RE = /^https?:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::[0-9]{1,5})?(?:[/?#][^\s<>"']*)?$/i;
+
+/** URL sin espacios en ningún lado. */
+export function webUrl(value: string, max: number) {
+  return value.replace(/\s/g, "").slice(0, max);
+}
+
+export function isWebUrl(value: string, max: number) {
+  if (value.length > max || !WEB_URL_RE.test(value)) return false;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Esquema y dominio en minúsculas; la ruta se respeta porque las imágenes la distinguen. */
+export function canonicalWebUrl(value: string) {
+  const match = /^([a-z]+:\/\/[^/?#]+)(.*)$/i.exec(value.trim());
+  return match ? match[1].toLowerCase() + match[2] : value.trim();
+}
+
+/** Usuario o URL de una red: sin espacios y en minúsculas, salvo el id de canal de YouTube. */
+export function socialHandle(value: string, max = 150) {
+  const clean = value.replace(/\s/g, "").slice(0, max);
+  const channel = /^(.*\/channel\/)(.*)$/i.exec(clean);
+  return channel ? channel[1].toLowerCase() + channel[2] : clean.toLowerCase();
+}
+
+const SCHEME = "(?:https?://)?";
+const INSTAGRAM_RE = new RegExp(
+  `^(?:@?[a-z0-9._]{1,30}|${SCHEME}(?:www\.)?instagram\.com/[a-z0-9._]{1,30}/?)$`,
+);
+const FACEBOOK_RE = new RegExp(
+  `^(?:@?[a-z0-9.]{1,50}|${SCHEME}(?:www\.|m\.)?facebook\.com/[a-z0-9._/?=&-]{1,120})$`,
+);
+const X_RE = new RegExp(`^(?:@?[a-z0-9_]{1,15}|${SCHEME}(?:www\.)?(?:x|twitter)\.com/[a-z0-9_]{1,15}/?)$`);
+const YOUTUBE_RE = new RegExp(
+  `^(?:@?[a-z0-9._-]{3,30}|${SCHEME}(?:www\.|m\.)?youtube\.com/(?:@[a-z0-9._-]{3,30}|c/[a-z0-9._-]{1,100}|user/[a-z0-9._-]{1,100}|channel/[A-Za-z0-9_-]{10,40})/?)$`,
+);
+
+export function isInstagram(value: string) {
+  return !value || INSTAGRAM_RE.test(value);
+}
+
+export function isFacebook(value: string) {
+  return !value || FACEBOOK_RE.test(value);
+}
+
+export function isX(value: string) {
+  return !value || X_RE.test(value);
+}
+
+export function isYoutube(value: string) {
+  return !value || YOUTUBE_RE.test(value);
+}
+
+/** WhatsApp: dígitos y espacios para leerlo mejor, 13 caracteres como máximo. */
+export function whatsappText(value: string) {
+  return singleSpaces(value.replace(/[^0-9 ]/g, "")).slice(0, 13);
+}
+
+export function isWhatsapp(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return !value.trim() || (digits.length >= 10 && digits.length <= 13);
+}

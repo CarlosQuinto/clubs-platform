@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { authErrorMessage, useAuth } from "../../domains/auth/AuthContext";
 import { usePostLoginRedirect } from "./usePostLoginRedirect";
 import PlatformLayout from "../shell/PlatformLayout";
 import DestinationPicker from "./DestinationPicker";
 import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../../shared/ui";
+import { emailText, isRegisterEmail } from "../../shared/textLimits";
 
 type Mode = "login" | "reset";
 
@@ -22,6 +23,9 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailSeen, setEmailSeen] = useState(false);
+  const [passwordSeen, setPasswordSeen] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,21 +35,50 @@ export default function Login() {
     fallback: next,
   });
 
+  const emailOk = isRegisterEmail(email);
+  // La contraseña va tal cual: sin trim ni límite de caracteres.
+  const passwordOk = mode === "reset" || password.length > 0;
+  const emailTip = !emailSeen
+    ? ""
+    : !email
+      ? "Escribe tu correo."
+      : !emailOk
+        ? "Escribe un correo válido, como usuario@dominio.com."
+        : "";
+  const passwordTip = passwordSeen && !password ? "Escribe tu contraseña." : "";
+  const canSubmit = emailOk && passwordOk && !busy && !resolving;
+
+  const switchMode = (nextMode: Mode) => {
+    setMode(nextMode);
+    setError("");
+    setInfo("");
+    setPasswordSeen(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) {
+      setEmailSeen(true);
+      setPasswordSeen(true);
+      return;
+    }
     setError("");
     setInfo("");
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(email.trim(), password);
+        await login(email, password);
       } else {
         try {
-          await resetPassword(email.trim());
+          await resetPassword(email);
         } catch (err) {
           const code = (err as { code?: string }).code || "";
           if (code.includes("invalid-argument")) {
             setError("El correo no es válido.");
+            return;
+          }
+          if (code.includes("resource-exhausted")) {
+            setError("Demasiadas solicitudes. Espera unos minutos e inténtalo de nuevo.");
             return;
           }
           if (code.includes("unavailable") || code.includes("internal")) {
@@ -54,7 +87,7 @@ export default function Login() {
           }
         }
         setInfo(
-          "Si hay una cuenta con ese correo, te enviaremos el enlace para restablecer la contraseña.",
+          "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.",
         );
       }
     } catch (err) {
@@ -125,27 +158,67 @@ export default function Login() {
 
         <form
           onSubmit={handleSubmit}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "100%" }}
         >
-          <FormInput
-            type="email"
-            placeholder="correo@ejemplo.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            autoFocus
-          />
-          {mode !== "reset" && (
+          <span className={emailTip ? "field-tip-anchor is-invalid" : "field-tip-anchor"}>
             <FormInput
-              type="password"
-              placeholder="Contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              type="email"
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChange={(e) => setEmail(emailText(e.target.value))}
+              onBlur={() => setEmailSeen(true)}
               required
-              minLength={6}
-              autoComplete="current-password"
+              maxLength={320}
+              autoComplete="email"
+              aria-invalid={!!emailTip}
+              autoFocus
             />
+            {emailTip ? (
+              <span className="field-tip" role="tooltip">
+                {emailTip}
+              </span>
+            ) : null}
+          </span>
+          {mode !== "reset" && (
+            <span className={passwordTip ? "field-tip-anchor is-invalid" : "field-tip-anchor"}>
+              <FormInput
+                type={showPassword ? "text" : "password"}
+                placeholder="Contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setPasswordSeen(true)}
+                required
+                autoComplete="current-password"
+                aria-invalid={!!passwordTip}
+                style={{ paddingRight: "2.5rem" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  right: "0.5rem",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  padding: "0.25rem",
+                  background: "none",
+                  border: "none",
+                  color: C.gray500,
+                  cursor: "pointer",
+                }}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+              {passwordTip ? (
+                <span className="field-tip" role="tooltip">
+                  {passwordTip}
+                </span>
+              ) : null}
+            </span>
           )}
 
           {passwordJustReset && !error && !info && (
@@ -162,11 +235,13 @@ export default function Login() {
 
           <PrimaryButton
             type="submit"
-            disabled={busy || resolving}
+            disabled={!canSubmit}
             style={{ width: "100%", padding: "0.85rem", marginTop: "0.25rem" }}
           >
             {busy
-              ? "Un momento..."
+              ? mode === "login"
+                ? "Entrando..."
+                : "Enviando..."
               : resolving
                 ? "Revisando tus accesos..."
                 : mode === "login"
@@ -187,13 +262,13 @@ export default function Login() {
           }}
         >
           {mode !== "login" && (
-            <LinkButton onClick={() => setMode("login")}>Ya tengo cuenta</LinkButton>
+            <LinkButton onClick={() => switchMode("login")}>Ya tengo cuenta</LinkButton>
           )}
           {mode === "login" && platformUnclaimed && (
             <LinkButton onClick={() => navigate("/registro")}>Crear cuenta</LinkButton>
           )}
           {mode !== "reset" && (
-            <LinkButton onClick={() => setMode("reset")}>Olvidé mi contraseña</LinkButton>
+            <LinkButton onClick={() => switchMode("reset")}>Olvidé mi contraseña</LinkButton>
           )}
         </div>
       </div>

@@ -64,10 +64,15 @@ export async function upsertHold(input: {
   endTime: string;
   note: string;
   guestEmail?: string;
+  /** Apartado nuevo: si otro se le cruzó al mismo tiempo, el SQL lo quita. */
+  fresh?: boolean;
 }) {
   const result = await saveCourtHold(dataConnect, { userId: sessionUserId(), ...input });
-  savedRow(result.data.hold);
+  if (!result.data.hold) throw new Error(HOLD_REJECTED);
 }
+
+/** El SQL no guardó el apartado: el tramo se cruza, ya pasó o salió de la apertura. */
+export const HOLD_REJECTED = "hold-rejected";
 
 export async function removeManualHold(id: string) {
   const result = await deleteManualCourtHold(dataConnect, { id });

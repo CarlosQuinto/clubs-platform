@@ -82,8 +82,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*SavePlatformHeader*](#saveplatformheader)
   - [*SavePlatformCover*](#saveplatformcover)
   - [*SavePlatformSocial*](#saveplatformsocial)
-  - [*ClearHeroImages*](#clearheroimages)
-  - [*SaveHeroImage*](#saveheroimage)
+  - [*ReplaceHeroImages*](#replaceheroimages)
   - [*SaveCourtSettings*](#savecourtsettings)
   - [*ClearCourtWindows*](#clearcourtwindows)
   - [*SaveCourtWindow*](#savecourtwindow)
@@ -93,7 +92,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*DeleteManualCourtHold*](#deletemanualcourthold)
   - [*SaveAd*](#savead)
   - [*SetAdStatus*](#setadstatus)
-  - [*SetAdSortOrder*](#setadsortorder)
+  - [*SetAdOrder*](#setadorder)
   - [*ClearAdPlacements*](#clearadplacements)
   - [*SaveAdPlacement*](#saveadplacement)
   - [*DeleteAd*](#deletead)
@@ -9127,7 +9126,6 @@ The `SavePlatformHeader` mutation requires an argument of type `SavePlatformHead
 
 ```typescript
 export interface SavePlatformHeaderVariables {
-  userId: string;
   name: string;
   motto: string;
   logoUrl: string;
@@ -9139,14 +9137,7 @@ Recall that executing the `SavePlatformHeader` mutation returns a `MutationPromi
 The `data` property is an object of type `SavePlatformHeaderData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface SavePlatformHeaderData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 ```
 ### Using `SavePlatformHeader`'s action shortcut function
@@ -9157,7 +9148,6 @@ import { connectorConfig, savePlatformHeader, SavePlatformHeaderVariables } from
 
 // The `SavePlatformHeader` mutation requires an argument of type `SavePlatformHeaderVariables`:
 const savePlatformHeaderVars: SavePlatformHeaderVariables = {
-  userId: ..., 
   name: ..., 
   motto: ..., 
   logoUrl: ..., 
@@ -9167,19 +9157,17 @@ const savePlatformHeaderVars: SavePlatformHeaderVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await savePlatformHeader(savePlatformHeaderVars);
 // Variables can be defined inline as well.
-const { data } = await savePlatformHeader({ userId: ..., name: ..., motto: ..., logoUrl: ..., });
+const { data } = await savePlatformHeader({ name: ..., motto: ..., logoUrl: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await savePlatformHeader(dataConnect, savePlatformHeaderVars);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 savePlatformHeader(savePlatformHeaderVars).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
@@ -9192,7 +9180,6 @@ import { connectorConfig, savePlatformHeaderRef, SavePlatformHeaderVariables } f
 
 // The `SavePlatformHeader` mutation requires an argument of type `SavePlatformHeaderVariables`:
 const savePlatformHeaderVars: SavePlatformHeaderVariables = {
-  userId: ..., 
   name: ..., 
   motto: ..., 
   logoUrl: ..., 
@@ -9201,7 +9188,7 @@ const savePlatformHeaderVars: SavePlatformHeaderVariables = {
 // Call the `savePlatformHeaderRef()` function to get a reference to the mutation.
 const ref = savePlatformHeaderRef(savePlatformHeaderVars);
 // Variables can be defined inline as well.
-const ref = savePlatformHeaderRef({ userId: ..., name: ..., motto: ..., logoUrl: ..., });
+const ref = savePlatformHeaderRef({ name: ..., motto: ..., logoUrl: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9211,13 +9198,11 @@ const ref = savePlatformHeaderRef(dataConnect, savePlatformHeaderVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
@@ -9256,7 +9241,6 @@ The `SavePlatformCover` mutation requires an argument of type `SavePlatformCover
 
 ```typescript
 export interface SavePlatformCoverVariables {
-  userId: string;
   headline: string;
   tagline: string;
 }
@@ -9267,14 +9251,7 @@ Recall that executing the `SavePlatformCover` mutation returns a `MutationPromis
 The `data` property is an object of type `SavePlatformCoverData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface SavePlatformCoverData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 ```
 ### Using `SavePlatformCover`'s action shortcut function
@@ -9285,7 +9262,6 @@ import { connectorConfig, savePlatformCover, SavePlatformCoverVariables } from '
 
 // The `SavePlatformCover` mutation requires an argument of type `SavePlatformCoverVariables`:
 const savePlatformCoverVars: SavePlatformCoverVariables = {
-  userId: ..., 
   headline: ..., 
   tagline: ..., 
 };
@@ -9294,19 +9270,17 @@ const savePlatformCoverVars: SavePlatformCoverVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await savePlatformCover(savePlatformCoverVars);
 // Variables can be defined inline as well.
-const { data } = await savePlatformCover({ userId: ..., headline: ..., tagline: ..., });
+const { data } = await savePlatformCover({ headline: ..., tagline: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await savePlatformCover(dataConnect, savePlatformCoverVars);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 savePlatformCover(savePlatformCoverVars).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
@@ -9319,7 +9293,6 @@ import { connectorConfig, savePlatformCoverRef, SavePlatformCoverVariables } fro
 
 // The `SavePlatformCover` mutation requires an argument of type `SavePlatformCoverVariables`:
 const savePlatformCoverVars: SavePlatformCoverVariables = {
-  userId: ..., 
   headline: ..., 
   tagline: ..., 
 };
@@ -9327,7 +9300,7 @@ const savePlatformCoverVars: SavePlatformCoverVariables = {
 // Call the `savePlatformCoverRef()` function to get a reference to the mutation.
 const ref = savePlatformCoverRef(savePlatformCoverVars);
 // Variables can be defined inline as well.
-const ref = savePlatformCoverRef({ userId: ..., headline: ..., tagline: ..., });
+const ref = savePlatformCoverRef({ headline: ..., tagline: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9337,13 +9310,11 @@ const ref = savePlatformCoverRef(dataConnect, savePlatformCoverVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
@@ -9382,7 +9353,6 @@ The `SavePlatformSocial` mutation requires an argument of type `SavePlatformSoci
 
 ```typescript
 export interface SavePlatformSocialVariables {
-  userId: string;
   instagram: string;
   facebook: string;
   x: string;
@@ -9396,14 +9366,7 @@ Recall that executing the `SavePlatformSocial` mutation returns a `MutationPromi
 The `data` property is an object of type `SavePlatformSocialData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
 export interface SavePlatformSocialData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  settings: PlatformSettings_Key;
+  settings?: unknown | null;
 }
 ```
 ### Using `SavePlatformSocial`'s action shortcut function
@@ -9414,7 +9377,6 @@ import { connectorConfig, savePlatformSocial, SavePlatformSocialVariables } from
 
 // The `SavePlatformSocial` mutation requires an argument of type `SavePlatformSocialVariables`:
 const savePlatformSocialVars: SavePlatformSocialVariables = {
-  userId: ..., 
   instagram: ..., 
   facebook: ..., 
   x: ..., 
@@ -9426,19 +9388,17 @@ const savePlatformSocialVars: SavePlatformSocialVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await savePlatformSocial(savePlatformSocialVars);
 // Variables can be defined inline as well.
-const { data } = await savePlatformSocial({ userId: ..., instagram: ..., facebook: ..., x: ..., youtube: ..., whatsapp: ..., });
+const { data } = await savePlatformSocial({ instagram: ..., facebook: ..., x: ..., youtube: ..., whatsapp: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await savePlatformSocial(dataConnect, savePlatformSocialVars);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 savePlatformSocial(savePlatformSocialVars).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
@@ -9451,7 +9411,6 @@ import { connectorConfig, savePlatformSocialRef, SavePlatformSocialVariables } f
 
 // The `SavePlatformSocial` mutation requires an argument of type `SavePlatformSocialVariables`:
 const savePlatformSocialVars: SavePlatformSocialVariables = {
-  userId: ..., 
   instagram: ..., 
   facebook: ..., 
   x: ..., 
@@ -9462,7 +9421,7 @@ const savePlatformSocialVars: SavePlatformSocialVariables = {
 // Call the `savePlatformSocialRef()` function to get a reference to the mutation.
 const ref = savePlatformSocialRef(savePlatformSocialVars);
 // Variables can be defined inline as well.
-const ref = savePlatformSocialRef({ userId: ..., instagram: ..., facebook: ..., x: ..., youtube: ..., whatsapp: ..., });
+const ref = savePlatformSocialRef({ instagram: ..., facebook: ..., x: ..., youtube: ..., whatsapp: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9472,263 +9431,121 @@ const ref = savePlatformSocialRef(dataConnect, savePlatformSocialVars);
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
-console.log(data.query);
 console.log(data.settings);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
-  console.log(data.query);
   console.log(data.settings);
 });
 ```
 
-## ClearHeroImages
-You can execute the `ClearHeroImages` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+## ReplaceHeroImages
+You can execute the `ReplaceHeroImages` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
-clearHeroImages(vars: ClearHeroImagesVariables): MutationPromise<ClearHeroImagesData, ClearHeroImagesVariables>;
+replaceHeroImages(vars: ReplaceHeroImagesVariables): MutationPromise<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
 
-interface ClearHeroImagesRef {
+interface ReplaceHeroImagesRef {
   ...
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ClearHeroImagesVariables): MutationRef<ClearHeroImagesData, ClearHeroImagesVariables>;
+  (vars: ReplaceHeroImagesVariables): MutationRef<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
 }
-export const clearHeroImagesRef: ClearHeroImagesRef;
+export const replaceHeroImagesRef: ReplaceHeroImagesRef;
 ```
 You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
 ```typescript
-clearHeroImages(dc: DataConnect, vars: ClearHeroImagesVariables): MutationPromise<ClearHeroImagesData, ClearHeroImagesVariables>;
+replaceHeroImages(dc: DataConnect, vars: ReplaceHeroImagesVariables): MutationPromise<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
 
-interface ClearHeroImagesRef {
+interface ReplaceHeroImagesRef {
   ...
-  (dc: DataConnect, vars: ClearHeroImagesVariables): MutationRef<ClearHeroImagesData, ClearHeroImagesVariables>;
+  (dc: DataConnect, vars: ReplaceHeroImagesVariables): MutationRef<ReplaceHeroImagesData, ReplaceHeroImagesVariables>;
 }
-export const clearHeroImagesRef: ClearHeroImagesRef;
+export const replaceHeroImagesRef: ReplaceHeroImagesRef;
 ```
 
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the clearHeroImagesRef:
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the replaceHeroImagesRef:
 ```typescript
-const name = clearHeroImagesRef.operationName;
+const name = replaceHeroImagesRef.operationName;
 console.log(name);
 ```
 
 ### Variables
-The `ClearHeroImages` mutation requires an argument of type `ClearHeroImagesVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+The `ReplaceHeroImages` mutation requires an argument of type `ReplaceHeroImagesVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 
 ```typescript
-export interface ClearHeroImagesVariables {
-  userId: string;
+export interface ReplaceHeroImagesVariables {
+  urls: string;
 }
 ```
 ### Return Type
-Recall that executing the `ClearHeroImages` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+Recall that executing the `ReplaceHeroImages` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
 
-The `data` property is an object of type `ClearHeroImagesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+The `data` property is an object of type `ReplaceHeroImagesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
-export interface ClearHeroImagesData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  cleared: number;
+export interface ReplaceHeroImagesData {
+  images?: unknown | null;
 }
 ```
-### Using `ClearHeroImages`'s action shortcut function
+### Using `ReplaceHeroImages`'s action shortcut function
 
 ```typescript
 import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, clearHeroImages, ClearHeroImagesVariables } from '@clubs-platform/dataconnect';
+import { connectorConfig, replaceHeroImages, ReplaceHeroImagesVariables } from '@clubs-platform/dataconnect';
 
-// The `ClearHeroImages` mutation requires an argument of type `ClearHeroImagesVariables`:
-const clearHeroImagesVars: ClearHeroImagesVariables = {
-  userId: ..., 
+// The `ReplaceHeroImages` mutation requires an argument of type `ReplaceHeroImagesVariables`:
+const replaceHeroImagesVars: ReplaceHeroImagesVariables = {
+  urls: ..., 
 };
 
-// Call the `clearHeroImages()` function to execute the mutation.
+// Call the `replaceHeroImages()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await clearHeroImages(clearHeroImagesVars);
+const { data } = await replaceHeroImages(replaceHeroImagesVars);
 // Variables can be defined inline as well.
-const { data } = await clearHeroImages({ userId: ..., });
+const { data } = await replaceHeroImages({ urls: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
-const { data } = await clearHeroImages(dataConnect, clearHeroImagesVars);
+const { data } = await replaceHeroImages(dataConnect, replaceHeroImagesVars);
 
-console.log(data.query);
-console.log(data.cleared);
+console.log(data.images);
 
 // Or, you can use the `Promise` API.
-clearHeroImages(clearHeroImagesVars).then((response) => {
+replaceHeroImages(replaceHeroImagesVars).then((response) => {
   const data = response.data;
-  console.log(data.query);
-  console.log(data.cleared);
+  console.log(data.images);
 });
 ```
 
-### Using `ClearHeroImages`'s `MutationRef` function
+### Using `ReplaceHeroImages`'s `MutationRef` function
 
 ```typescript
 import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, clearHeroImagesRef, ClearHeroImagesVariables } from '@clubs-platform/dataconnect';
+import { connectorConfig, replaceHeroImagesRef, ReplaceHeroImagesVariables } from '@clubs-platform/dataconnect';
 
-// The `ClearHeroImages` mutation requires an argument of type `ClearHeroImagesVariables`:
-const clearHeroImagesVars: ClearHeroImagesVariables = {
-  userId: ..., 
+// The `ReplaceHeroImages` mutation requires an argument of type `ReplaceHeroImagesVariables`:
+const replaceHeroImagesVars: ReplaceHeroImagesVariables = {
+  urls: ..., 
 };
 
-// Call the `clearHeroImagesRef()` function to get a reference to the mutation.
-const ref = clearHeroImagesRef(clearHeroImagesVars);
+// Call the `replaceHeroImagesRef()` function to get a reference to the mutation.
+const ref = replaceHeroImagesRef(replaceHeroImagesVars);
 // Variables can be defined inline as well.
-const ref = clearHeroImagesRef({ userId: ..., });
+const ref = replaceHeroImagesRef({ urls: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
-const ref = clearHeroImagesRef(dataConnect, clearHeroImagesVars);
+const ref = replaceHeroImagesRef(dataConnect, replaceHeroImagesVars);
 
 // Call `executeMutation()` on the reference to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await executeMutation(ref);
 
-console.log(data.query);
-console.log(data.cleared);
+console.log(data.images);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
-  console.log(data.query);
-  console.log(data.cleared);
-});
-```
-
-## SaveHeroImage
-You can execute the `SaveHeroImage` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
-```typescript
-saveHeroImage(vars: SaveHeroImageVariables): MutationPromise<SaveHeroImageData, SaveHeroImageVariables>;
-
-interface SaveHeroImageRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: SaveHeroImageVariables): MutationRef<SaveHeroImageData, SaveHeroImageVariables>;
-}
-export const saveHeroImageRef: SaveHeroImageRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-saveHeroImage(dc: DataConnect, vars: SaveHeroImageVariables): MutationPromise<SaveHeroImageData, SaveHeroImageVariables>;
-
-interface SaveHeroImageRef {
-  ...
-  (dc: DataConnect, vars: SaveHeroImageVariables): MutationRef<SaveHeroImageData, SaveHeroImageVariables>;
-}
-export const saveHeroImageRef: SaveHeroImageRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the saveHeroImageRef:
-```typescript
-const name = saveHeroImageRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `SaveHeroImage` mutation requires an argument of type `SaveHeroImageVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface SaveHeroImageVariables {
-  userId: string;
-  id: UUIDString;
-  position: number;
-  url: string;
-}
-```
-### Return Type
-Recall that executing the `SaveHeroImage` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `SaveHeroImageData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface SaveHeroImageData {
-  query?: {
-    platformAdmin?: {
-      user: {
-        id: string;
-      } & User_Key;
-    };
-  };
-  image: PlatformHeroImage_Key;
-}
-```
-### Using `SaveHeroImage`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, saveHeroImage, SaveHeroImageVariables } from '@clubs-platform/dataconnect';
-
-// The `SaveHeroImage` mutation requires an argument of type `SaveHeroImageVariables`:
-const saveHeroImageVars: SaveHeroImageVariables = {
-  userId: ..., 
-  id: ..., 
-  position: ..., 
-  url: ..., 
-};
-
-// Call the `saveHeroImage()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await saveHeroImage(saveHeroImageVars);
-// Variables can be defined inline as well.
-const { data } = await saveHeroImage({ userId: ..., id: ..., position: ..., url: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await saveHeroImage(dataConnect, saveHeroImageVars);
-
-console.log(data.query);
-console.log(data.image);
-
-// Or, you can use the `Promise` API.
-saveHeroImage(saveHeroImageVars).then((response) => {
-  const data = response.data;
-  console.log(data.query);
-  console.log(data.image);
-});
-```
-
-### Using `SaveHeroImage`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, saveHeroImageRef, SaveHeroImageVariables } from '@clubs-platform/dataconnect';
-
-// The `SaveHeroImage` mutation requires an argument of type `SaveHeroImageVariables`:
-const saveHeroImageVars: SaveHeroImageVariables = {
-  userId: ..., 
-  id: ..., 
-  position: ..., 
-  url: ..., 
-};
-
-// Call the `saveHeroImageRef()` function to get a reference to the mutation.
-const ref = saveHeroImageRef(saveHeroImageVars);
-// Variables can be defined inline as well.
-const ref = saveHeroImageRef({ userId: ..., id: ..., position: ..., url: ..., });
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = saveHeroImageRef(dataConnect, saveHeroImageVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.query);
-console.log(data.image);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.query);
-  console.log(data.image);
+  console.log(data.images);
 });
 ```
 
@@ -10419,6 +10236,7 @@ export interface SaveCourtHoldVariables {
   endTime: string;
   note: string;
   guestEmail?: string;
+  fresh?: boolean;
 }
 ```
 ### Return Type
@@ -10434,6 +10252,8 @@ export interface SaveCourtHoldData {
       } & User_Key;
     };
   };
+  saved?: number | null;
+  race?: number | null;
   hold?: unknown | null;
 }
 ```
@@ -10453,25 +10273,30 @@ const saveCourtHoldVars: SaveCourtHoldVariables = {
   endTime: ..., 
   note: ..., 
   guestEmail: ..., // optional
+  fresh: ..., // optional
 };
 
 // Call the `saveCourtHold()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await saveCourtHold(saveCourtHoldVars);
 // Variables can be defined inline as well.
-const { data } = await saveCourtHold({ userId: ..., id: ..., courtId: ..., holdDate: ..., startTime: ..., endTime: ..., note: ..., guestEmail: ..., });
+const { data } = await saveCourtHold({ userId: ..., id: ..., courtId: ..., holdDate: ..., startTime: ..., endTime: ..., note: ..., guestEmail: ..., fresh: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
 const { data } = await saveCourtHold(dataConnect, saveCourtHoldVars);
 
 console.log(data.query);
+console.log(data.saved);
+console.log(data.race);
 console.log(data.hold);
 
 // Or, you can use the `Promise` API.
 saveCourtHold(saveCourtHoldVars).then((response) => {
   const data = response.data;
   console.log(data.query);
+  console.log(data.saved);
+  console.log(data.race);
   console.log(data.hold);
 });
 ```
@@ -10492,12 +10317,13 @@ const saveCourtHoldVars: SaveCourtHoldVariables = {
   endTime: ..., 
   note: ..., 
   guestEmail: ..., // optional
+  fresh: ..., // optional
 };
 
 // Call the `saveCourtHoldRef()` function to get a reference to the mutation.
 const ref = saveCourtHoldRef(saveCourtHoldVars);
 // Variables can be defined inline as well.
-const ref = saveCourtHoldRef({ userId: ..., id: ..., courtId: ..., holdDate: ..., startTime: ..., endTime: ..., note: ..., guestEmail: ..., });
+const ref = saveCourtHoldRef({ userId: ..., id: ..., courtId: ..., holdDate: ..., startTime: ..., endTime: ..., note: ..., guestEmail: ..., fresh: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -10508,12 +10334,16 @@ const ref = saveCourtHoldRef(dataConnect, saveCourtHoldVars);
 const { data } = await executeMutation(ref);
 
 console.log(data.query);
+console.log(data.saved);
+console.log(data.race);
 console.log(data.hold);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.query);
+  console.log(data.saved);
+  console.log(data.race);
   console.log(data.hold);
 });
 ```
@@ -10869,104 +10699,101 @@ executeMutation(ref).then((response) => {
 });
 ```
 
-## SetAdSortOrder
-You can execute the `SetAdSortOrder` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+## SetAdOrder
+You can execute the `SetAdOrder` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
-setAdSortOrder(vars: SetAdSortOrderVariables): MutationPromise<SetAdSortOrderData, SetAdSortOrderVariables>;
+setAdOrder(vars: SetAdOrderVariables): MutationPromise<SetAdOrderData, SetAdOrderVariables>;
 
-interface SetAdSortOrderRef {
+interface SetAdOrderRef {
   ...
   /* Allow users to create refs without passing in DataConnect */
-  (vars: SetAdSortOrderVariables): MutationRef<SetAdSortOrderData, SetAdSortOrderVariables>;
+  (vars: SetAdOrderVariables): MutationRef<SetAdOrderData, SetAdOrderVariables>;
 }
-export const setAdSortOrderRef: SetAdSortOrderRef;
+export const setAdOrderRef: SetAdOrderRef;
 ```
 You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
 ```typescript
-setAdSortOrder(dc: DataConnect, vars: SetAdSortOrderVariables): MutationPromise<SetAdSortOrderData, SetAdSortOrderVariables>;
+setAdOrder(dc: DataConnect, vars: SetAdOrderVariables): MutationPromise<SetAdOrderData, SetAdOrderVariables>;
 
-interface SetAdSortOrderRef {
+interface SetAdOrderRef {
   ...
-  (dc: DataConnect, vars: SetAdSortOrderVariables): MutationRef<SetAdSortOrderData, SetAdSortOrderVariables>;
+  (dc: DataConnect, vars: SetAdOrderVariables): MutationRef<SetAdOrderData, SetAdOrderVariables>;
 }
-export const setAdSortOrderRef: SetAdSortOrderRef;
+export const setAdOrderRef: SetAdOrderRef;
 ```
 
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the setAdSortOrderRef:
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the setAdOrderRef:
 ```typescript
-const name = setAdSortOrderRef.operationName;
+const name = setAdOrderRef.operationName;
 console.log(name);
 ```
 
 ### Variables
-The `SetAdSortOrder` mutation requires an argument of type `SetAdSortOrderVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+The `SetAdOrder` mutation requires an argument of type `SetAdOrderVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 
 ```typescript
-export interface SetAdSortOrderVariables {
-  id: string;
-  sortOrder: number;
+export interface SetAdOrderVariables {
+  ids: string;
 }
 ```
 ### Return Type
-Recall that executing the `SetAdSortOrder` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+Recall that executing the `SetAdOrder` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
 
-The `data` property is an object of type `SetAdSortOrderData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+The `data` property is an object of type `SetAdOrderData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
 ```typescript
-export interface SetAdSortOrderData {
+export interface SetAdOrderData {
   ad?: unknown | null;
 }
 ```
-### Using `SetAdSortOrder`'s action shortcut function
+### Using `SetAdOrder`'s action shortcut function
 
 ```typescript
 import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, setAdSortOrder, SetAdSortOrderVariables } from '@clubs-platform/dataconnect';
+import { connectorConfig, setAdOrder, SetAdOrderVariables } from '@clubs-platform/dataconnect';
 
-// The `SetAdSortOrder` mutation requires an argument of type `SetAdSortOrderVariables`:
-const setAdSortOrderVars: SetAdSortOrderVariables = {
-  id: ..., 
-  sortOrder: ..., 
+// The `SetAdOrder` mutation requires an argument of type `SetAdOrderVariables`:
+const setAdOrderVars: SetAdOrderVariables = {
+  ids: ..., 
 };
 
-// Call the `setAdSortOrder()` function to execute the mutation.
+// Call the `setAdOrder()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await setAdSortOrder(setAdSortOrderVars);
+const { data } = await setAdOrder(setAdOrderVars);
 // Variables can be defined inline as well.
-const { data } = await setAdSortOrder({ id: ..., sortOrder: ..., });
+const { data } = await setAdOrder({ ids: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
-const { data } = await setAdSortOrder(dataConnect, setAdSortOrderVars);
+const { data } = await setAdOrder(dataConnect, setAdOrderVars);
 
 console.log(data.ad);
 
 // Or, you can use the `Promise` API.
-setAdSortOrder(setAdSortOrderVars).then((response) => {
+setAdOrder(setAdOrderVars).then((response) => {
   const data = response.data;
   console.log(data.ad);
 });
 ```
 
-### Using `SetAdSortOrder`'s `MutationRef` function
+### Using `SetAdOrder`'s `MutationRef` function
 
 ```typescript
 import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, setAdSortOrderRef, SetAdSortOrderVariables } from '@clubs-platform/dataconnect';
+import { connectorConfig, setAdOrderRef, SetAdOrderVariables } from '@clubs-platform/dataconnect';
 
-// The `SetAdSortOrder` mutation requires an argument of type `SetAdSortOrderVariables`:
-const setAdSortOrderVars: SetAdSortOrderVariables = {
-  id: ..., 
-  sortOrder: ..., 
+// The `SetAdOrder` mutation requires an argument of type `SetAdOrderVariables`:
+const setAdOrderVars: SetAdOrderVariables = {
+  ids: ..., 
 };
 
-// Call the `setAdSortOrderRef()` function to get a reference to the mutation.
-const ref = setAdSortOrderRef(setAdSortOrderVars);
+// Call the `setAdOrderRef()` function to get a reference to the mutation.
+const ref = setAdOrderRef(setAdOrderVars);
 // Variables can be defined inline as well.
-const ref = setAdSortOrderRef({ id: ..., sortOrder: ..., });
+const ref = setAdOrderRef({ ids: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
-const ref = setAdSortOrderRef(dataConnect, setAdSortOrderVars);
+const ref = setAdOrderRef(dataConnect, setAdOrderVars);
 
 // Call `executeMutation()` on the reference to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.

@@ -21,6 +21,7 @@ import {
   removeManualHold,
   saveCourtModule,
   upsertCourt,
+  HOLD_REJECTED,
   upsertHold,
 } from "../../../domains/courts/courtCommands";
 import { toCourtsAdmin } from "./courtsAdminMapper";
@@ -32,6 +33,7 @@ import {
   windowsOnDay,
   formatDuration,
   fromMinutes,
+  isIsoDate,
   rangesOverlap,
   readWindows,
   todayIso,
@@ -44,12 +46,18 @@ import { sendCourtBookingNotice } from "../../../infrastructure/functions/callab
 import {
   courtName,
   courtNote,
+  emailText,
+  holdName,
+  holdNote,
+  isBookingEmail,
   isCourtName,
   isCourtNote,
-  isEmail,
+  isHoldName,
+  isHoldNote,
   isMoneyText,
   moneyLabel,
   moneyText,
+  titleCase,
 } from "../../../shared/textLimits";
 import { IMAGE_ACCEPT, isAllowedImage } from "../../../shared/imageFile";
 import { uploadImageFile } from "../../../infrastructure/storage/uploadImage";
@@ -71,19 +79,59 @@ const COURT_TEXT_LIMIT = 15;
 
 const PHOTO_ERROR = "La foto tiene que ser JPG, PNG o WEBP de hasta 5 MB.";
 
+function missingHint(missing: string[]) {
+  if (missing.length === 0) return "";
+  if (missing.length === 1) return `Escribe ${missing[0]}.`;
+  const last = missing[missing.length - 1];
+  return `Escribe ${missing.slice(0, -1).join(", ")} y ${last}.`;
+}
+
 function courtSaveHint(name: string, description: string, rate: string) {
   const missing: string[] = [];
   if (!isCourtName(name)) missing.push("el nombre (3 a 15)");
   if (!isCourtNote(description)) missing.push("la descripción (3 a 15)");
   if (!isMoneyText(rate)) missing.push("el costo por hora");
-  if (missing.length === 0) return "";
-  if (missing.length === 1) return `Escribe ${missing[0]}.`;
-  if (missing.length === 2) return `Escribe ${missing[0]} y ${missing[1]}.`;
-  return `Escribe ${missing[0]}, ${missing[1]} y ${missing[2]}.`;
+  return missingHint(missing);
+}
+
+type HoldField = "name" | "email" | "note" | "date" | "start";
+
+const HOLD_FIELDS: HoldField[] = ["name", "email", "note", "date", "start"];
+
+/** Aviso de cada campo del apartado; vacío si el campo está bien. */
+function holdTips(name: string, email: string, note: string): Record<HoldField, string> {
+  return {
+    name: isHoldName(name) ? "" : name.trim() ? "Usa de 3 a 30 letras." : "Escribe el nombre.",
+    email: isBookingEmail(email) ? "" : email ? "Escribe un correo válido." : "Escribe el correo.",
+    note: isHoldNote(note) ? "" : "Usa letras, números y . , ¡! ¿? -",
+    date: "",
+    start: "",
+  };
+}
+
+/** El primer campo con aviso, para mostrar uno a la vez. */
+function firstTip(tips: Record<HoldField, string>, shown: Partial<Record<HoldField, boolean>> | null = null) {
+  const field = HOLD_FIELDS.find((key) => tips[key] && (!shown || shown[key]));
+  return field ? { field, text: tips[field] } : null;
+}
+
+type HoldTip = ReturnType<typeof firstTip>;
+
+function holdText(name: string, note: string) {
+  const cleanName = titleCase(name);
+  const cleanNote = note.trim();
+  return cleanNote ? `${cleanName} · ${cleanNote}` : cleanName;
 }
 
 const BOOKING_MAIL_FAIL = "El cambio quedó guardado, pero el correo no se envió.";
 const COURT_TAKEN = "Esa cancha no está disponible en esa fecha y hora.";
+const HOLD_TAKEN = "No se pudo guardar. Puede que ese horario ya no esté libre; revisa la rejilla.";
+
+function holdSaveError(err: unknown) {
+  return err instanceof Error && err.message === HOLD_REJECTED
+    ? HOLD_TAKEN
+    : "No se pudo guardar el apartado. Revisa tu conexión e inténtalo de nuevo.";
+}
 
 function bookingPriceLabel(hourlyRate: number, minutes: number) {
   const price = Math.round(((hourlyRate * minutes) / 60) * 100) / 100;
@@ -736,18 +784,19 @@ function DayGrid({
   const [open, setOpen] = useState(false);
   const [guest, setGuest] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [guestHint, setGuestHint] = useState("");
   const [note, setNote] = useState("");
+  const [bookSeen, setBookSeen] = useState<Partial<Record<HoldField, boolean>>>({});
   const [busy, setBusy] = useState(false);
+  const booking = useRef(false);
   const [editHold, setEditHold] = useState<CourtHold | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editNameHint, setEditNameHint] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editDate, setEditDate] = useState(date);
   const [editStart, setEditStart] = useState(0);
   const [editDuration, setEditDuration] = useState(60);
   const [editBusy, setEditBusy] = useState(false);
+  const editing = useRef(false);
   const [matchHold, setMatchHold] = useState<CourtHold | null>(null);
   const [matchDate, setMatchDate] = useState(date);
   const [matchStart, setMatchStart] = useState(0);
@@ -784,13 +833,28 @@ function DayGrid({
 
   const close = () => {
     if (busy) return;
-    setGuestHint("");
     setOpen(false);
   };
 
-  const editCourt = editHold
+  const bookTips = holdTips(guest, guestEmail, note);
+  const bookHint = firstTip(bookTips)?.text || "";
+  // Al apartar, el aviso de un campo sale hasta que el usuario lo deja.
+  const bookTip = firstTip(bookTips, bookSeen);
+  const seeBook = (field: HoldField) => setBookSeen((current) => (current[field] ? current : { ...current, [field]: true }));
+
+  const editPast = editHold !== null && editHold.date < todayIso();
+  const editDateOk = isIsoDate(editDate) && editDate >= todayIso();
+  const editCourt = editHold && editDateOk
     ? pickCourt(courts, holds, windows, slot, editDate, editStart, editDuration, editHold)
     : null;
+  const editTip = !editHold || editPast
+    ? null
+    : firstTip({
+        ...holdTips(editName, editEmail, editNote),
+        date: editDateOk ? "" : "Elige una fecha de hoy en adelante.",
+        start: editDateOk && !editCourt ? "Ese horario ya está ocupado o cerrado." : "",
+      });
+  const editHint = editTip?.text || "";
   const matchStarts = slotStartsFor(windows, matchDate, slot);
   const matchCourt = matchHold
     ? pickCourt(
@@ -809,25 +873,11 @@ function DayGrid({
   const matchTitle = homeName && awayName ? `${homeName} vs ${awayName}` : "Partido";
 
   const saveHold = async () => {
-    const cleanName = editName.trim().slice(0, 30);
-    const cleanNote = editNote.trim().slice(0, 50);
-    if (!editHold || editHold.date < todayIso() || !editCourt) return;
-    const cleanEmail = editEmail.trim().toLowerCase();
-    if (!cleanName) {
-      setEditNameHint("Escribe el nombre.");
-      return;
-    }
-    if (cleanEmail && !isEmail(cleanEmail)) {
-      setEditNameHint("Escribe un correo válido.");
-      return;
-    }
-    setEditNameHint("");
-    const text = cleanNote ? `${cleanName} · ${cleanNote}` : cleanName;
-    if (text.length >= 200) {
-      alert("El nombre y la nota juntos no pueden pasar de 200 caracteres.");
-      return;
-    }
+    if (editing.current || !editHold || editPast || !editCourt || editHint) return;
+    const cleanNote = editNote.trim();
+    const cleanEmail = editEmail.trim();
     const end = editStart + editDuration;
+    editing.current = true;
     setEditBusy(true);
     try {
       await upsertHold({
@@ -836,7 +886,7 @@ function DayGrid({
         holdDate: editDate,
         startTime: fromMinutes(editStart),
         endTime: fromMinutes(end),
-        note: text,
+        note: holdText(editName, editNote),
         guestEmail: cleanEmail,
       });
       onChanged();
@@ -852,8 +902,10 @@ function DayGrid({
       setNotice(mailed ? saved : `${saved} ${BOOKING_MAIL_FAIL}`);
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar el apartado.");
+      onChanged();
+      alert(holdSaveError(err));
     } finally {
+      editing.current = false;
       setEditBusy(false);
     }
   };
@@ -892,24 +944,11 @@ function DayGrid({
   };
 
   const save = async () => {
-    const cleanName = guest.trim().slice(0, 30);
-    const cleanNote = note.trim().slice(0, 50);
-    if (past || ranges.length === 0) return;
-    const cleanEmail = guestEmail.trim().toLowerCase();
-    if (!cleanName) {
-      setGuestHint("Escribe el nombre.");
-      return;
-    }
-    if (!isEmail(cleanEmail)) {
-      setGuestHint("Escribe un correo válido.");
-      return;
-    }
-    setGuestHint("");
-    const text = cleanNote ? `${cleanName} · ${cleanNote}` : cleanName;
-    if (text.length >= 200) {
-      alert("El nombre y la nota juntos no pueden pasar de 200 caracteres.");
-      return;
-    }
+    if (booking.current || past || ranges.length === 0 || bookHint) return;
+    const cleanNote = note.trim();
+    const cleanEmail = guestEmail.trim();
+    const text = holdText(guest, note);
+    booking.current = true;
     setBusy(true);
     try {
       for (const range of ranges) {
@@ -921,6 +960,7 @@ function DayGrid({
           endTime: fromMinutes(range.end),
           note: text,
           guestEmail: cleanEmail,
+          fresh: true,
         });
       }
       onChanged();
@@ -941,12 +981,17 @@ function DayGrid({
       setGuest("");
       setGuestEmail("");
       setNote("");
+      setBookSeen({});
       setOpen(false);
       if (!mailed) setNotice(BOOKING_MAIL_FAIL);
     } catch (err) {
       console.error(err);
-      alert("No se pudo apartar ese horario.");
+      setPicked([]);
+      setOpen(false);
+      onChanged();
+      alert(holdSaveError(err));
     } finally {
+      booking.current = false;
       setBusy(false);
     }
   };
@@ -978,7 +1023,10 @@ function DayGrid({
       </div>
       {!past && ranges.length > 0 && (
         <div className="book-bar">
-          <button type="button" className="book-bar__go" onClick={() => setOpen(true)}>
+          <button type="button" className="book-bar__go" onClick={() => {
+            setBookSeen({});
+            setOpen(true);
+          }}>
             <Calendar size={15} />
             {barLabel}
           </button>
@@ -1044,10 +1092,9 @@ function DayGrid({
                       return;
                     }
                     const parts = splitHoldNote(hold.note || "");
-                    setEditNameHint("");
-                    setEditName(parts.name.slice(0, 30));
-                    setEditEmail((hold.guestEmail || "").slice(0, 320));
-                    setEditNote(parts.note.slice(0, 50));
+                    setEditName(holdName(parts.name));
+                    setEditEmail(emailText(hold.guestEmail || ""));
+                    setEditNote(holdNote(parts.note));
                     setEditDate(hold.date);
                     setEditStart(start);
                     setEditDuration(duration);
@@ -1068,41 +1115,45 @@ function DayGrid({
         message={summary}
         confirmLabel="Apartar"
         busy={busy}
-        confirmHint={guestHint}
+        confirmDisabled={Boolean(bookHint)}
         onConfirm={() => void save()}
         onCancel={close}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-          <Field label="Nombre">
+          <Field label="Nombre" tip={bookTip?.field === "name" ? bookTip.text : ""}>
             <FormInput
               value={guest}
               maxLength={30}
-              onChange={(e) => {
-                setGuest(e.target.value.slice(0, 30));
-                setGuestHint("");
-              }}
+              disabled={busy}
+              aria-invalid={bookTip?.field === "name"}
+              onChange={(e) => setGuest(holdName(e.target.value))}
+              onBlur={() => seeBook("name")}
               placeholder="Quién aparta"
+              autoComplete="name"
               autoFocus
             />
           </Field>
-          <Field label="Correo">
+          <Field label="Correo" tip={bookTip?.field === "email" ? bookTip.text : ""}>
             <FormInput
               type="email"
               value={guestEmail}
               maxLength={320}
-              onChange={(e) => {
-                setGuestEmail(e.target.value.slice(0, 320));
-                setGuestHint("");
-              }}
+              disabled={busy}
+              aria-invalid={bookTip?.field === "email"}
+              onChange={(e) => setGuestEmail(emailText(e.target.value))}
+              onBlur={() => seeBook("email")}
               placeholder="correo@ejemplo.com"
               autoComplete="email"
             />
           </Field>
-          <Field label="Nota">
+          <Field label="Nota" tip={bookTip?.field === "note" ? bookTip.text : ""}>
             <FormInput
               value={note}
               maxLength={50}
-              onChange={(e) => setNote(e.target.value.slice(0, 50))}
+              disabled={busy}
+              aria-invalid={bookTip?.field === "note"}
+              onChange={(e) => setNote(holdNote(e.target.value))}
+              onBlur={() => seeBook("note")}
               placeholder="Opcional"
             />
           </Field>
@@ -1112,20 +1163,31 @@ function DayGrid({
         open={editHold !== null}
         title="Apartado"
         confirmLabel="Guardar"
-        cancelLabel={editHold && editHold.date < todayIso() ? "Cerrar" : "Cancelar"}
+        cancelLabel={editPast ? "Cerrar" : "Cancelar"}
         busy={editBusy}
-        readOnly={editHold !== null && editHold.date < todayIso()}
-        confirmDisabled={!editCourt}
-        confirmHint={editNameHint}
+        readOnly={editPast}
+        confirmDisabled={Boolean(editHint)}
         dangerAction={{
           label: "Eliminar",
           onClick: () => {
-            if (!editHold) return;
+            if (!editHold || editing.current) return;
             const hold = editHold;
             const court = courts.find((item) => item.id === hold.courtId);
             const start = toMinutes(hold.startTime) ?? 0;
             const end = toMinutes(hold.endTime) ?? start;
-            const comment = splitHoldNote(hold.note || "").note;
+            const parts = splitHoldNote(hold.note || "");
+            const comment = parts.note;
+            const who = parts.name ? ` de ${parts.name}` : "";
+            const when = `${formatFriendlyDate(hold.date)} de ${formatFriendlyTime(fromMinutes(start))} a ${formatFriendlyTime(fromMinutes(end))}`;
+            const mailNote = hold.guestEmail ? " Se le avisará por correo." : "";
+            if (
+              !window.confirm(
+                `¿Seguro que deseas cancelar el apartado${who} (${court?.name || "Cancha"}, ${when})?${mailNote} Esta acción no se puede deshacer.`,
+              )
+            ) {
+              return;
+            }
+            editing.current = true;
             setEditBusy(true);
             void removeManualHold(hold.id)
               .then(async () => {
@@ -1141,13 +1203,15 @@ function DayGrid({
                 if (!mailed) setNotice(BOOKING_MAIL_FAIL);
               })
               .catch(() => alert("No se pudo quitar el apartado."))
-              .finally(() => setEditBusy(false));
+              .finally(() => {
+                editing.current = false;
+                setEditBusy(false);
+              });
           },
         }}
         onConfirm={() => void saveHold()}
         onCancel={() => {
           if (editBusy) return;
-          setEditNameHint("");
           setEditHold(null);
         }}
       >
@@ -1160,16 +1224,11 @@ function DayGrid({
           duration={editDuration}
           slot={slot}
           windows={windows}
-          locked={editHold !== null && editHold.date < todayIso()}
-          onName={(value) => {
-            setEditName(value.slice(0, 30));
-            setEditNameHint("");
-          }}
-          onEmail={(value) => {
-            setEditEmail(value.slice(0, 320));
-            setEditNameHint("");
-          }}
-          onNote={(value) => setEditNote(value.slice(0, 50))}
+          locked={editPast || editBusy}
+          tip={editTip}
+          onName={(value) => setEditName(holdName(value))}
+          onEmail={(value) => setEditEmail(emailText(value))}
+          onNote={(value) => setEditNote(holdNote(value))}
           onDate={(value) => {
             setEditDate(value);
             const day = weekdayOf(value);
@@ -1464,6 +1523,7 @@ function HoldEditor({
   slot,
   windows,
   locked = false,
+  tip,
   onName,
   onEmail,
   onNote,
@@ -1480,6 +1540,7 @@ function HoldEditor({
   slot: CourtSlotMinutes;
   windows: TimeWindow[];
   locked?: boolean;
+  tip: HoldTip;
   onName: (value: string) => void;
   onEmail: (value: string) => void;
   onNote: (value: string) => void;
@@ -1493,42 +1554,60 @@ function HoldEditor({
     if (locked || !options.length || options.includes(duration)) return;
     onDuration(options[options.length - 1]);
   }, [duration, locked, onDuration, options]);
+  const tipFor = (field: HoldField) => (tip?.field === field ? tip.text : "");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-      <Field label="Nombre">
+      <Field label="Nombre" tip={tipFor("name")}>
         <FormInput
           value={name}
           maxLength={30}
           disabled={locked}
-          onChange={(e) => onName(e.target.value.slice(0, 30))}
+          aria-invalid={Boolean(tipFor("name"))}
+          onChange={(e) => onName(e.target.value)}
+          autoComplete="name"
           autoFocus
         />
       </Field>
-      <Field label="Correo">
+      <Field label="Correo" tip={tipFor("email")}>
         <FormInput
           type="email"
           value={email}
           maxLength={320}
           disabled={locked}
-          onChange={(e) => onEmail(e.target.value.slice(0, 320))}
+          aria-invalid={Boolean(tipFor("email"))}
+          onChange={(e) => onEmail(e.target.value)}
           placeholder="correo@ejemplo.com"
           autoComplete="email"
         />
       </Field>
-      <Field label="Nota">
+      <Field label="Nota" tip={tipFor("note")}>
         <FormInput
           value={note}
           maxLength={50}
           disabled={locked}
-          onChange={(e) => onNote(e.target.value.slice(0, 50))}
+          aria-invalid={Boolean(tipFor("note"))}
+          onChange={(e) => onNote(e.target.value)}
           placeholder="Pagó la mitad, pago completo…"
         />
       </Field>
-      <Field label="Fecha">
-        <FormInput type="date" value={dateValue} disabled={locked} onChange={(e) => onDate(e.target.value)} />
+      <Field label="Fecha" tip={tipFor("date")}>
+        <FormInput
+          type="date"
+          value={dateValue}
+          min={locked ? undefined : todayIso()}
+          required
+          disabled={locked}
+          aria-invalid={Boolean(tipFor("date"))}
+          onChange={(e) => onDate(e.target.value)}
+        />
       </Field>
-      <Field label="Horario">
-        <FormSelect value={String(start)} disabled={locked} onChange={(e) => onStart(Number(e.target.value))}>
+      <Field label="Horario" tip={tipFor("start")}>
+        <FormSelect
+          value={String(start)}
+          disabled={locked}
+          aria-invalid={Boolean(tipFor("start"))}
+          onChange={(e) => onStart(Number(e.target.value))}
+        >
           {starts.length === 0 ? (
             <option value={start}>Sin horario</option>
           ) : (

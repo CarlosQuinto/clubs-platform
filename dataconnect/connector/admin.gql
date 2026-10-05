@@ -850,81 +850,135 @@ mutation CreateTournament(
   )
 }
 
-mutation SavePlatformHeader($userId: String!, $name: String!, $motto: String!, $logoUrl: String!) @auth(level: USER) {
-  query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
-      user { id }
-    }
-  }
-  settings: platformSettings_upsert(
-    data: {
-      id: "config"
-      name: $name
-      motto: $motto
-      logoUrl: $logoUrl
-      updatedAt_expr: "request.time"
-    }
+# Textos y enlaces públicos: los mismos límites que el formulario, y nunca < > que armen HTML.
+mutation SavePlatformHeader($name: String!, $motto: String!, $logoUrl: String!) @auth(level: USER) {
+  settings: _executeReturningFirst(
+    sql: """
+      INSERT INTO platform_settings (
+        id, name, motto, headline, tagline, logo_url,
+        courts_enabled, court_slot_minutes, created_at, updated_at
+      )
+      SELECT 'config', btrim($1), btrim($2), '', '', btrim($3), false, 60, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      WHERE char_length(btrim($1)) BETWEEN 2 AND 30
+        AND btrim($1) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND (
+          btrim($2) = ''
+          OR (char_length(btrim($2)) <= 50 AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)*$')
+        )
+        AND (btrim($3) = '' OR (char_length($3) <= 1000 AND $3 ~ '^https?://[^[:space:]<>"'']+$'))
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $4)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        motto = EXCLUDED.motto,
+        logo_url = EXCLUDED.logo_url,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id
+    """
+    params: [$name, $motto, $logoUrl, { _expr: "auth.uid" }]
   )
 }
 
-mutation SavePlatformCover($userId: String!, $headline: String!, $tagline: String!) @auth(level: USER) {
-  query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
-      user { id }
-    }
-  }
-  settings: platformSettings_upsert(
-    data: {
-      id: "config"
-      headline: $headline
-      tagline: $tagline
-      updatedAt_expr: "request.time"
-    }
+mutation SavePlatformCover($headline: String!, $tagline: String!) @auth(level: USER) {
+  settings: _executeReturningFirst(
+    sql: """
+      INSERT INTO platform_settings (
+        id, name, motto, headline, tagline,
+        courts_enabled, court_slot_minutes, created_at, updated_at
+      )
+      SELECT 'config', '', '', btrim($1), btrim($2), false, 60, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      WHERE (
+          btrim($1) = ''
+          OR (char_length(btrim($1)) <= 35 AND btrim($1) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)*$')
+        )
+        AND (
+          btrim($2) = ''
+          OR (char_length(btrim($2)) <= 120 AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,:;¡!¿?()''"-]+)*$')
+        )
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+      ON CONFLICT (id) DO UPDATE SET
+        headline = EXCLUDED.headline,
+        tagline = EXCLUDED.tagline,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id
+    """
+    params: [$headline, $tagline, { _expr: "auth.uid" }]
   )
 }
 
+# Redes en minúsculas, salvo el id de canal de YouTube. WhatsApp solo dígitos.
 mutation SavePlatformSocial(
-  $userId: String!
   $instagram: String!
   $facebook: String!
   $x: String!
   $youtube: String!
   $whatsapp: String!
 ) @auth(level: USER) {
-  query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
-      user { id }
-    }
-  }
-  settings: platformSettings_upsert(
-    data: {
-      id: "config"
-      instagram: $instagram
-      facebook: $facebook
-      x: $x
-      youtube: $youtube
-      whatsapp: $whatsapp
-      updatedAt_expr: "request.time"
-    }
+  settings: _executeReturningFirst(
+    sql: """
+      INSERT INTO platform_settings (
+        id, name, motto, headline, tagline, instagram, facebook, x, youtube, whatsapp,
+        courts_enabled, court_slot_minutes, created_at, updated_at
+      )
+      SELECT
+        'config', '', '', '', '',
+        lower($1), lower($2), lower($3),
+        CASE WHEN $4 ~* '/channel/' THEN $4 ELSE lower($4) END,
+        $5,
+        false, 60, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      WHERE ($1 = '' OR (char_length($1) <= 150 AND $1 ~ '^[^[:space:]<>"'']+$'))
+        AND ($2 = '' OR (char_length($2) <= 150 AND $2 ~ '^[^[:space:]<>"'']+$'))
+        AND ($3 = '' OR (char_length($3) <= 150 AND $3 ~ '^[^[:space:]<>"'']+$'))
+        AND ($4 = '' OR (char_length($4) <= 150 AND $4 ~ '^[^[:space:]<>"'']+$'))
+        AND ($5 = '' OR $5 ~ '^[0-9]{10,13}$')
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $6)
+      ON CONFLICT (id) DO UPDATE SET
+        instagram = EXCLUDED.instagram,
+        facebook = EXCLUDED.facebook,
+        x = EXCLUDED.x,
+        youtube = EXCLUDED.youtube,
+        whatsapp = EXCLUDED.whatsapp,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id
+    """
+    params: [$instagram, $facebook, $x, $youtube, $whatsapp, { _expr: "auth.uid" }]
   )
 }
 
-mutation ClearHeroImages($userId: String!) @auth(level: USER) {
-  query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
-      user { id }
-    }
-  }
-  cleared: platformHeroImage_deleteMany(all: true)
-}
-
-mutation SaveHeroImage($userId: String!, $id: UUID!, $position: Int!, $url: String!) @auth(level: USER) {
-  query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
-      user { id }
-    }
-  }
-  image: platformHeroImage_upsert(data: { id: $id, position: $position, url: $url })
+# Reemplaza el carrusel en una sola sentencia: hasta 6 URLs separadas por espacio (una URL nunca lo lleva).
+mutation ReplaceHeroImages($urls: String!) @auth(level: USER) {
+  images: _executeReturningFirst(
+    sql: """
+      WITH input AS (
+        SELECT url, (ord - 1)::int AS position
+        FROM unnest(string_to_array(btrim($1), ' ')) WITH ORDINALITY AS t(url, ord)
+        WHERE url <> ''
+      ),
+      ok AS (
+        SELECT 'config'::text AS id
+        WHERE (SELECT count(*) FROM input) <= 6
+          AND NOT EXISTS (
+            SELECT 1 FROM input
+            WHERE char_length(url) > 2000 OR url !~ '^https?://[^[:space:]<>"'']+$'
+          )
+          AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      ),
+      saved AS (
+        INSERT INTO platform_hero_images (id, position, url)
+        SELECT gen_random_uuid(), position, url FROM input
+        WHERE EXISTS (SELECT 1 FROM ok)
+        ON CONFLICT (position) DO UPDATE SET url = EXCLUDED.url
+        RETURNING position
+      ),
+      trimmed AS (
+        DELETE FROM platform_hero_images
+        WHERE EXISTS (SELECT 1 FROM ok)
+          AND position >= (SELECT count(*) FROM input)
+        RETURNING position
+      )
+      SELECT id FROM ok
+    """
+    params: [$urls, { _expr: "auth.uid" }]
+  )
 }
 
 mutation SaveCourtSettings($userId: String! = "", $enabled: Boolean!, $slotMinutes: Int!) @auth(level: USER) {
@@ -1084,18 +1138,64 @@ mutation SaveCourtHold(
   $endTime: String!
   $note: String!
   $guestEmail: String! = ""
+  $fresh: Boolean! = false
 ) @auth(level: USER) {
   query {
     platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
       user { id }
     }
   }
-  hold: _executeReturningFirst(
+  # La nota llega como "Nombre · Nota". Nombre: letras y espacios, 3 a 30, en Title Case.
+  # Nota: opcional, hasta 50. Correo obligatorio. Fecha desde ayer en UTC (hoy en México).
+  # El tramo cae en la rejilla, dentro de la apertura de ese día y sin cruzarse con otro.
+  saved: _execute(
     sql: """
       INSERT INTO court_holds (
         id, court_id, hold_date, start_time, end_time, source, note, guest_email
       )
-      VALUES ($1, $2, $3, $4, $5, 'MANUAL'::court_hold_source, $6, $7)
+      SELECT
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        'MANUAL'::court_hold_source,
+        initcap(split_part(btrim($6), ' · ', 1))
+          || CASE WHEN strpos(btrim($6), ' · ') > 0
+               THEN ' · ' || split_part(btrim($6), ' · ', 2)
+               ELSE '' END,
+        lower(btrim($7))
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $8)
+        AND EXISTS (SELECT 1 FROM courts WHERE id = $2)
+        AND $3 >= CURRENT_DATE - 1
+        AND btrim($6) ~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*( · [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+( [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+)*)?$'
+        AND char_length(split_part(btrim($6), ' · ', 1)) BETWEEN 3 AND 30
+        AND char_length(split_part(btrim($6), ' · ', 2)) <= 50
+        AND char_length(btrim($7)) <= 320
+        AND lower(btrim($7)) ~ '^[a-z0-9._%+-]+@([a-z0-9-]+[.])+[a-z]{2,10}$'
+        AND CASE
+          WHEN $4 ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' AND $5 ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          THEN $4 < $5
+            AND (split_part($4, ':', 1)::int * 60 + split_part($4, ':', 2)::int)
+              % (SELECT court_slot_minutes FROM platform_settings WHERE id = 'config') = 0
+            AND (split_part($5, ':', 1)::int * 60 + split_part($5, ':', 2)::int)
+              % (SELECT court_slot_minutes FROM platform_settings WHERE id = 'config') = 0
+          ELSE false
+        END
+        AND EXISTS (
+          SELECT 1 FROM court_open_windows w
+          WHERE w.weekday = EXTRACT(ISODOW FROM $3::date)
+            AND w.start_time <= $4
+            AND $5 <= w.end_time
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM court_holds h
+          WHERE h.court_id = $2
+            AND h.hold_date = $3
+            AND h.id <> $1
+            AND h.start_time < $5
+            AND $4 < h.end_time
+        )
       ON CONFLICT (id) DO UPDATE SET
         court_id = EXCLUDED.court_id,
         hold_date = EXCLUDED.hold_date,
@@ -1103,7 +1203,49 @@ mutation SaveCourtHold(
         end_time = EXCLUDED.end_time,
         note = EXCLUDED.note,
         guest_email = EXCLUDED.guest_email
-      RETURNING id
+      WHERE court_holds.source::text = 'MANUAL'
+        AND court_holds.hold_date >= CURRENT_DATE - 1
+    """
+    params: [
+      $id
+      $courtId
+      $holdDate
+      $startTime
+      $endTime
+      $note
+      $guestEmail
+      { _expr: "auth.uid" }
+    ]
+  )
+  # Dos apartados nuevos al mismo tiempo pueden pasar ambos el NOT EXISTS de arriba.
+  # El que llega y ya ve otro cruzado se quita a sí mismo; al menos uno de los dos lo ve.
+  race: _execute(
+    sql: """
+      DELETE FROM court_holds h
+      WHERE h.id = $1
+        AND $2
+        AND h.source::text = 'MANUAL'
+        AND EXISTS (
+          SELECT 1 FROM court_holds o
+          WHERE o.court_id = h.court_id
+            AND o.hold_date = h.hold_date
+            AND o.id <> h.id
+            AND o.start_time < h.end_time
+            AND h.start_time < o.end_time
+        )
+    """
+    params: [$id, $fresh]
+  )
+  hold: _executeReturningFirst(
+    sql: """
+      SELECT id FROM court_holds
+      WHERE id = $1
+        AND court_id = $2
+        AND hold_date = $3
+        AND start_time = $4
+        AND end_time = $5
+        AND lower(note) = lower(btrim($6))
+        AND guest_email = lower(btrim($7))
     """
     params: [$id, $courtId, $holdDate, $startTime, $endTime, $note, $guestEmail]
   )
@@ -1137,8 +1279,15 @@ mutation SaveAd(
       INSERT INTO ads (
         id, brand, image_url, href, starts_on, ends_on, status, sort_order, created_at
       )
-      SELECT $1, $2, $3, $4, $5, $6, $7::ad_status, $8, CURRENT_TIMESTAMP
-      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $9)
+      SELECT $1, btrim($2), $3, $4, $5, $6, $7::ad_status, $8, CURRENT_TIMESTAMP
+      WHERE char_length(btrim($2)) BETWEEN 2 AND 50
+        AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND char_length($3) <= 2000 AND $3 ~ '^https?://[^[:space:]<>"'']+$'
+        AND ($4 = '' OR (char_length($4) <= 500 AND $4 ~ '^https?://[^[:space:]<>"'']+$'))
+        AND $6 > $5
+        /* Un anuncio nuevo no arranca en el pasado. Un día de holgura por la zona horaria del navegador. */
+        AND ($5 >= CURRENT_DATE - 1 OR EXISTS (SELECT 1 FROM ads WHERE id = $1))
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $9)
       ON CONFLICT (id) DO UPDATE SET
         brand = EXCLUDED.brand,
         image_url = EXCLUDED.image_url,
@@ -1165,15 +1314,17 @@ mutation SetAdStatus($id: String!, $status: String!) @auth(level: USER) {
   )
 }
 
-mutation SetAdSortOrder($id: String!, $sortOrder: Int!) @auth(level: USER) {
+# Guarda el orden completo del inventario en una sola sentencia: ids separados por coma.
+mutation SetAdOrder($ids: String!) @auth(level: USER) {
   ad: _executeReturningFirst(
     sql: """
-      UPDATE ads SET sort_order = $2
-      WHERE id = $1
-        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
-      RETURNING id
+      UPDATE ads SET sort_order = (o.ord - 1)::int
+      FROM unnest(string_to_array($1, ',')) WITH ORDINALITY AS o(id, ord)
+      WHERE ads.id = o.id
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $2)
+      RETURNING ads.id
     """
-    params: [$id, $sortOrder, { _expr: "auth.uid" }]
+    params: [$ids, { _expr: "auth.uid" }]
   )
 }
 

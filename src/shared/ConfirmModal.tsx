@@ -28,7 +28,7 @@ export default function ConfirmModal({
   danger?: boolean;
   busy?: boolean;
   confirmDisabled?: boolean;
-  /** Aviso junto al botón de confirmar. El botón sigue recibiendo el clic. */
+  /** Aviso junto al botón de confirmar. Sin `confirmDisabled`, el botón sigue recibiendo el clic. */
   confirmHint?: string;
   /** Oculta confirmar y la acción de peligro. Cancelar sigue cerrando. */
   readOnly?: boolean;
@@ -117,11 +117,11 @@ export default function ConfirmModal({
             {cancelLabel}
           </SecondaryButton>
           {!readOnly && (
-          <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
+          <span style={{ position: "relative", display: "inline-flex" }}>
             <PrimaryButton
               type="button"
               variant={danger ? "red" : "navy"}
-              disabled={busy || (confirmDisabled && !confirmHint)}
+              disabled={busy || confirmDisabled}
               onClick={onConfirm}
             >
               {busy ? "…" : confirmLabel}
@@ -130,8 +130,10 @@ export default function ConfirmModal({
               <span
                 role="tooltip"
                 style={{
-                  position: "relative",
-                  marginTop: "0.55rem",
+                  position: "absolute",
+                  right: 0,
+                  bottom: "calc(100% + 0.5rem)",
+                  zIndex: 2,
                   width: "max-content",
                   maxWidth: 220,
                   padding: "0.4rem 0.6rem",
@@ -149,7 +151,7 @@ export default function ConfirmModal({
                   style={{
                     position: "absolute",
                     right: 18,
-                    top: -4,
+                    bottom: -4,
                     width: 8,
                     height: 8,
                     backgroundColor: C.navy900,

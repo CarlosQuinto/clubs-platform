@@ -7,7 +7,7 @@ import {
   QueryFetchPolicy,
   saveAd,
   saveAdPlacement,
-  setAdSortOrder,
+  setAdOrder,
   setAdStatus,
 } from "../../infrastructure/dataconnect";
 import { savedRow } from "../../shared/saved";
@@ -41,8 +41,10 @@ export async function saveAdStatus(id: string, status: string) {
   savedRow(result.data.ad);
 }
 
-export async function orderAd(id: string, sortOrder: number) {
-  const result = await setAdSortOrder(dataConnect, { id, sortOrder });
+/** Guarda el orden de todo el inventario en una sola petición. */
+export async function orderAds(ids: string[]) {
+  if (ids.length === 0) return;
+  const result = await setAdOrder(dataConnect, { ids: ids.join(",") });
   savedRow(result.data.ad);
 }
 

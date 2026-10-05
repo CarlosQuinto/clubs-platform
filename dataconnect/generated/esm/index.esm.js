@@ -548,28 +548,16 @@ export function savePlatformSocial(dcOrVars, vars) {
   return executeMutation(savePlatformSocialRef(dcInstance, inputVars));
 }
 
-export const clearHeroImagesRef = (dcOrVars, vars) => {
+export const replaceHeroImagesRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'ClearHeroImages', inputVars);
+  return mutationRef(dcInstance, 'ReplaceHeroImages', inputVars);
 }
-clearHeroImagesRef.operationName = 'ClearHeroImages';
+replaceHeroImagesRef.operationName = 'ReplaceHeroImages';
 
-export function clearHeroImages(dcOrVars, vars) {
+export function replaceHeroImages(dcOrVars, vars) {
   const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(clearHeroImagesRef(dcInstance, inputVars));
-}
-
-export const saveHeroImageRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'SaveHeroImage', inputVars);
-}
-saveHeroImageRef.operationName = 'SaveHeroImage';
-
-export function saveHeroImage(dcOrVars, vars) {
-  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(saveHeroImageRef(dcInstance, inputVars));
+  return executeMutation(replaceHeroImagesRef(dcInstance, inputVars));
 }
 
 export const saveCourtSettingsRef = (dcOrVars, vars) => {
@@ -680,16 +668,16 @@ export function setAdStatus(dcOrVars, vars) {
   return executeMutation(setAdStatusRef(dcInstance, inputVars));
 }
 
-export const setAdSortOrderRef = (dcOrVars, vars) => {
+export const setAdOrderRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'SetAdSortOrder', inputVars);
+  return mutationRef(dcInstance, 'SetAdOrder', inputVars);
 }
-setAdSortOrderRef.operationName = 'SetAdSortOrder';
+setAdOrderRef.operationName = 'SetAdOrder';
 
-export function setAdSortOrder(dcOrVars, vars) {
+export function setAdOrder(dcOrVars, vars) {
   const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(setAdSortOrderRef(dcInstance, inputVars));
+  return executeMutation(setAdOrderRef(dcInstance, inputVars));
 }
 
 export const clearAdPlacementsRef = (dcOrVars, vars) => {

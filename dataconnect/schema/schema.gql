@@ -592,6 +592,13 @@ type EmailOutbox @table(name: "email_outbox", key: "id")
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
+# Intentos por ventana de tiempo de un endpoint público (p. ej. "reset-ip:1.2.3.4"). Solo lo usan las Functions.
+type RequestThrottle @table(name: "request_throttles", key: "id") {
+  id: String! @col(dataType: "varchar(400)")
+  hits: Int!
+  windowStart: Timestamp!
+}
+
 type PlatformClaimState @view(sql: """
   SELECT 1 AS id, (COUNT(*) = 0) AS open
   FROM platform_admins
