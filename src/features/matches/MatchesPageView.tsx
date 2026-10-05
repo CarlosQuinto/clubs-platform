@@ -80,6 +80,7 @@ export default function MatchesPageView() {
               <FormInput
                 value={screen.query}
                 onChange={(event) => screen.onSearch(event.target.value)}
+                maxLength={30}
                 placeholder="Buscar por equipo"
                 aria-label="Buscar por equipo"
               />

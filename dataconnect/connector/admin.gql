@@ -534,7 +534,12 @@ mutation SaveSignupInvite($emailKey: String!, $email: String!, $clubId: String, 
   invite: _executeReturningFirst(
     sql: """
       INSERT INTO signup_invites (email_key, email, club_id, platform, updated_at)
-      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      SELECT $1, $2, $3, $4, CURRENT_TIMESTAMP
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $5)
+        OR (
+          NOT $4
+          AND EXISTS (SELECT 1 FROM club_invites WHERE club_id = $3 AND email_key = $1)
+        )
       ON CONFLICT (email_key) DO UPDATE SET
         email = EXCLUDED.email,
         club_id = COALESCE(EXCLUDED.club_id, signup_invites.club_id),
@@ -542,7 +547,7 @@ mutation SaveSignupInvite($emailKey: String!, $email: String!, $clubId: String, 
         updated_at = CURRENT_TIMESTAMP
       RETURNING email_key AS id
     """
-    params: [$emailKey, $email, $clubId, $platform]
+    params: [$emailKey, $email, $clubId, $platform, { _expr: "auth.uid" }]
   )
 }
 
@@ -1429,10 +1434,22 @@ mutation SavePlatformAdminInvite($emailKey: String!, $email: String!) @auth(leve
   invite: _executeReturningFirst(
     sql: """
       INSERT INTO platform_admin_invites (email_key, email, invited_by_id, created_at)
-      SELECT $1, $2, $3, CURRENT_TIMESTAMP
-      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
-        AND NOT EXISTS (SELECT 1 FROM platform_admins WHERE lower(email) = lower($2))
-      ON CONFLICT (email_key) DO NOTHING
+      SELECT $1, lower(btrim($2)), $3, CURRENT_TIMESTAMP
+      WHERE char_length(btrim($2)) BETWEEN 6 AND 320
+        AND btrim($2) = lower(btrim($2))
+        AND btrim($2) ~ '^[^[:space:]@]+@[^[:space:]@]+\.[a-z]{2,}$'
+        AND $1 = replace(lower(btrim($2)), '.', ',')
+        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $3)
+        AND NOT EXISTS (SELECT 1 FROM platform_admins WHERE lower(email) = lower(btrim($2)))
+        AND NOT EXISTS (
+          SELECT 1 FROM platform_admin_invites
+          WHERE email_key = $1 OR lower(email) = lower(btrim($2))
+        )
+        AND (
+          SELECT count(*) FROM platform_admin_invites
+          WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+        ) < 10
+      ON CONFLICT DO NOTHING
       RETURNING email_key AS id
     """
     params: [$emailKey, $email, { _expr: "auth.uid" }]

@@ -218,7 +218,14 @@ export const reviewTeamApplication = onCall(CALLABLE, async (request) => {
   return { ok: true, action, mailed, clubId, slug, kind, url: urls.copyUrl };
 });
 
-/** Correo de invitación a superadministrador. La invitación ya se guardó en SQL. */
+const ADMIN_INVITE_WINDOW_SECONDS = 15 * 60;
+const ADMIN_INVITE_LIMIT_PER_ADMIN = 20;
+const ADMIN_INVITE_LIMIT_PER_EMAIL = 3;
+
+/**
+ * Correo de invitación a superadministrador. La invitación ya se guardó en SQL.
+ * Limita por superadmin y por correo para que los reenvíos no sirvan para spam.
+ */
 export const sendPlatformAdminInvite = onCall(CALLABLE, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Inicia sesión para invitar.");
@@ -226,8 +233,20 @@ export const sendPlatformAdminInvite = onCall(CALLABLE, async (request) => {
   await assertSuperAdmin(request.auth.uid, "Solo un superadmin puede invitar.");
 
   const email = String(request.data?.email || "").trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) {
+  if (email.length > 320 || !EMAIL_RE.test(email)) {
     throw new HttpsError("invalid-argument", "El correo no es válido.");
+  }
+  if (
+    (await throttleHits(`admin-invite-uid:${request.auth.uid}`, ADMIN_INVITE_WINDOW_SECONDS)) >
+    ADMIN_INVITE_LIMIT_PER_ADMIN
+  ) {
+    throw new HttpsError("resource-exhausted", "Demasiadas invitaciones. Espera unos minutos.");
+  }
+  if (
+    (await throttleHits(`admin-invite:${email}`, ADMIN_INVITE_WINDOW_SECONDS)) >
+    ADMIN_INVITE_LIMIT_PER_EMAIL
+  ) {
+    throw new HttpsError("resource-exhausted", "Demasiados envíos a ese correo. Espera unos minutos.");
   }
   const invite = await sql().executeQuery<
     { platformAdminInvite?: { email: string } | null },

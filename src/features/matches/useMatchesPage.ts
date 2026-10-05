@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dataConnect, matchesPage, QueryFetchPolicy } from "../../infrastructure/dataconnect";
 import { todayIso } from "../../domains/courts/courts";
+import { teamLabel } from "../../shared/textLimits";
 import { filterMatches, toMatchesPage } from "./matchesMapper";
 import type { MatchesPageModel } from "./matchesViewState";
 
@@ -26,8 +27,10 @@ export function useMatchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<MatchesPageModel | null>(null);
-  const [tournamentId, setTournamentId] = useState("");
+  const [chosenTournament, setChosenTournament] = useState("");
   const [query, setQuery] = useState("");
+  // Solo vale un torneo vigente de la lista; cualquier otro valor equivale a "Todos los torneos".
+  const tournamentId = model?.tournaments.some((t) => t.id === chosenTournament) ? chosenTournament : "";
   const request = useRef(0);
   const batch = useMatchBatchSize();
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -88,8 +91,8 @@ export function useMatchesPage() {
     tournaments: model?.tournaments ?? [],
     matches: filtered.slice(0, visibleCount),
     hasMore: visibleCount < filtered.length,
-    onSearch: setQuery,
-    onTournamentChange: setTournamentId,
+    onSearch: (value: string) => setQuery(teamLabel(value)),
+    onTournamentChange: setChosenTournament,
     onMore,
     onRefresh: load,
   };
