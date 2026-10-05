@@ -73,6 +73,71 @@ export default function MembersModal({
   clubName: string;
   onClose: () => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useModalLock(confirmOpen ? null : onClose);
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(10, 25, 41, 0.85)",
+        backdropFilter: "blur(6px)",
+        zIndex: 9999,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "1rem",
+        animation: "fadeIn 0.2s ease",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="members-modal compact-form"
+        style={{
+          backgroundColor: C.white,
+          borderRadius: RADIUS.lg,
+          padding: "1rem 1rem 1.1rem",
+          width: "100%",
+          maxWidth: "440px",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          boxShadow: SHADOWS.xl,
+          position: "relative",
+        }}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          style={{
+            position: "absolute",
+            top: "0.7rem",
+            right: "0.7rem",
+            background: "none",
+            border: "none",
+            color: C.gray400,
+            cursor: "pointer",
+          }}
+        >
+          <X size={16} />
+        </button>
+        <MembersPanel clubName={clubName} onConfirmOpenChange={setConfirmOpen} />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Contenido de la gestión de miembros; se usa en el modal del superadmin y en la pestaña del club. */
+export function MembersPanel({
+  clubName,
+  onConfirmOpenChange,
+}: {
+  clubName: string;
+  onConfirmOpenChange?: (open: boolean) => void;
+}) {
   const { clubId } = useClub();
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
@@ -89,7 +154,9 @@ export default function MembersModal({
   const [canceling, setCanceling] = useState(false);
   const sending = useRef(false);
 
-  useModalLock(cancelInvite ? null : onClose);
+  useEffect(() => {
+    onConfirmOpenChange?.(Boolean(cancelInvite));
+  }, [cancelInvite, onConfirmOpenChange]);
 
   const reload = async () => {
     const data = await loadClubPeople(clubId);
@@ -216,53 +283,8 @@ export default function MembersModal({
     }
   };
 
-  return createPortal(
+  return (
     <>
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(10, 25, 41, 0.85)",
-        backdropFilter: "blur(6px)",
-        zIndex: 9999,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "1rem",
-        animation: "fadeIn 0.2s ease",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="members-modal compact-form"
-        style={{
-          backgroundColor: C.white,
-          borderRadius: RADIUS.lg,
-          padding: "1rem 1rem 1.1rem",
-          width: "100%",
-          maxWidth: "440px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: SHADOWS.xl,
-          position: "relative",
-        }}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute",
-            top: "0.7rem",
-            right: "0.7rem",
-            background: "none",
-            border: "none",
-            color: C.gray400,
-            cursor: "pointer",
-          }}
-        >
-          <X size={16} />
-        </button>
-
         <h3 className="members-modal__title">
           <UserCog size={15} color={C.amber} />
           Administradores
@@ -452,8 +474,6 @@ export default function MembersModal({
             </IconButton>
           </Row>
         ))}
-      </div>
-    </div>
     <ConfirmModal
       open={Boolean(cancelInvite)}
       title="Cancelar invitación"
@@ -468,8 +488,7 @@ export default function MembersModal({
         if (!canceling) setCancelInvite(null);
       }}
     />
-    </>,
-    document.body,
+    </>
   );
 }
 

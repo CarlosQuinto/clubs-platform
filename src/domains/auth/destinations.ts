@@ -2,74 +2,51 @@ import type { User } from "../../infrastructure/auth";
 import {
   acceptClubInvite,
   dataConnect,
-  type MemberRole,
-  myMemberships,
   myOpenClubInvites,
   platformAdminById,
   QueryFetchPolicy,
 } from "../../infrastructure/dataconnect";
 import { emailKey } from "../../shared/paths";
-import { ROLE_LABELS, type Role } from "./roles";
+import {
+  ADMIN_SPACE,
+  listMyClubSpaces,
+  seedMySpaces,
+  sortSpaces,
+  type Space,
+} from "./mySpaces";
 
-export type LoginDestination = {
-  kind: "admin" | "club";
-  path: string;
-  title: string;
-  subtitle: string;
-  logoUrl?: string;
-};
+export type LoginDestination = Space;
 
-const ROLE_FROM_SQL: Record<MemberRole, Role> = {
-  ADMIN: "admin",
-  DT: "dt",
-  PRENSA: "prensa",
-  TESORERO: "tesorero",
-};
+/** Acepta las invitaciones abiertas al correo de la sesión. */
+export async function acceptPendingClubInvites(user: User) {
+  const email = (user.email || "").toLowerCase();
+  if (!email) return;
+  const fresh = { fetchPolicy: QueryFetchPolicy.SERVER_ONLY };
+  const invites = await myOpenClubInvites(dataConnect, { emailKey: emailKey(email) }, fresh);
+  for (const invite of invites.data.clubInvites) {
+    if (!invite.token) continue;
+    await acceptClubInvite(dataConnect, {
+      clubId: invite.club.id,
+      emailKey: emailKey(email),
+      token: invite.token,
+      displayName: user.displayName || "",
+    }).catch((err: unknown) => {
+      console.error("No se pudo aceptar la invitación:", err);
+    });
+  }
+}
 
 export async function resolveUserDestinations(user: User): Promise<LoginDestination[]> {
   const dests: LoginDestination[] = [];
   const fresh = { fetchPolicy: QueryFetchPolicy.SERVER_ONLY };
   const admin = await platformAdminById(dataConnect, { id: user.uid }, fresh);
-  if (admin.data.platformAdmin) {
-    dests.push({
-      kind: "admin",
-      path: "/admin",
-      title: "Panel de administración",
-      subtitle: "Clubes, competición y portada",
-    });
-  }
+  if (admin.data.platformAdmin) dests.push(ADMIN_SPACE);
 
-  const email = (user.email || "").toLowerCase();
-  if (email) {
-    const invites = await myOpenClubInvites(dataConnect, { emailKey: emailKey(email) }, fresh);
-    for (const invite of invites.data.clubInvites) {
-      if (!invite.token) continue;
-      await acceptClubInvite(dataConnect, {
-        clubId: invite.club.id,
-        emailKey: emailKey(email),
-        token: invite.token,
-        displayName: user.displayName || "",
-      }).catch((err: unknown) => {
-        console.error("No se pudo aceptar la invitación:", err);
-      });
-    }
-  }
+  await acceptPendingClubInvites(user);
 
-  const memberships = await myMemberships(dataConnect, { userId: user.uid }, fresh);
-  for (const member of memberships.data.clubMembers) {
-    const role = ROLE_FROM_SQL[member.role];
-    dests.push({
-      kind: "club",
-      path: `/${member.club.slug || member.club.id}`,
-      title: member.club.name,
-      subtitle: ROLE_LABELS[role] || "Administración",
-      logoUrl: member.club.logoUrl || undefined,
-    });
-  }
-
-  dests.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "admin" ? -1 : 1;
-    return a.title.localeCompare(b.title);
-  });
-  return dests;
+  const clubs = await listMyClubSpaces();
+  // El selector de la cabecera ya pudo consultar antes de aceptar las invitaciones.
+  seedMySpaces(user.uid, clubs);
+  dests.push(...clubs);
+  return sortSpaces(dests);
 }

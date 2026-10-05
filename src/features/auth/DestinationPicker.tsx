@@ -1,7 +1,7 @@
-import { Crown, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useModalLock } from "../../shared/useModalLock";
-import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import type { LoginDestination } from "../../domains/auth/destinations";
+import SpaceRow, { SpaceAvatar } from "../shell/SpaceRow";
 import { C, RADIUS, SHADOWS } from "../../shared/ui";
 
 export default function DestinationPicker({
@@ -67,87 +67,18 @@ export default function DestinationPicker({
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
           {destinations.map((dest) => (
-            <button
+            <SpaceRow
               key={dest.path}
-              type="button"
+              avatar={<SpaceAvatar kind={dest.kind} logoUrl={dest.logoUrl} />}
+              title={dest.title}
+              subtitle={dest.subtitle}
+              trailing={
+                dest.kind === "club" ? (
+                  <Shield size={14} color={C.gray400} style={{ flexShrink: 0 }} />
+                ) : undefined
+              }
               onClick={() => onPick(dest.path)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.7rem",
-                width: "100%",
-                textAlign: "left",
-                padding: "0.7rem 0.75rem",
-                borderRadius: RADIUS.lg,
-                border: `1px solid ${C.gray200}`,
-                background: C.gray50,
-                cursor: "pointer",
-              }}
-            >
-              {dest.kind === "admin" ? (
-                <span
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: C.navy900,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Crown size={16} color={C.amber} />
-                </span>
-              ) : (
-                <span
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    background: C.navy900,
-                    border: `1.5px solid ${C.amber}`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <img
-                    src={dest.logoUrl || DEFAULT_CLUB_LOGO}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </span>
-              )}
-              <span style={{ minWidth: 0, flex: 1 }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontWeight: 800,
-                    fontSize: "0.88rem",
-                    color: C.navy900,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {dest.title}
-                </span>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: "0.72rem",
-                    color: C.gray500,
-                    fontWeight: 600,
-                    marginTop: 2,
-                  }}
-                >
-                  {dest.subtitle}
-                </span>
-              </span>
-              {dest.kind === "club" && (
-                <Shield size={14} color={C.gray400} style={{ flexShrink: 0 }} />
-              )}
-            </button>
+            />
           ))}
         </div>
 

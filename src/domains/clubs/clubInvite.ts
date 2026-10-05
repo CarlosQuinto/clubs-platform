@@ -6,6 +6,7 @@ import {
   myMemberships,
   QueryFetchPolicy,
 } from "../../infrastructure/dataconnect";
+import { invalidateMySpaces } from "../auth/mySpaces";
 import type { Role } from "../auth/roles";
 
 export type InviteLink = { clubId: string; emailKey: string; token: string };
@@ -47,7 +48,9 @@ const WRONG_SESSION = "La sesión no es del correo invitado.";
 export async function acceptInvite(link: InviteLink, displayName: string) {
   try {
     const result = await acceptClubInvite(dataConnect, { ...link, displayName });
-    return result.data.member != null;
+    if (result.data.member == null) return false;
+    invalidateMySpaces();
+    return true;
   } catch (err) {
     if (err instanceof Error && err.message.includes(WRONG_SESSION)) return false;
     throw err;

@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { Wallet, Shield, Camera, LayoutTemplate, X, Edit2, UploadCloud, Lock, LogOut, UserCog, Crown, ArrowLeft } from "lucide-react";
+import { Shield, X, Edit2, UploadCloud, LogIn, ArrowLeft } from "lucide-react";
 import { useClubModel, ClubModelProvider } from "./useClubScreen";
 import StatsScopeBar from "./StatsScopeBar";
 import AvailabilityPanel from "./AvailabilityPanel";
@@ -7,14 +7,17 @@ import { useAuth } from "../../domains/auth/AuthContext";
 import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { normalizeSlug } from "../../shared/paths";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
-import { C, RADIUS, SHADOWS, FormInput, PrimaryButton, SecondaryButton } from "../../shared/ui";
+import { C, RADIUS, SHADOWS, FormInput, PrimaryButton, SecondaryButton, SectionCard } from "../../shared/ui";
 import Home from "./home/Home";
 import Agenda from "./agenda/Agenda";
 import Players from "./players/Players";
 import Finances from "./finances/Finances";
 import Inventory from "./inventory/Inventory";
-import MembersModal from "./MembersModal";
+import { MembersPanel } from "./MembersModal";
 import AdSlot from "../shell/AdSlot";
+import SpaceSwitcher from "../shell/SpaceSwitcher";
+import PlatformFooter from "../shell/PlatformFooter";
+import { markScrollTopAfterNav } from "../shell/scrollAfterNav";
 import { useClubShell } from "./useClubShell";
 
 
@@ -72,7 +75,7 @@ function ClubNotFound({ slug }: { slug: string }) {
           textDecoration: "none",
         }}
       >
-        <ArrowLeft size={16} /> Ver todos los clubes
+        <ArrowLeft size={16} /> Ir a la liga
       </Link>
     </div>
   );
@@ -98,11 +101,8 @@ function ClubShell() {
     routeSlug,
     clubId,
     user,
-    isSuperAdmin,
     screenModel,
     role,
-    showMembers,
-    setShowMembers,
     activeTab,
     visited,
     hallSeen,
@@ -146,7 +146,6 @@ function ClubShell() {
     handleLogoUpload,
     handleCancelEditClub,
     handleSaveClub,
-    handleLogout,
     goToLogin,
     perms,
     roleLabel,
@@ -200,19 +199,6 @@ function ClubShell() {
               minWidth: 0,
             }}
           >
-            <Link
-              to="/"
-              title="Todos los clubes"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                color: C.gray400,
-                flexShrink: 0,
-              }}
-            >
-              <ArrowLeft size={16} />
-            </Link>
-
             {/* CONTENEDOR DEL LOGO CON LÁPIZ TIPO "BADGE" */}
             <div
               style={{ position: "relative", display: "flex", flexShrink: 0 }}
@@ -300,7 +286,6 @@ function ClubShell() {
                   whiteSpace: "nowrap", // 👈 PROHIBIDO saltar a segunda línea
                   overflow: "hidden",
                   textOverflow: "clip", // 👈 Corta al ras si es necesario, sin puntos suspensivos
-                  transition: "font-size 0.2s ease", // Suaviza el cambio al girar el celular
                 }}
               >
                 {clubInfo?.name || DEFAULT_CLUB_NAME}
@@ -308,7 +293,7 @@ function ClubShell() {
             </div>
           </div>
 
-          {/* ── DERECHA: ESTADO, ROL Y ACCIONES ── */}
+          {/* ── DERECHA: SELECTOR DE ESPACIOS O LOGIN ── */}
           <div
             style={{
               display: "flex",
@@ -318,159 +303,30 @@ function ClubShell() {
             }}
           >
             <div
-              title={
-                loading
-                  ? "Sincronizando con la nube..."
-                  : "Base de datos sincronizada"
-              }
-              style={{
-                display: isUltraSmall ? "none" : "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                backgroundColor: "rgba(0,0,0,0.3)",
-                padding: "4px 8px",
-                borderRadius: RADIUS.full,
-                border: `1px solid rgba(255,255,255,0.05)`,
-              }}
-            >
-              <div
-                style={{
-                  width: "6px",
-                  height: "6px",
-                  borderRadius: "50%",
-                  backgroundColor: loading ? C.amber : C.green,
-                  boxShadow: `0 0 6px ${loading ? C.amber : C.green}`,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: "0.6rem",
-                  color: C.gray300,
-                  fontWeight: "800",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                {loading ? "SYNC" : "LIVE"}
-              </span>
-            </div>
-
-            <div
-              style={{
-                width: "1px",
-                height: "16px",
-                backgroundColor: "rgba(255,255,255,0.15)",
-                display: isUltraSmall ? "none" : "block",
-              }}
-            />
-
-            <div
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
             >
-              <div
-                title={user?.email || undefined}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  backgroundColor: hasAccess
-                    ? "rgba(245, 158, 11, 0.15)"
-                    : "rgba(255,255,255,0.1)",
-                  padding: "4px 10px",
-                  borderRadius: RADIUS.full,
-                  fontSize: "0.65rem",
-                  fontWeight: "800",
-                  color: hasAccess ? C.amber : C.gray300,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {isSuperAdmin ? (
-                  <Crown size={10} />
-                ) : role === "admin" ? (
-                  <Shield size={10} />
-                ) : role === "dt" ? (
-                  <LayoutTemplate size={10} />
-                ) : role === "tesorero" ? (
-                  <Wallet size={10} />
-                ) : role === "prensa" ? (
-                  <Camera size={10} />
-                ) : null}
-                {roleLabel}
-              </div>
-
-              {perms.canManageMembers && (
-                <button
-                  onClick={() => setShowMembers(true)}
-                  title="Gestionar administradores del club"
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    border: `1px solid rgba(255,255,255,0.15)`,
-                    borderRadius: RADIUS.md,
-                    color: C.white,
-                    cursor: "pointer",
-                    padding: "0.35rem 0.5rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.3rem",
-                    fontSize: "0.7rem",
-                    fontWeight: "700",
-                  }}
-                >
-                  <UserCog size={12} />
-                  <span style={{ display: isMobile ? "none" : "inline" }}>
-                    Administradores
-                  </span>
-                </button>
-              )}
-
               {user ? (
-                <button
-                  onClick={handleLogout}
-                  title="Cerrar Sesión"
-                  style={{
-                    background: "rgba(239, 68, 68, 0.1)",
-                    border: `1px solid rgba(239, 68, 68, 0.3)`,
-                    borderRadius: RADIUS.md,
-                    color: C.red || "#ef4444",
-                    cursor: "pointer",
-                    padding: "0.35rem 0.5rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.3rem",
-                    fontSize: "0.7rem",
-                    fontWeight: "700",
+                <SpaceSwitcher
+                  variant="club"
+                  club={{
+                    name: clubInfo?.name || DEFAULT_CLUB_NAME,
+                    logoUrl: clubInfo?.logoUrl || undefined,
+                    role,
+                    roleLabel,
+                    hasAccess,
                   }}
-                >
-                  <LogOut size={12} />
-                  <span style={{ display: isMobile ? "none" : "inline" }}>
-                    Salir
-                  </span>
-                </button>
+                />
               ) : (
-                <button
-                  onClick={goToLogin}
-                  title="Acceso Directiva"
-                  style={{
-                    background: C.white,
-                    border: "none",
-                    borderRadius: RADIUS.md,
-                    color: C.navy900,
-                    cursor: "pointer",
-                    padding: "0.35rem 0.6rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.3rem",
-                    fontSize: "0.7rem",
-                    fontWeight: "800",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  }}
-                >
-                  <Lock size={12} />
-                  <span style={{ display: isMobile ? "none" : "inline" }}>
-                    Login
-                  </span>
-                </button>
+                // Mismas clases que «Entrar» de la cabecera de la plataforma.
+                <div className="platform-topbar__auth">
+                  <button
+                    type="button"
+                    className="platform-auth-btn is-in"
+                    onClick={goToLogin}
+                  >
+                    <LogIn size={14} /> Entrar
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -794,14 +650,6 @@ function ClubShell() {
         </div>
       )}
 
-      {/* ── MODAL DE MIEMBROS (ADMIN / SUPERADMIN) ── */}
-      {showMembers && (
-        <MembersModal
-          clubName={clubInfo?.name || DEFAULT_CLUB_NAME}
-          onClose={() => setShowMembers(false)}
-        />
-      )}
-
       {/* ── NAVIGATION (SWIPEABLE & AUTO-CENTERED TABS) ── */}
       <nav
         style={{
@@ -1020,12 +868,24 @@ function ClubShell() {
                     ) : (
                       <SectionPending />
                     ))}
+                  {item.key === "administradores" && visited.administradores && (
+                    <SectionCard className="compact-form">
+                      <MembersPanel clubName={clubInfo?.name || DEFAULT_CLUB_NAME} />
+                    </SectionCard>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </main>
+
+      {/* Los destinos del pie son páginas de plataforma: llegan arriba, salvo los formularios. */}
+      <PlatformFooter
+        onLinkClick={(to) => {
+          if (!to.includes("#")) markScrollTopAfterNav();
+        }}
+      />
     </div>
   );
 }

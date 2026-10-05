@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Home as HomeIcon, Calendar, Users, Wallet, Package } from "lucide-react";
+import { Home as HomeIcon, Calendar, Users, Wallet, Package, UserCog } from "lucide-react";
 import { useClubModelContext } from "./useClubScreen";
 import { useModalLock } from "../../shared/useModalLock";
 import { acceptClubInvite, dataConnect, myOpenClubInvites, QueryFetchPolicy, saveClubProfile } from "../../infrastructure/dataconnect";
@@ -10,6 +10,7 @@ import type { StatsScope } from "../../shared/types";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { useClub } from "../../domains/clubs/ClubContext";
 import { buildPerms, ROLE_LABELS } from "../../domains/auth/roles";
+import { invalidateMySpaces } from "../../domains/auth/mySpaces";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { requestClubRefresh } from "./useClubScreen";
 import { deleteStoredImage, uploadImageFile } from "../../infrastructure/storage/uploadImage";
@@ -38,7 +39,7 @@ function useWindowSize() {
   return windowSize;
 }
 
-type ClubTab = "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario";
+type ClubTab = "inicio" | "agenda" | "jugadores" | "finanzas" | "inventario" | "administradores";
 
 function tabFromSearch(params: URLSearchParams): ClubTab {
   const value = params.get("seccion");
@@ -46,7 +47,8 @@ function tabFromSearch(params: URLSearchParams): ClubTab {
     value === "agenda" ||
     value === "jugadores" ||
     value === "finanzas" ||
-    value === "inventario"
+    value === "inventario" ||
+    value === "administradores"
   ) {
     return value;
   }
@@ -60,6 +62,7 @@ function visitedTabs(active: ClubTab) {
     jugadores: active === "jugadores",
     finanzas: active === "finanzas",
     inventario: active === "inventario",
+    administradores: active === "administradores",
   };
 }
 
@@ -70,7 +73,7 @@ export function useClubShell() {
   const section = tabFromSearch(searchParams);
   const { clubId, storagePath } = useClub();
   const navigate = useNavigate();
-  const { user, isSuperAdmin, logout } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { role: sqlRole } = useClubModelContext().model || { role: null };
   const screenModel = useClubModelContext().model;
   const role = sqlRole;
@@ -95,11 +98,11 @@ export function useClubShell() {
       });
       if (result.data.member == null) return;
       requestClubRefresh();
+      invalidateMySpaces();
     })().catch((err: unknown) => {
       console.error("No se pudo reclamar la invitación:", err);
     });
   }, [user, clubId, sqlRole, screenModel?.exists]);
-  const [showMembers, setShowMembers] = useState(false);
   const [activeTab, setActiveTab] = useState<ClubTab>(section);
   const [visitState, setVisitState] = useState({
     clubId,
@@ -310,17 +313,12 @@ export function useClubShell() {
         presidentPhone: editClubPhone.trim(),
       });
       requestClubRefresh();
+      invalidateMySpaces();
       setNewlyUploadedLogos([]);
       setShowEditClub(false);
     } catch (error) {
       console.error("Error al actualizar el club:", error);
       alert("Hubo un problema al guardar los cambios.");
-    }
-  };
-
-  const handleLogout = async () => {
-    if (window.confirm("¿Cerrar sesión?")) {
-      await logout();
     }
   };
 
@@ -337,22 +335,25 @@ export function useClubShell() {
     ? "Superadmin"
     : role
       ? ROLE_LABELS[role]
-      : user
-        ? "Visitante"
-        : "Plantilla";
+      : "Visitante";
   const hasAccess = !!user && (isSuperAdmin || !!role);
 
-  const navItems = [
+  const navItems: { key: ClubTab; label: string; icon: React.ReactNode }[] = [
     { key: "inicio", label: "Inicio", icon: <HomeIcon size={16} /> },
     { key: "agenda", label: "Agenda", icon: <Calendar size={16} /> },
     { key: "jugadores", label: "Jugadores", icon: <Users size={16} /> },
     { key: "finanzas", label: "Finanzas", icon: <Wallet size={16} /> },
     { key: "inventario", label: "Inventario", icon: <Package size={16} /> },
-  ] as const;
+    ...(perms.canManageMembers
+      ? [{ key: "administradores" as const, label: "Administradores", icon: <UserCog size={16} /> }]
+      : []),
+  ];
 
-  const activeIndex = useMemo(() => {
-    return navItems.findIndex((item) => item.key === activeTab);
-  }, [activeTab]);
+  // Sin permiso (o con el rol aún cargando) la pestaña de administradores cae en Inicio.
+  const shownTab: ClubTab =
+    activeTab === "administradores" && !perms.canManageMembers ? "inicio" : activeTab;
+
+  const activeIndex = Math.max(0, navItems.findIndex((item) => item.key === shownTab));
 
   useEffect(() => {
     if (navContainerRef.current) {
@@ -435,6 +436,7 @@ export function useClubShell() {
     if (key === "agenda") return ready.players && ready.events;
     if (key === "jugadores") return ready.players && ready.goals;
     if (key === "finanzas") return ready.players && ready.transactions;
+    if (key === "administradores") return true;
     return ready.inventory;
   };
 
@@ -445,9 +447,7 @@ export function useClubShell() {
     isSuperAdmin,
     screenModel,
     role,
-    showMembers,
-    setShowMembers,
-    activeTab,
+    activeTab: shownTab,
     visited,
     hallSeen,
     albumsSeen,
@@ -490,7 +490,6 @@ export function useClubShell() {
     handleLogoUpload,
     handleCancelEditClub,
     handleSaveClub,
-    handleLogout,
     goToLogin,
     perms,
     roleLabel,

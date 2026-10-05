@@ -2126,6 +2126,21 @@ exports.myMemberships = function myMemberships(dcOrVars, varsOrOptions, options)
 }
 ;
 
+const mySpacesRef = (dc) => {
+  const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'MySpaces');
+}
+mySpacesRef.operationName = 'MySpaces';
+exports.mySpacesRef = mySpacesRef;
+
+exports.mySpaces = function mySpaces(dcOrOptions, options) {
+  
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
+  return executeQuery(mySpacesRef(dcInstance, inputVars), inputOpts && { fetchPolicy: inputOpts.fetchPolicy });
+}
+;
+
 const myOpenClubInvitesRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();

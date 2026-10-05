@@ -55,6 +55,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*CourtHoldsOnDate*](#courtholdsondate)
   - [*LiveAds*](#liveads)
   - [*MyMemberships*](#mymemberships)
+  - [*MySpaces*](#myspaces)
   - [*MyOpenClubInvites*](#myopenclubinvites)
   - [*PlayerContributionTotals*](#playercontributiontotals)
 - [**Mutations**](#mutations)
@@ -6199,6 +6200,105 @@ const ref = myMembershipsRef({ userId: ..., });
 // You can also pass in a `DataConnect` instance to the `QueryRef` function.
 const dataConnect = getDataConnect(connectorConfig);
 const ref = myMembershipsRef(dataConnect, myMembershipsVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.clubMembers);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.clubMembers);
+});
+```
+
+## MySpaces
+You can execute the `MySpaces` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+mySpaces(options?: ExecuteQueryOptions): QueryPromise<MySpacesData, undefined>;
+
+interface MySpacesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<MySpacesData, undefined>;
+}
+export const mySpacesRef: MySpacesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+mySpaces(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<MySpacesData, undefined>;
+
+interface MySpacesRef {
+  ...
+  (dc: DataConnect): QueryRef<MySpacesData, undefined>;
+}
+export const mySpacesRef: MySpacesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the mySpacesRef:
+```typescript
+const name = mySpacesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `MySpaces` query has no variables.
+### Return Type
+Recall that executing the `MySpaces` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `MySpacesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface MySpacesData {
+  clubMembers: ({
+    role: MemberRole;
+    club: {
+      id: string;
+      slug: string;
+      name: string;
+      logoUrl?: string | null;
+    } & Club_Key;
+  })[];
+}
+```
+### Using `MySpaces`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, mySpaces } from '@clubs-platform/dataconnect';
+
+
+// Call the `mySpaces()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await mySpaces();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await mySpaces(dataConnect);
+
+console.log(data.clubMembers);
+
+// Or, you can use the `Promise` API.
+mySpaces().then((response) => {
+  const data = response.data;
+  console.log(data.clubMembers);
+});
+```
+
+### Using `MySpaces`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, mySpacesRef } from '@clubs-platform/dataconnect';
+
+
+// Call the `mySpacesRef()` function to get a reference to the query.
+const ref = mySpacesRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = mySpacesRef(dataConnect);
 
 // Call `executeQuery()` on the reference to execute the query.
 // You can use the `await` keyword to wait for the promise to resolve.

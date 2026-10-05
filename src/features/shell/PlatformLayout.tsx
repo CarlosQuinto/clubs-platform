@@ -6,7 +6,6 @@ import {
   Inbox,
   Megaphone,
   LogIn,
-  LogOut,
   Calendar,
   Mail,
   MapPin,
@@ -20,18 +19,17 @@ import { useAuth } from "../../domains/auth/AuthContext";
 import { useModalLock } from "../../shared/useModalLock";
 import { C } from "../../shared/ui";
 import { usePlatformChrome } from "./usePlatformChrome";
-import { hasAnySocial } from "../../domains/platform/social";
-import SocialLinks from "./SocialLinks";
+import PlatformFooter from "./PlatformFooter";
+import SpaceSwitcher from "./SpaceSwitcher";
+import {
+  clearScrollTopAfterNav,
+  markScrollTopAfterNav,
+  shouldScrollTopAfterNav,
+} from "./scrollAfterNav";
 
 type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
 
-/** Sobrevive al remonte del layout al cambiar de ruta. */
-let scrollTopAfterNav = false;
-
-/** Los enlaces fuera del pie marcan el tope antes de navegar. */
-export function markScrollTopAfterNav() {
-  scrollTopAfterNav = true;
-}
+export { markScrollTopAfterNav };
 
 /** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
 export default function PlatformLayout({
@@ -45,16 +43,14 @@ export default function PlatformLayout({
   landing?: boolean;
   flush?: boolean;
 }) {
-  const { user, isSuperAdmin, logout } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const chrome = usePlatformChrome(true);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const brandName = chrome.brandName;
   const logoUrl = chrome.logoUrl || "";
-  const motto = chrome.motto;
   const showCourts = chrome.courtsEnabled;
-  const social = chrome.social;
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
     return tab === "competition" ||
@@ -80,13 +76,13 @@ export default function PlatformLayout({
   // useLayoutEffect evita el destello; useEffect corre después de que el
   // menú suelta el bloqueo y restaura el scroll anterior.
   useLayoutEffect(() => {
-    if (!scrollTopAfterNav) return;
+    if (!shouldScrollTopAfterNav()) return;
     scrollWindowTop();
   }, [pathname]);
 
   useEffect(() => {
-    if (!scrollTopAfterNav) return;
-    scrollTopAfterNav = false;
+    if (!shouldScrollTopAfterNav()) return;
+    clearScrollTopAfterNav();
     scrollWindowTop();
   }, [pathname]);
 
@@ -113,34 +109,22 @@ export default function PlatformLayout({
       window.setTimeout(scrollWindowTop, 0);
       return;
     }
-    scrollTopAfterNav = true;
+    markScrollTopAfterNav();
   };
 
-  const renderAuthButton = () =>
-    user ? (
-      <button
-        type="button"
-        className="platform-auth-btn is-out"
-        title={user.email || ""}
-        onClick={() => {
-          closeMenu();
-          void logout();
-        }}
-      >
-        <LogOut size={14} /> Salir
-      </button>
-    ) : (
-      <button
-        type="button"
-        className="platform-auth-btn is-in"
-        onClick={() => {
-          closeMenu();
-          navigate("/login");
-        }}
-      >
-        <LogIn size={14} /> Entrar
-      </button>
-    );
+  // Con sesión, el selector de espacios ya incluye «Cerrar sesión».
+  const loginButton = (
+    <button
+      type="button"
+      className="platform-auth-btn is-in"
+      onClick={() => {
+        closeMenu();
+        navigate("/login");
+      }}
+    >
+      <LogIn size={14} /> Entrar
+    </button>
+  );
 
   const navLink = (
     to: string,
@@ -292,10 +276,6 @@ export default function PlatformLayout({
           </div>
         )}
       </nav>
-
-      <div className="platform-sidebar__foot">
-        {renderAuthButton()}
-      </div>
     </aside>
   );
 
@@ -328,7 +308,13 @@ export default function PlatformLayout({
             )}
             <span>{brandName}</span>
           </Link>
-          <div className="platform-topbar__auth">{renderAuthButton()}</div>
+          {user ? (
+            <div className="platform-topbar__space">
+              <SpaceSwitcher variant="topbar" />
+            </div>
+          ) : (
+            <div className="platform-topbar__auth">{loginButton}</div>
+          )}
         </header>
         <main
           className={[
@@ -342,81 +328,7 @@ export default function PlatformLayout({
         >
           {children}
         </main>
-        <footer className="platform-footer">
-          <div className="platform-footer__inner">
-            <div className="platform-footer__brand">
-              <Link to="/" className="platform-footer__logo" onClick={() => onDestinationClick("/")} aria-label={brandName}>
-                {logoUrl ? (
-                  <img src={logoUrl} alt="" />
-                ) : (
-                  <Shield size={22} color={C.amber} />
-                )}
-              </Link>
-              <div className="platform-footer__identity">
-                <Link to="/" className="platform-footer__name" onClick={() => onDestinationClick("/")}>
-                  {brandName}
-                </Link>
-                {motto ? <p className="platform-footer__motto">{motto}</p> : null}
-              </div>
-            </div>
-            <nav className="platform-footer__nav" aria-label="Enlaces del pie">
-              <p className="platform-footer__label">Navegación</p>
-              <Link to="/torneos" onClick={() => onDestinationClick("/torneos")}>
-                <Trophy size={16} /> Torneos
-              </Link>
-              <Link to="/partidos" onClick={() => onDestinationClick("/partidos")}>
-                <Calendar size={16} /> Partidos
-              </Link>
-              <Link to="/equipos" onClick={() => onDestinationClick("/equipos")}>
-                <Shield size={16} /> Equipos
-              </Link>
-              {showCourts && (
-                <Link to="/canchas" onClick={() => onDestinationClick("/canchas")}>
-                  <MapPin size={16} /> Renta una cancha
-                </Link>
-              )}
-              <Link
-                to="/registrar-equipo#formulario"
-                onClick={() => onDestinationClick("/registrar-equipo#formulario")}
-              >
-                <UserPlus size={16} /> Registra tu equipo
-              </Link>
-              <Link
-                to="/contacto#formulario"
-                onClick={() => onDestinationClick("/contacto#formulario")}
-              >
-                <Mail size={16} /> Contacto
-              </Link>
-            </nav>
-            {hasAnySocial(social) && (
-              <div className="platform-footer__social">
-                <p className="platform-footer__label">Síguenos</p>
-                <SocialLinks social={social} tone="dark" />
-              </div>
-            )}
-          </div>
-          <div className="platform-footer__bar">
-            <span>
-              © {new Date().getFullYear()} {brandName}. Todos los derechos
-              reservados.
-            </span>
-            <nav className="platform-footer__legal" aria-label="Información legal">
-              <Link
-                to="/terminos"
-                onClick={() => onDestinationClick("/terminos")}
-              >
-                Términos de uso
-              </Link>
-              <span aria-hidden="true">|</span>
-              <Link
-                to="/aviso-de-privacidad"
-                onClick={() => onDestinationClick("/aviso-de-privacidad")}
-              >
-                Aviso de privacidad
-              </Link>
-            </nav>
-          </div>
-        </footer>
+        <PlatformFooter onLinkClick={onDestinationClick} />
       </div>
     </div>
   );

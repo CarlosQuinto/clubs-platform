@@ -70,7 +70,7 @@ Hay tres tipos de usuario:
 | `/canchas` | Elegir cancha, fecha, horario y duración según la apertura y los apartados. El botón final abre WhatsApp; elegir un horario **no** reserva nada en la base. Solo aparece si `courts_enabled` está activo. |
 | `/contacto` | Formulario de contacto (se guarda en `inquiries`). |
 | `/registrar-equipo` | Solicitud de alta de un equipo (se guarda en `team_applications` como pendiente). |
-| `/:slug` | Página del club con pestañas `inicio`, `agenda`, `jugadores`, `finanzas`, `inventario` (`?seccion=`). |
+| `/:slug` | Página del club con pestañas `inicio`, `agenda`, `jugadores`, `finanzas`, `inventario` y `administradores` (`?seccion=`). La de administradores (miembros e invitaciones) solo la ven el presidente y el superadmin. |
 | `/terminos`, `/aviso-de-privacidad` | Textos legales. |
 
 ### Cuentas
@@ -81,6 +81,8 @@ Hay tres tipos de usuario:
 | `/registro` | Crear cuenta. Solo si el correo tiene una invitación en `signup_invites` o si la plataforma aún no tiene administrador. Acepta `?email=` y `?next=`. |
 | `/restablecer` | Fijar una contraseña nueva con el `oobCode` del correo. |
 | `/invitar` | Aceptar o rechazar una invitación a un club (`?c=&e=&t=`, y `&accion=rechazar`). Aceptar pide sesión con el mismo correo; sin sesión manda a `/login?next=`. |
+
+**Selector de espacios.** Con sesión, la cabecera (la de la plataforma y la del club) muestra un selector al estilo de las cuentas de Instagram: la liga (`/`), el panel de administración (`/admin`, solo superadmin) y cada club donde el usuario tiene rol, con su rol. El espacio activo se deduce de la URL. En escritorio se abre como menú y en móvil como hoja inferior; también incluye «Cerrar sesión». En la cabecera del club el selector sustituye a la píldora de rol; desde ahí se vuelve a la liga.
 
 ### Club (`/:slug`), según rol
 
@@ -324,6 +326,7 @@ clubs-platform/
 2. Con sesión, consulta `PlatformAdminById`. `isSuperAdmin` es verdadero solo si hay fila en `platform_admins`; mientras la consulta no responde, `/admin` espera.
 3. Al entrar o registrarse ejecuta `EnsureMyProfile` (fila en `users`) y `ClaimPlatformAdminInvite`, que convierte en superadmin a quien tenga una invitación en `platform_admin_invites` para su correo.
 4. Después del login, [`destinations.ts`](src/domains/auth/destinations.ts) acepta las invitaciones de club abiertas para ese correo (`MyOpenClubInvites` + `AcceptClubInvite`) y decide a dónde llevar al usuario.
+5. El selector de espacios lee los clubes con `MySpaces`, que filtra por `auth.uid` en el servidor ([`mySpaces.ts`](src/domains/auth/mySpaces.ts)). La lista se guarda en memoria, compartida entre cabeceras, y se vuelve a consultar al abrir el selector, al aceptar una invitación, al cambiar roles y al guardar el perfil del club. Antes de publicar un cliente que use `MySpaces`, despliega Data Connect.
 
 ### Invitaciones
 

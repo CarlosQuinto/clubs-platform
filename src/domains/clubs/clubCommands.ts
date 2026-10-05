@@ -21,6 +21,7 @@ import {
 } from "../../infrastructure/dataconnect";
 import { sessionUserId } from "../../infrastructure/auth";
 import { savedRow } from "../../shared/saved";
+import { invalidateMySpaces } from "../auth/mySpaces";
 import { emailKey as toEmailKey } from "../../shared/paths";
 
 export const DATA_REVIEW_MESSAGE = "Los datos no pasaron la revisión.";
@@ -162,9 +163,11 @@ export async function dropClubInvite(clubId: string, emailKey: string) {
 export async function changeMemberRole(clubId: string, userId: string, role: string) {
   const result = await setClubMemberRole(dataConnect, { clubId, userId, role });
   savedRow(result.data.member);
+  invalidateMySpaces();
 }
 
 export async function dropMember(clubId: string, userId: string) {
   const result = await removeClubMember(dataConnect, { clubId, userId });
   savedRow(result.data.member);
+  invalidateMySpaces();
 }

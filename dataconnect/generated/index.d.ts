@@ -1806,6 +1806,18 @@ export interface MyPlatformAdminInviteVariables {
   emailKey: string;
 }
 
+export interface MySpacesData {
+  clubMembers: ({
+    role: MemberRole;
+    club: {
+      id: string;
+      slug: string;
+      name: string;
+      logoUrl?: string | null;
+    } & Club_Key;
+  })[];
+}
+
 export interface PlatformAdminByIdData {
   platformAdmin?: {
     email: string;
@@ -4668,6 +4680,18 @@ export const myMembershipsRef: MyMembershipsRef;
 
 export function myMemberships(vars: MyMembershipsVariables, options?: ExecuteQueryOptions): QueryPromise<MyMembershipsData, MyMembershipsVariables>;
 export function myMemberships(dc: DataConnect, vars: MyMembershipsVariables, options?: ExecuteQueryOptions): QueryPromise<MyMembershipsData, MyMembershipsVariables>;
+
+interface MySpacesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<MySpacesData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<MySpacesData, undefined>;
+  operationName: string;
+}
+export const mySpacesRef: MySpacesRef;
+
+export function mySpaces(options?: ExecuteQueryOptions): QueryPromise<MySpacesData, undefined>;
+export function mySpaces(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<MySpacesData, undefined>;
 
 interface MyOpenClubInvitesRef {
   /* Allow users to create refs without passing in DataConnect */

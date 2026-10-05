@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFinancesData } from "./useFinancesData";
 import { FinancesProps, Transaction } from "../../../domains/finances/types";
 
@@ -9,6 +9,15 @@ export function useFinancesPage({
   perms,
 }: FinancesProps) {
   const [date] = useState(new Date().toISOString().split("T")[0]);
+  // Misma referencia entre renders: useFinancesData copia las metas en un efecto.
+  const goalsWithDate = useMemo(
+    () =>
+      externalGoals?.map((goal) => ({
+        ...goal,
+        createdAt: goal.createdAt || "",
+      })),
+    [externalGoals],
+  );
 
   const {
     allTransactions,
@@ -23,10 +32,7 @@ export function useFinancesPage({
     completeGoal,
     deleteGoal,
     updateGoalContribution,
-  } = useFinancesData(transactions, players, date, externalGoals?.map((goal) => ({
-    ...goal,
-    createdAt: goal.createdAt || "",
-  })));
+  } = useFinancesData(transactions, players, date, goalsWithDate);
 
   // ── CREACIÓN DE META CON CÁLCULO DE CUOTA ──
   const handleAddGoal = () => {

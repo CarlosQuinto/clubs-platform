@@ -594,6 +594,14 @@ query MyMemberships($userId: String!) @auth(level: USER) {
   }
 }
 
+# Clubes de la sesión para el selector de espacios; solo lee las filas de auth.uid.
+query MySpaces @auth(level: USER) {
+  clubMembers(where: { userId: { eq_expr: "auth.uid" } }) {
+    role
+    club { id slug name logoUrl }
+  }
+}
+
 query MyOpenClubInvites($emailKey: String!) @auth(level: USER) {
   clubInvites(where: { emailKey: { eq: $emailKey }, kind: { ne: ACCEPT } }) {
     token
