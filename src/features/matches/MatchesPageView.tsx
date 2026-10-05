@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Calendar, Search } from "lucide-react";
 import { PageTitle } from "../shell/ArchiveUI";
 import PlatformLayout from "../shell/PlatformLayout";
+import { usePlatformChrome } from "../shell/usePlatformChrome";
 import { C, FormInput, FormSelect, RADIUS } from "../../shared/ui";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { useAuth } from "../../domains/auth/AuthContext";
@@ -18,6 +19,7 @@ import type { UpcomingMatchView } from "./matchesViewState";
 export default function MatchesPageView() {
   const screen = useMatchesPage();
   const { isSuperAdmin } = useAuth();
+  const { courtsEnabled } = usePlatformChrome(true);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [courts, setCourts] = useState<{ id: string; name: string }[]>([]);
 
@@ -111,6 +113,7 @@ export default function MatchesPageView() {
                       match={match}
                       admin={isSuperAdmin}
                       courts={courts}
+                      courtsEnabled={courtsEnabled}
                       onScheduled={screen.onRefresh}
                     />
                   ))}
@@ -129,11 +132,14 @@ function MatchCard({
   match,
   admin,
   courts,
+  courtsEnabled,
   onScheduled,
 }: {
   match: UpcomingMatchView;
   admin: boolean;
   courts: { id: string; name: string }[];
+  /** Con la renta de canchas activa, la sede es la cancha elegida y no se escribe «Lugar». */
+  courtsEnabled: boolean;
   onScheduled: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -151,7 +157,7 @@ function MatchCard({
         id: match.id,
         matchDate: date,
         startTime: time,
-        venue,
+        venue: courtsEnabled ? courts.find((court) => court.id === courtId)?.name || "" : venue,
         courtId: courtId || null,
       });
       if (!result.data.match) {
@@ -202,7 +208,9 @@ function MatchCard({
             <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.45rem" }}>
               <FormInput type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="Fecha" />
               <FormInput type="time" value={time} onChange={(event) => setTime(event.target.value)} aria-label="Hora" />
-              <FormInput value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Lugar" aria-label="Lugar" />
+              {courtsEnabled ? null : (
+                <FormInput value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Lugar" aria-label="Lugar" />
+              )}
               <FormSelect value={courtId} onChange={(event) => setCourtId(event.target.value)} aria-label="Cancha">
                 <option value="">Sin cancha</option>
                 {courts.map((court) => (
