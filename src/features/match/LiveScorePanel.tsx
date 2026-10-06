@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { Flag, Minus, Plus, Radio, X } from "lucide-react";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { useModalLock } from "../../shared/useModalLock";
-import { PrimaryButton } from "../../shared/ui";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { liveMinute } from "../../domains/matches/liveMatchPhase";
 import {
@@ -50,8 +49,9 @@ export default function LiveScorePanel({ view, onSaved }: { view: MatchDetailVie
   return (
     <>
       <button type="button" className="live-sheet__trigger" onClick={() => setOpen(true)}>
-        <Radio size={16} />
-        Marcador en vivo
+        <span className="live-sheet__trigger-dot" aria-hidden />
+        <span className="live-sheet__trigger-label">Marcador en vivo</span>
+        <Radio size={18} />
       </button>
       {open ? <LiveSheet view={view} onSaved={onSaved} onClose={() => setOpen(false)} /> : null}
     </>
@@ -342,9 +342,9 @@ function LiveSheet({
           >
             <Flag size={15} /> Finalizar partido
           </button>
-          <PrimaryButton type="button" onClick={() => void save()} disabled={!ready || busy}>
+          <button type="button" className="live-sheet__save" onClick={() => void save()} disabled={!ready || busy}>
             {busy ? "Guardando…" : kind && !isGoal ? "Guardar tarjeta" : "Guardar gol"}
-          </PrimaryButton>
+          </button>
         </div>
       </div>
       <div onClick={(event) => event.stopPropagation()}>
@@ -354,7 +354,6 @@ function LiveSheet({
           message={`El resultado ${view.header.home.name} ${homeScore}–${awayScore} ${view.header.away.name} contará para la tabla y ya no se podrán registrar eventos en vivo. Las correcciones se hacen después desde «Marcador» en la página del torneo.`}
           confirmLabel="Finalizar"
           busy={busy}
-          zIndex={10050}
           onConfirm={() => void finish()}
           onCancel={() => setConfirmFinish(false)}
         />

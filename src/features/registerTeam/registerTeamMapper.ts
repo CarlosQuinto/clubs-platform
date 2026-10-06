@@ -1,5 +1,6 @@
 import { type RegisterTeamPageData } from "../../infrastructure/dataconnect";
 import { isCellPhone, isPersonName, isRegisterEmail, isTeamLabel } from "../../shared/textLimits";
+import { clubInitials } from "../teams/teamsMapper";
 import type { ClubCardView } from "../teams/teamsViewState";
 
 export interface RegisterTeamDraft {
@@ -24,6 +25,7 @@ export function toRegisterTeamClubs(data: RegisterTeamPageData): ClubCardView[] 
     return {
       href: club.slug.trim() ? `/${club.slug.trim()}` : "/",
       name: club.name,
+      initials: clubInitials(club.name),
       locality,
       logoUrl: club.logoUrl?.trim() || null,
       phoneLabel: phone ? `Presidente: ${phone}` : null,

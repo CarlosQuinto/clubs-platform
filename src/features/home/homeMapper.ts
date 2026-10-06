@@ -11,20 +11,21 @@ import {
   PLATFORM_HEADLINE,
 } from "../../domains/clubs/clubDefaults";
 import { tournamentPhase } from "../../domains/competition/tournamentPhase";
-import { liveMatchPhase, liveMatchWindow, liveMinuteLabel } from "../../domains/matches/liveMatchPhase";
+import { courtPlaceLabel } from "../../domains/courts/courts";
+import { LIVE_MARGIN_MINUTES, liveMatchPhase, liveMatchWindow, liveMinuteLabel } from "../../domains/matches/liveMatchPhase";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
-import { asLiveMargin, asMatchDuration } from "../../shared/types";
+import { asMatchDuration } from "../../shared/types";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
 import type {
   HomeAdView,
-  HomeMatchView,
   HomePageModel,
   HomeStatView,
   HomeTournamentCard,
   LiveMatchView,
 } from "./homeViewState";
+import type { UpcomingMatchView } from "../matches/matchesViewState";
 
 const MATCH_LIMIT = 12;
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
@@ -52,7 +53,7 @@ function clockParts(now: Date) {
 function dateParts(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return null;
-  return { day, month: MONTHS[month - 1] || "", year };
+  return { day, month: MONTHS[month - 1] || "" };
 }
 
 function clubCount(rows: { _count: number }[]): number {
@@ -94,7 +95,6 @@ function toTournamentCard(
       .filter((part) => part.trim())
       .join(" · "),
     // `?? ""`: un servidor sin el último despliegue de Data Connect no trae estos campos.
-    description: (tournament.description ?? "").trim(),
     startLabel: begins ? (phase === "active" ? "Inició" : "Inicia") : null,
     startDate: begins || null,
     clubsLabel: clubs === 1 ? "1 equipo" : `${clubs} equipos`,
@@ -140,32 +140,36 @@ function toMatch(
   match: HomePageData["matches"][number],
   today: string,
   time: string,
-): HomeMatchView | null {
+): UpcomingMatchView | null {
   if (!match.matchDate || !match.startTime || !TIME_RE.test(match.startTime)) return null;
   if (!LIVE.has(match.tournament.status)) return null;
   if (match.matchDate < today) return null;
   if (match.matchDate === today && match.startTime < time) return null;
   const date = dateParts(match.matchDate);
   if (!date) return null;
-  const venue = match.venue.trim();
+  // La cancha enlazada manda (ubicación · nombre); `venue` es la copia guardada al programar.
+  const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
   return {
     id: match.id,
     href: matchPath(match.id),
     isoDate: match.matchDate,
     day: date.day,
     month: date.month,
-    year: date.year,
     dateLabel: formatFriendlyDate(match.matchDate),
+    time: match.startTime,
     timeLabel: formatFriendlyTime(match.startTime),
     venue: venue || null,
+    homeClubId: match.homeClub.id,
+    awayClubId: match.awayClub.id,
     homeName: match.homeClub.name,
     awayName: match.awayClub.name,
     homeLogo: match.homeClub.logoUrl?.trim() || null,
     awayLogo: match.awayClub.logoUrl?.trim() || null,
-    subtitle: [match.tournament.category.name, match.tournament.name].filter(Boolean).join(" · "),
     categoryName: match.tournament.category.name,
     tournamentName: match.tournament.name,
-    courtId: null,
+    courtId: match.court?.id || "",
+    durationMinutes: asMatchDuration(match.tournament.durationMinutes),
+    tournamentStartDate: match.tournament.startDate || "",
   };
 }
 
@@ -245,7 +249,7 @@ function liveWindow(match: LiveRow) {
     match.matchDate,
     match.startTime,
     asMatchDuration(match.tournament.durationMinutes),
-    asLiveMargin(match.tournament.liveMarginMinutes),
+    LIVE_MARGIN_MINUTES,
   );
 }
 
@@ -270,7 +274,7 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
       match.matchDate,
       match.startTime,
       asMatchDuration(match.tournament.durationMinutes),
-      asLiveMargin(match.tournament.liveMarginMinutes),
+      LIVE_MARGIN_MINUTES,
       now,
     );
     if (phase !== "live" && phase !== "finished") return [];
@@ -279,7 +283,7 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
     const window = liveWindow(match);
     const penaltiesHome = score(match.penaltiesHome);
     const penaltiesAway = score(match.penaltiesAway);
-    const venue = match.venue.trim();
+    const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
     const view: LiveMatchView = {
       id: match.id,
       href: matchPath(match.id),

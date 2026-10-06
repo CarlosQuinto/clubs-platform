@@ -44,12 +44,14 @@ import { platformStoragePath } from "../../../shared/paths";
 import { saveMatchSchedule } from "../../../domains/matches/matchCommands";
 import { sendCourtBookingNotice } from "../../../infrastructure/functions/callables";
 import {
+  courtLocation,
   courtName,
   courtNote,
   emailText,
   holdName,
   holdNote,
   isBookingEmail,
+  isCourtLocation,
   isCourtName,
   isCourtNote,
   isHoldName,
@@ -76,6 +78,7 @@ import {
 } from "../../../shared/ui";
 
 const COURT_TEXT_LIMIT = 15;
+const COURT_LOCATION_LIMIT = 60;
 
 const PHOTO_ERROR = "La foto tiene que ser JPG, PNG o WEBP de hasta 5 MB.";
 
@@ -86,11 +89,13 @@ function missingHint(missing: string[]) {
   return `Escribe ${missing.slice(0, -1).join(", ")} y ${last}.`;
 }
 
-function courtSaveHint(name: string, description: string, rate: string) {
+function courtSaveHint(name: string, description: string, rate: string, location: string) {
   const missing: string[] = [];
   if (!isCourtName(name)) missing.push("el nombre (3 a 15)");
   if (!isCourtNote(description)) missing.push("la descripción (3 a 15)");
   if (!isMoneyText(rate)) missing.push("el costo por hora");
+  // La ubicación es opcional: solo avisa si se escribió algo demasiado corto.
+  if (!isCourtLocation(location)) missing.push("la ubicación (3 a 60)");
   return missingHint(missing);
 }
 
@@ -224,6 +229,7 @@ export default function CourtsAdmin() {
   const [courtModal, setCourtModal] = useState<null | "add" | Court>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
+  const [draftLocation, setDraftLocation] = useState("");
   const [draftRate, setDraftRate] = useState("");
   const [draftFootball, setDraftFootball] = useState(true);
   const [draftImageUrl, setDraftImageUrl] = useState("");
@@ -272,6 +278,7 @@ export default function CourtsAdmin() {
   const openAddCourt = () => {
     setDraftName("");
     setDraftDescription("");
+    setDraftLocation("");
     setDraftRate("");
     setDraftFootball(true);
     setDraftError("");
@@ -282,6 +289,7 @@ export default function CourtsAdmin() {
   const openEditCourt = (court: Court) => {
     setDraftName(courtName(court.name));
     setDraftDescription(courtNote(court.description));
+    setDraftLocation(courtLocation(court.location));
     setDraftRate(moneyText(String(court.hourlyRate)));
     setDraftFootball(court.football !== false);
     setDraftError("");
@@ -315,9 +323,10 @@ export default function CourtsAdmin() {
 
   const saveCourtModal = async () => {
     if (savingCourt.current) return;
-    if (courtSaveHint(draftName, draftDescription, draftRate) || draftPhotoError) return;
+    if (courtSaveHint(draftName, draftDescription, draftRate, draftLocation) || draftPhotoError) return;
     const cleanName = draftName.trim();
     const cleanDescription = draftDescription.trim();
+    const cleanLocation = draftLocation.trim();
     const hourlyRate = Math.round(Number(draftRate) * 100) / 100;
     savingCourt.current = true;
     setDraftBusy(true);
@@ -337,6 +346,7 @@ export default function CourtsAdmin() {
           id: crypto.randomUUID(),
           name: cleanName,
           description: cleanDescription,
+          location: cleanLocation,
           hourlyRate,
           imageUrl,
           football: draftFootball,
@@ -348,6 +358,7 @@ export default function CourtsAdmin() {
           id: courtModal.id,
           name: cleanName,
           description: cleanDescription,
+          location: cleanLocation,
           hourlyRate,
           imageUrl,
           football: draftFootball,
@@ -445,6 +456,7 @@ export default function CourtsAdmin() {
         editing={courtModal && courtModal !== "add" ? courtModal : null}
         name={draftName}
         description={draftDescription}
+        location={draftLocation}
         rate={draftRate}
         football={draftFootball}
         preview={draftPreview}
@@ -457,6 +469,10 @@ export default function CourtsAdmin() {
         }}
         onDescription={(value) => {
           setDraftDescription(value);
+          setDraftError("");
+        }}
+        onLocation={(value) => {
+          setDraftLocation(value);
           setDraftError("");
         }}
         onRate={(value) => {
@@ -485,6 +501,7 @@ export default function CourtsAdmin() {
             id: courtModal.id,
             name: courtName(courtModal.name).trim(),
             description: courtNote(courtModal.description).trim(),
+            location: courtLocation(courtModal.location).trim(),
             hourlyRate: courtModal.hourlyRate,
             football: courtModal.football !== false,
             imageUrl: courtModal.imageUrl || "",
@@ -520,6 +537,7 @@ function CourtFormModal({
   editing,
   name,
   description,
+  location,
   rate,
   football,
   preview,
@@ -528,6 +546,7 @@ function CourtFormModal({
   error,
   onName,
   onDescription,
+  onLocation,
   onRate,
   onFootball,
   onPhoto,
@@ -541,6 +560,7 @@ function CourtFormModal({
   editing: Court | null;
   name: string;
   description: string;
+  location: string;
   rate: string;
   football: boolean;
   preview: string;
@@ -549,6 +569,7 @@ function CourtFormModal({
   error: string;
   onName: (value: string) => void;
   onDescription: (value: string) => void;
+  onLocation: (value: string) => void;
   onRate: (value: string) => void;
   onFootball: (value: boolean) => void;
   onPhoto: (file: File) => void;
@@ -562,8 +583,8 @@ function CourtFormModal({
   useModalLock(open ? onCancel : null);
   if (!open) return null;
 
-  const missing = courtSaveHint(name, description, rate);
-  const touched = Boolean(name || description || rate);
+  const missing = courtSaveHint(name, description, rate, location);
+  const touched = Boolean(name || description || rate || location);
   const saveHint = touched ? missing : "";
   const ready = !missing && !photoError && !busy;
 
@@ -635,6 +656,22 @@ function CourtFormModal({
                 onChange={(event) => onDescription(courtNote(event.target.value))}
               />
             </span>
+          </label>
+          <label className="court-form__label">
+            Ubicación
+            <span className="court-form__field">
+              <MapPin size={16} aria-hidden="true" />
+              <FormInput
+                value={location}
+                disabled={busy}
+                maxLength={COURT_LOCATION_LIMIT}
+                placeholder="Col. Centro, Calle 5 #12"
+                onChange={(event) => onLocation(courtLocation(event.target.value))}
+              />
+            </span>
+            <small className="court-form__help">
+              Opcional. Se muestra antes del nombre de la cancha en los partidos y en la renta.
+            </small>
           </label>
           <label className="court-form__label">
             Costo por hora

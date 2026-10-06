@@ -46,8 +46,11 @@ export async function upsertCourt(input: {
   imageUrl: string;
   sortOrder: number;
   active: boolean;
+  /** "" sin ubicación. */
+  location: string;
 }) {
-  const result = await saveCourt(dataConnect, { userId: sessionUserId(), ...input });
+  // SaveCourt valida al superadmin con auth.uid en el servidor; ya no recibe userId.
+  const result = await saveCourt(dataConnect, input);
   savedRow(result.data.court);
 }
 

@@ -3,6 +3,7 @@ export interface TournamentOptionView {
   label: string;
 }
 
+/** Tarjeta de próximo partido (portada y /partidos); trae lo que pide el formulario de programar. */
 export interface UpcomingMatchView {
   id: string;
   /** Página del partido. */
@@ -10,16 +11,23 @@ export interface UpcomingMatchView {
   isoDate: string;
   day: number;
   month: string;
-  year: number;
   dateLabel: string;
+  /** «HH:MM» guardado; "" si aún no tiene hora. */
+  time: string;
   timeLabel: string | null;
   venue: string | null;
+  homeClubId: string;
+  awayClubId: string;
   homeName: string;
   awayName: string;
   homeLogo: string | null;
   awayLogo: string | null;
-  subtitle: string;
-  courtId: string | null;
+  categoryName: string;
+  tournamentName: string;
+  /** "" sin cancha. */
+  courtId: string;
+  durationMinutes: number;
+  tournamentStartDate: string;
 }
 
 export interface MatchesPageModel {

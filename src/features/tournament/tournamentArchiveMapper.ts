@@ -5,10 +5,8 @@ import { whatsappUrl } from "../../domains/platform/social";
 import { formatCalendarDate } from "./tournamentMapper";
 import type {
   TournamentArchiveView,
-  TournamentCardView,
+  TournamentTileView,
 } from "./tournamentArchiveViewState";
-
-const TONE_COUNT = 4;
 
 const FOOTBALL_LABEL: Record<FootballType, string> = {
   [FootballType.FUT_7]: "Fútbol 7",
@@ -21,7 +19,7 @@ const JOIN_TEXT =
 
 type TournamentRow = TournamentArchiveData["tournaments"][number];
 
-function byName(a: TournamentCardView, b: TournamentCardView) {
+function byName(a: TournamentTileView, b: TournamentTileView) {
   return a.name.localeCompare(b.name, "es");
 }
 
@@ -39,11 +37,13 @@ function phaseOf(tournament: TournamentRow, today: string) {
   );
 }
 
-function toCard(tournament: TournamentRow, joinBase: string, today: string): TournamentCardView {
+function toCard(
+  tournament: TournamentRow,
+  joinBase: string,
+  phase: TournamentTileView["phase"],
+): TournamentTileView {
   const clubs = clubCount(tournament.tournamentClubs_on_tournament);
-  const clubLabel = clubs === 1 ? "1 club" : `${clubs} clubes`;
   const begins = formatCalendarDate(tournament.startDate || tournament.season.startDate);
-  const upcoming = phaseOf(tournament, today) === "upcoming";
   const joinHref =
     tournament.status === TournamentStatus.FINISHED || !joinBase
       ? null
@@ -55,15 +55,17 @@ function toCard(tournament: TournamentRow, joinBase: string, today: string): Tou
     id: tournament.id,
     href: `/torneos/${tournament.id}`,
     name: tournament.name,
+    phase,
+    playedMatches: clubCount(tournament.matches_on_tournament),
     categoryName: tournament.category.name,
-    toneIndex: (Math.max(1, tournament.category.sortOrder) - 1) % TONE_COUNT,
-    meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType], clubLabel].join(
-      " · ",
-    ),
-    startLabel: upcoming && begins ? `Inicia ${begins}` : null,
+    meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType]]
+      .filter((part) => part.trim())
+      .join(" · "),
+    startLabel: begins ? (phase === "upcoming" ? "Inicia" : "Inició") : null,
+    startDate: begins || null,
+    clubsLabel: clubs === 1 ? "1 equipo" : `${clubs} equipos`,
     prize: (tournament.prize ?? "").trim(),
     joinHref,
-    playedMatches: clubCount(tournament.matches_on_tournament),
   };
 }
 
@@ -72,21 +74,20 @@ export function toTournamentArchive(
   today = todayIso(),
 ): TournamentArchiveView {
   const joinBase = data.platformSettings?.whatsapp?.trim() || "";
-  const active: TournamentCardView[] = [];
-  const upcoming: TournamentCardView[] = [];
-  const finished: TournamentCardView[] = [];
+  const active: TournamentTileView[] = [];
+  const upcoming: TournamentTileView[] = [];
+  const finished: TournamentTileView[] = [];
   const finishedSeasons: string[] = [];
 
   for (const tournament of data.tournaments) {
-    const card = toCard(tournament, joinBase, today);
     const phase = phaseOf(tournament, today);
     if (!tournament.season.active || phase === "finished") {
-      finished.push(card);
+      finished.push(toCard(tournament, joinBase, "finished"));
       finishedSeasons.push(tournament.season.name);
       continue;
     }
-    if (phase === "upcoming") upcoming.push(card);
-    else active.push(card);
+    if (phase === "upcoming") upcoming.push(toCard(tournament, joinBase, "upcoming"));
+    else active.push(toCard(tournament, joinBase, "active"));
   }
 
   active.sort(byName);

@@ -9,6 +9,11 @@ import { asCourtSlot } from "../../shared/types";
 
 const TIME_RE = /^(\d{2}):(\d{2})$/;
 
+/** Sede de un partido o etiqueta de una cancha: la ubicación antes del nombre («Col. Centro · Futbol 1»). */
+export function courtPlaceLabel(location: string | null | undefined, name: string | null | undefined) {
+  return [location?.trim(), name?.trim()].filter(Boolean).join(" · ");
+}
+
 export function toMinutes(value: string): number | null {
   const match = TIME_RE.exec(value.trim());
   if (!match) return null;
@@ -297,7 +302,7 @@ export function suggestSlots(opts: {
         date,
         time: fromMinutes(start),
         courtId: court.id,
-        courtName: court.name,
+        courtName: courtPlaceLabel(court.location, court.name),
       });
       if (found.length === 3) break;
     }

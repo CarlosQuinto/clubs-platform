@@ -1,12 +1,14 @@
 import { type TeamsPageData } from "../../infrastructure/dataconnect";
-import type { StandingRowView } from "../tournament/tournamentViewState";
 import type {
   ClubCardView,
+  TeamStandingView,
   TeamsPageModel,
   TeamsScopeView,
 } from "./teamsViewState";
 
 type ClubSide = { name: string; slug: string };
+
+const INITIALS_SKIP = new Set(["de", "del", "la", "las", "los", "el", "y"]);
 
 function fold(value: string) {
   return value
@@ -40,6 +42,47 @@ export function clubsMatching(clubs: ClubCardView[], key: string) {
   return clubs.filter((club) => fold(club.name).includes(key));
 }
 
+/** Siglas del escudo cuando el club no tiene logo: «Halcones FC» → HFC. */
+export function clubInitials(name: string) {
+  const words = fold(name)
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const main = words.filter((word) => !INITIALS_SKIP.has(word));
+  const parts = main.length ? main : words;
+  let initials = "";
+  if (parts.length >= 3) initials = parts.slice(0, 3).map((word) => word[0]).join("");
+  else if (parts.length === 2) initials = parts[0][0] + parts[1].slice(0, 2);
+  else if (parts.length === 1) initials = parts[0].slice(0, 3);
+  return initials.toUpperCase() || "?";
+}
+
+/** 10 dígitos → «782 123 4567»; cualquier otro largo se muestra tal cual. */
+export function phoneLabel(phone: string) {
+  const digits = phone.replace(/\s+/g, "");
+  const local = /^[0-9]{10}$/.test(digits) ? digits : null;
+  return local ? `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}` : phone;
+}
+
+export function toClubCard(club: {
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  presidentPhone: string;
+  locality: string;
+}): ClubCardView {
+  const phone = club.presidentPhone.trim();
+  return {
+    href: hrefFor(club.slug) || "/",
+    name: club.name,
+    initials: clubInitials(club.name),
+    locality: club.locality,
+    logoUrl: club.logoUrl?.trim() || null,
+    phoneLabel: phone ? phoneLabel(phone) : null,
+    phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
+  };
+}
+
 function textOf(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -52,23 +95,25 @@ export function toSearchClubs(rows: unknown[] | null | undefined): ClubCardView[
     const name = textOf(record.name);
     const slug = textOf(record.slug);
     if (!name) return [];
-    const phone = textOf(record.presidentPhone);
     const locality = textOf(record.localityName) || textOf(record.location) || (slug ? `/${slug}` : "");
-    return [{
-      href: hrefFor(slug) || "/",
+    return [toClubCard({
       name,
+      slug,
+      logoUrl: textOf(record.logoUrl),
+      presidentPhone: textOf(record.presidentPhone),
       locality,
-      logoUrl: textOf(record.logoUrl) || null,
-      phoneLabel: phone ? `Presidente: ${phone}` : null,
-      phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
-    }];
+    })];
   });
 }
 
-function emptyStanding(club: ClubSide): Omit<StandingRowView, "rank"> {
+function emptyStanding(club: ClubSide, logoUrl: string | null): Omit<TeamStandingView, "rank"> {
+  const clubName = club.name || "Club";
   return {
-    clubName: club.name || "Club",
+    clubName,
     clubHref: hrefFor(club.slug),
+    clubSlug: club.slug || null,
+    logoUrl,
+    initials: clubInitials(clubName),
     played: 0,
     won: 0,
     drawn: 0,
@@ -80,12 +125,16 @@ function emptyStanding(club: ClubSide): Omit<StandingRowView, "rank"> {
   };
 }
 
-function standingsFor(data: TeamsPageData, scope: TeamsScopeView): StandingRowView[] {
-  const rows = new Map<string, Omit<StandingRowView, "rank">>();
+function standingsFor(
+  data: TeamsPageData,
+  logos: Map<string, string>,
+  scope: TeamsScopeView,
+): TeamStandingView[] {
+  const rows = new Map<string, Omit<TeamStandingView, "rank">>();
   const ensure = (club: ClubSide) => {
     const key = club.slug || club.name;
     if (!key) return undefined;
-    if (!rows.has(key)) rows.set(key, emptyStanding(club));
+    if (!rows.has(key)) rows.set(key, emptyStanding(club, logos.get(club.slug) || null));
     return rows.get(key);
   };
 
@@ -144,25 +193,27 @@ export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
     (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "es"),
   );
   const activeSeason = data.seasons.find((season) => season.active);
+  const logos = new Map<string, string>();
+  for (const club of data.clubs) {
+    const logo = club.logoUrl?.trim();
+    if (club.slug && logo) logos.set(club.slug, logo);
+  }
   return {
-    clubs: data.clubs.map((club) => {
-      const phone = club.presidentPhone.trim();
-      const locality = club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`;
-      return {
-        href: hrefFor(club.slug) || "/",
+    clubs: data.clubs.map((club) =>
+      toClubCard({
         name: club.name,
-        locality,
-        logoUrl: club.logoUrl?.trim() || null,
-        phoneLabel: phone ? `Presidente: ${phone}` : null,
-        phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
-      };
-    }),
+        slug: club.slug,
+        logoUrl: club.logoUrl,
+        presidentPhone: club.presidentPhone,
+        locality: club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`,
+      }),
+    ),
     seasons: seasons.map((season) => ({ id: season.id, name: season.name })),
     categories: categories.map((category) => ({ id: category.id, name: category.name })),
     defaultScope: {
       seasonId: activeSeason?.id || seasons[0]?.id || "",
       categoryId: categories[0]?.id || "",
     },
-    standingsFor: (scope) => standingsFor(data, scope),
+    standingsFor: (scope) => standingsFor(data, logos, scope),
   };
 }

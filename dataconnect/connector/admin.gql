@@ -213,6 +213,7 @@ query AdminCourts($from: Date @retired) @auth(level: USER) {
     id
     name
     description
+    location
     hourlyRate
     active
     sortOrder
@@ -797,7 +798,6 @@ mutation CreateTournament(
   $footballType: String!
   $durationMinutes: Int!
   $startDate: Date!
-  $description: String!
   $prize: String! = ""
 ) @auth(level: USER) {
   query {
@@ -805,8 +805,8 @@ mutation CreateTournament(
       user { id }
     }
   }
-  # El INSERT del torneo ya usa $1–$9: el premio se valida aquí (sin grupo, el torneo falla
-  # por la llave foránea antes de escribirse) y se guarda en el último paso.
+  # El premio se valida aquí (sin grupo, el torneo falla por la llave foránea antes de
+  # escribirse) y se guarda en el último paso.
   # Misma regla que isTournamentPrize() en src/shared/textLimits.ts.
   grouped: _executeReturningFirst(
     sql: """
@@ -830,7 +830,7 @@ mutation CreateTournament(
     sql: """
       INSERT INTO tournaments (
         id, name, season_id, category_id, group_id, status,
-        legs, football_type, duration_minutes, start_date, description, created_at
+        legs, football_type, duration_minutes, start_date, created_at
       )
       SELECT
         $1, btrim($2), $3, $4, $5, 'UPCOMING'::tournament_status,
@@ -840,17 +840,12 @@ mutation CreateTournament(
           WHEN 'FUT_9' THEN 'FUT_9'::football_type
           WHEN 'FUT_11' THEN 'FUT_11'::football_type
         END,
-        $7, $8::date, btrim($9), CURRENT_TIMESTAMP
+        $7, $8::date, CURRENT_TIMESTAMP
       WHERE char_length(btrim($2)) BETWEEN 3 AND 50
         AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
         AND $6 IN ('FUT_7', 'FUT_9', 'FUT_11')
         AND $7 IN (30, 60, 90, 120)
         AND $8 IS NOT NULL
-        AND (
-          btrim($9) = ''
-          OR btrim($9) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,¡!¿?-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,¡!¿?-]+)*$'
-        )
-        AND char_length(btrim($9)) <= 100
         AND EXISTS (SELECT 1 FROM categories WHERE id = $4)
         AND EXISTS (
           SELECT 1 FROM seasons s
@@ -869,7 +864,6 @@ mutation CreateTournament(
       $footballType
       $durationMinutes
       $startDate
-      $description
     ]
   )
   prized: _executeReturningFirst(
@@ -1075,8 +1069,10 @@ mutation SaveCourtWindow(
   )
 }
 
+# El superadmin se valida en el paso query con auth.uid (un @check fallido detiene la mutación):
+# así el SQL no gasta un parámetro en el uid y caben los nueve campos ($10 se parsea mal).
 mutation SaveCourt(
-  $userId: String! = ""
+  $userId: String @retired
   $id: String!
   $name: String!
   $description: String!
@@ -1085,16 +1081,17 @@ mutation SaveCourt(
   $imageUrl: String!
   $sortOrder: Int!
   $active: Boolean!
+  $location: String! = ""
 ) @auth(level: USER) {
   query {
-    platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
+    platformAdmin(key: { userId_expr: "auth.uid" }) @check(message: "No se pudo guardar.") {
       user { id }
     }
   }
   court: _executeReturningFirst(
     sql: """
       INSERT INTO courts (
-        id, name, description, hourly_rate, football, image_url, sort_order, active
+        id, name, description, hourly_rate, football, image_url, sort_order, active, location
       )
       SELECT
         $1,
@@ -1104,7 +1101,8 @@ mutation SaveCourt(
         $5,
         NULLIF(btrim($6), ''),
         $7,
-        $8
+        $8,
+        btrim($9)
       WHERE char_length(btrim($2)) BETWEEN 3 AND 15
         AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
         AND char_length(btrim($3)) BETWEEN 3 AND 15
@@ -1116,7 +1114,13 @@ mutation SaveCourt(
           OR (char_length($6) <= 2048 AND $6 ~ '^https://[^[:space:]<>"'']+$')
         )
         AND $7 BETWEEN 0 AND 100000
-        AND EXISTS (SELECT 1 FROM platform_admins WHERE user_id = $9)
+        AND (
+          btrim($9) = ''
+          OR (
+            char_length(btrim($9)) BETWEEN 3 AND 60
+            AND btrim($9) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)*$'
+          )
+        )
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -1124,7 +1128,8 @@ mutation SaveCourt(
         football = EXCLUDED.football,
         image_url = EXCLUDED.image_url,
         sort_order = EXCLUDED.sort_order,
-        active = EXCLUDED.active
+        active = EXCLUDED.active,
+        location = EXCLUDED.location
       RETURNING id
     """
     params: [
@@ -1136,7 +1141,7 @@ mutation SaveCourt(
       $imageUrl
       $sortOrder
       $active
-      { _expr: "auth.uid" }
+      $location
     ]
   )
 }

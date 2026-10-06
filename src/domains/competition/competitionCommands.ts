@@ -51,7 +51,6 @@ export async function addTournament(input: {
   footballType: string;
   durationMinutes: number;
   startDate: string;
-  description: string;
   prize: string;
 }) {
   const result = await createTournament(dataConnect, { userId: sessionUserId(), id: crypto.randomUUID(), ...input });

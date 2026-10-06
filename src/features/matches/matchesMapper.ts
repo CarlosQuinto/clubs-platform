@@ -1,6 +1,8 @@
 import { type MatchesPageData, TournamentStatus } from "../../infrastructure/dataconnect";
+import { courtPlaceLabel } from "../../domains/courts/courts";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
+import { asMatchDuration } from "../../shared/types";
 import type { MatchesPageModel, UpcomingMatchView } from "./matchesViewState";
 
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
@@ -18,7 +20,7 @@ function fold(value: string) {
 function dateParts(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return null;
-  return { day, month: MONTHS[month - 1] || "", year };
+  return { day, month: MONTHS[month - 1] || "" };
 }
 
 export function toMatchesPage(data: MatchesPageData, today: string): MatchesPageModel {
@@ -41,7 +43,8 @@ export function toMatchesPage(data: MatchesPageData, today: string): MatchesPage
     if (!LIVE.has(match.tournament.status) || !liveIds.has(match.tournament.id)) return [];
     const date = dateParts(match.matchDate);
     if (!date) return [];
-    const venue = match.venue.trim();
+    // La cancha enlazada manda (ubicación · nombre); `venue` es la copia guardada al programar.
+    const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
     const card: UpcomingMatchView & { tournamentId: string } = {
       id: match.id,
       tournamentId: match.tournament.id,
@@ -49,16 +52,21 @@ export function toMatchesPage(data: MatchesPageData, today: string): MatchesPage
       isoDate: match.matchDate,
       day: date.day,
       month: date.month,
-      year: date.year,
       dateLabel: formatFriendlyDate(match.matchDate),
+      time: match.startTime || "",
       timeLabel: match.startTime ? formatFriendlyTime(match.startTime) : null,
       venue: venue || null,
+      homeClubId: match.homeClub.id,
+      awayClubId: match.awayClub.id,
       homeName: match.homeClub.name,
       awayName: match.awayClub.name,
       homeLogo: match.homeClub.logoUrl?.trim() || null,
       awayLogo: match.awayClub.logoUrl?.trim() || null,
-      subtitle: [match.tournament.category.name, match.tournament.name].filter(Boolean).join(" · "),
-      courtId: match.court?.id || null,
+      categoryName: match.tournament.category.name,
+      tournamentName: match.tournament.name,
+      courtId: match.court?.id || "",
+      durationMinutes: asMatchDuration(match.tournament.durationMinutes),
+      tournamentStartDate: match.tournament.startDate || "",
     };
     return [card];
   });

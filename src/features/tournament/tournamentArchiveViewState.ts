@@ -1,18 +1,21 @@
-export interface TournamentCardView {
+/** Tarjeta de torneo «Carbón y Oro»: la usan la portada y /torneos. */
+export interface TournamentTileView {
   id: string;
   href: string;
   name: string;
+  phase: "active" | "upcoming" | "finished";
+  playedMatches: number;
   categoryName: string;
-  toneIndex: number;
   meta: string;
   startLabel: string | null;
+  startDate: string | null;
+  clubsLabel: string;
   prize: string;
   joinHref: string | null;
-  playedMatches: number;
 }
 
 export interface TournamentArchiveView {
-  active: TournamentCardView[];
-  upcoming: TournamentCardView[];
-  finished: TournamentCardView[];
+  active: TournamentTileView[];
+  upcoming: TournamentTileView[];
+  finished: TournamentTileView[];
 }

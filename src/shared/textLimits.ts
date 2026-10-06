@@ -11,9 +11,6 @@ const CELL_PHONE_RE = /^\+?[0-9]{10,15}$/;
 const REGISTER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/;
 const SEASON_NAME_RE = /^[0-9]+(?:-[0-9]+)*$/;
 const SPACED_LABEL_RE = new RegExp(`^[${LATIN_LETTERS}0-9]+(?: [${LATIN_LETTERS}0-9]+)*$`);
-const TOURNAMENT_NOTE_RE = new RegExp(
-  `^[${LATIN_LETTERS}0-9.,¡!¿?-]+(?: [${LATIN_LETTERS}0-9.,¡!¿?-]+)*$`,
-);
 const TOURNAMENT_PRIZE_RE = new RegExp(
   `^[${LATIN_LETTERS}0-9.,+$/()-]+(?: [${LATIN_LETTERS}0-9.,+$/()-]+)*$`,
 );
@@ -55,18 +52,6 @@ export function isCategoryName(value: string) {
   return isSpacedLabel(value, 3, 40);
 }
 
-export function tournamentNote(value: string, max = 100) {
-  return singleSpaces(
-    value.replace(new RegExp(`[^${LATIN_LETTERS}0-9.,¡!¿?\\- ]`, "g"), ""),
-  ).slice(0, max);
-}
-
-export function isTournamentNote(value: string) {
-  const clean = value.trim();
-  if (!clean) return true;
-  return clean.length <= 100 && TOURNAMENT_NOTE_RE.test(clean);
-}
-
 /** Premio al campeón: opcional, hasta 60 caracteres («$25,000 MXN», «Trofeo + uniformes»). */
 export function tournamentPrize(value: string, max = 60) {
   return singleSpaces(
@@ -97,6 +82,19 @@ export function courtNote(value: string, max = 15) {
 export function isCourtNote(value: string) {
   const clean = value.trim();
   return clean.length >= 3 && clean.length <= 15 && COURT_NOTE_RE.test(clean);
+}
+
+const COURT_LOCATION_RE = new RegExp(`^[${LATIN_LETTERS}0-9.,#/-]+(?: [${LATIN_LETTERS}0-9.,#/-]+)*$`);
+
+/** Ubicación de la cancha: opcional, 3 a 60 caracteres («Col. Centro, Calle 5 #12»). */
+export function courtLocation(value: string, max = 60) {
+  return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9.,#/\\- ]`, "g"), "")).slice(0, max);
+}
+
+export function isCourtLocation(value: string) {
+  const clean = value.trim();
+  if (!clean) return true;
+  return clean.length >= 3 && clean.length <= 60 && COURT_LOCATION_RE.test(clean);
 }
 
 /** Costo en texto plano: dígitos y un punto, 8 enteros y 2 decimales como máximo. */

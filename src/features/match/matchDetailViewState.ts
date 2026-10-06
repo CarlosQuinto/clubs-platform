@@ -67,6 +67,8 @@ export interface SquadPlayerView {
   id: string;
   name: string;
   shirtNumber: string | null;
+  /** Posición registrada en la plantilla («Portero», «Defensa»…); vacío si no tiene. */
+  position: string;
   goals: number;
   yellow: number;
   red: number;
@@ -83,6 +85,8 @@ export interface TeamLineupView {
   bench: SquadPlayerView[];
   /** true si `bench` es la plantilla completa porque no hay convocados ni alineación. */
   benchIsSquad: boolean;
+  /** Director técnico (jugador marcado como DT en la plantilla); null si no hay. */
+  coach: string | null;
 }
 
 export interface StatRowView {
@@ -133,6 +137,12 @@ export interface FormPillView {
 export interface StandingSummaryView {
   /** «3.º de 10 · 12 pts»; null si aún no juega. */
   label: string | null;
+  /** «3.º de 10»; null si aún no juega. */
+  rankLabel: string | null;
+  /** Puntos acumulados; null si aún no juega. */
+  points: number | null;
+  /** Desglose PJ · G · E · P · GF · GC · DG en orden; vacío si aún no juega. */
+  breakdown: { label: string; value: number }[];
 }
 
 export interface HeadToHeadItemView {

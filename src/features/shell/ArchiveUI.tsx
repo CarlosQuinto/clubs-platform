@@ -2,10 +2,6 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { C } from "../../shared/ui";
 
-export function TournamentGrid({ children }: { children: React.ReactNode }) {
-  return <div className="tour-grid">{children}</div>;
-}
-
 export function ArchiveSection({
   title,
   count,

@@ -12,20 +12,15 @@ import {
   CalendarDays,
   Crown,
   MapPin,
-  Medal,
   Megaphone,
   Pencil,
   Radio,
   Shield,
-  Trash2,
   Trophy,
-  Users,
 } from "lucide-react";
-import { useTournamentEdit } from "../tournament/TournamentEditModal";
-import ConfirmModal from "../../shared/ConfirmModal";
+import TournamentTile from "../tournament/TournamentTile";
 import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
 import { C, PrimaryButton, RADIUS } from "../../shared/ui";
-import { dataConnect, deleteUnplayedTournament } from "../../infrastructure/dataconnect";
 import { useAuth } from "../../domains/auth/AuthContext";
 import {
   DEFAULT_CLUB_LOGO,
@@ -38,10 +33,11 @@ import { useLiveMatches } from "./useLiveMatches";
 import type {
   HomeAdView,
   HomeHeroView,
-  HomeMatchView,
   HomeTournamentCard,
   LiveMatchView,
 } from "./homeViewState";
+import FixtureCard from "../matches/FixtureCard";
+import type { UpcomingMatchView } from "../matches/matchesViewState";
 
 const MATCH_PAGE = 6;
 const DESKTOP_QUERY = "(min-width: 900px)";
@@ -98,6 +94,13 @@ export default function HomePageView() {
   const shown = desktop ? matches : matches.slice(0, MATCH_PAGE);
   const rotate = desktop && !reduceMotion && shown.length > MATCH_PAGE;
   const unclaimed = platformUnclaimed === true;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const fixtures: FixtureActions = {
+    admin: isSuperAdmin,
+    editingId,
+    onEdit: setEditingId,
+    onSaved: home.onRefresh,
+  };
 
   const claim = async () => {
     if (
@@ -191,9 +194,9 @@ export default function HomePageView() {
           ) : shown.length === 0 ? (
             <Empty>No hay partidos próximos en torneos vigentes.</Empty>
           ) : rotate ? (
-            <MatchRotator matches={shown} />
+            <MatchRotator matches={shown} actions={fixtures} />
           ) : (
-            <MatchGrid matches={shown} />
+            <MatchGrid matches={shown} actions={fixtures} />
           )}
         </Section>
 
@@ -411,9 +414,17 @@ function TeamFace({ name, logo, role }: { name: string; logo: string | null; rol
   );
 }
 
-function MatchRotator({ matches }: { matches: HomeMatchView[] }) {
+interface FixtureActions {
+  admin: boolean;
+  /** Partido con el formulario de programar abierto; mientras haya uno, el rotador no avanza. */
+  editingId: string | null;
+  onEdit: (id: string | null) => void;
+  onSaved: () => void;
+}
+
+function MatchRotator({ matches, actions }: { matches: UpcomingMatchView[]; actions: FixtureActions }) {
   const pages = useMemo(() => {
-    const chunks: HomeMatchView[][] = [];
+    const chunks: UpcomingMatchView[][] = [];
     for (let i = 0; i < matches.length; i += MATCH_PAGE) chunks.push(matches.slice(i, i + MATCH_PAGE));
     return chunks;
   }, [matches]);
@@ -423,6 +434,8 @@ function MatchRotator({ matches }: { matches: HomeMatchView[] }) {
   phaseRef.current = phase;
   const sliding = useRef(false);
   const commitRef = useRef<() => void>(() => {});
+  const pausedRef = useRef(false);
+  pausedRef.current = actions.editingId != null;
 
   useEffect(() => {
     if (phase !== "armed") return;
@@ -444,7 +457,7 @@ function MatchRotator({ matches }: { matches: HomeMatchView[] }) {
       setIndex((current) => (current + 1) % pages.length);
     };
     const interval = window.setInterval(() => {
-      if (sliding.current || phaseRef.current !== "idle") return;
+      if (pausedRef.current || sliding.current || phaseRef.current !== "idle") return;
       sliding.current = true;
       setPhase("armed");
       fallback = window.setTimeout(commit, SLIDE_DURATION_MS + 120);
@@ -479,68 +492,38 @@ function MatchRotator({ matches }: { matches: HomeMatchView[] }) {
         onTransitionEnd={onTransitionEnd}
       >
         <div className="home-rotator__page">
-          <MatchGrid matches={current} />
+          <MatchGrid matches={current} actions={actions} />
         </div>
         <div className="home-rotator__page" aria-hidden={phase !== "sliding"}>
-          <MatchGrid matches={next} />
+          <MatchGrid matches={next} actions={actions} inert={phase !== "sliding"} />
         </div>
       </div>
     </div>
   );
 }
 
-function MatchGrid({ matches }: { matches: HomeMatchView[] }) {
+function MatchGrid({
+  matches,
+  actions,
+  inert = false,
+}: {
+  matches: UpcomingMatchView[];
+  actions: FixtureActions;
+  /** Página oculta del rotador: tarjetas sin formulario, para no duplicarlo. */
+  inert?: boolean;
+}) {
   return (
     <div className="home-grid">
       {matches.map((match) => (
-        <FixtureCard key={match.id} match={match} />
+        <FixtureCard
+          key={match.id}
+          match={match}
+          admin={actions.admin && !inert}
+          editing={actions.editingId === match.id}
+          onEdit={actions.onEdit}
+          onSaved={actions.onSaved}
+        />
       ))}
-    </div>
-  );
-}
-
-function FixtureCard({ match }: { match: HomeMatchView }) {
-  return (
-    <Link to={match.href} className="home-card home-fixture">
-      <div className="home-fixture__head">
-        <time className="home-fixture__date" dateTime={match.isoDate} aria-label={match.dateLabel}>
-          <span className="home-fixture__day">{match.day}</span>
-          <span className="home-fixture__month">{match.month}</span>
-        </time>
-        <div className="home-fixture__when">
-          <strong>{match.timeLabel}</strong>
-          <span>{match.venue || "Sede por definir"}</span>
-        </div>
-        {match.categoryName ? (
-          <span className="home-chip" title={match.categoryName}>
-            {match.categoryName}
-          </span>
-        ) : null}
-      </div>
-      <div className="home-fixture__teams">
-        <FixtureTeam name={match.homeName} logo={match.homeLogo} role="Local" />
-        <FixtureTeam name={match.awayName} logo={match.awayLogo} role="Visita" />
-      </div>
-      {match.tournamentName ? (
-        <div className="home-card__foot">
-          <Trophy size={14} aria-hidden />
-          <span>{match.tournamentName}</span>
-        </div>
-      ) : null}
-    </Link>
-  );
-}
-
-function FixtureTeam({ name, logo, role }: { name: string; logo: string | null; role: string }) {
-  return (
-    <div className="home-fixture__team">
-      <span className="home-crest">
-        <img src={logo || DEFAULT_CLUB_LOGO} alt="" />
-      </span>
-      <span className="home-fixture__name" title={name}>
-        {name}
-      </span>
-      <span className="home-fixture__role">{role}</span>
     </div>
   );
 }
@@ -606,136 +589,11 @@ function TournamentsSection({
       ) : (
         <div className="home-grid">
           {cards.map((card) => (
-            <TournamentCard key={card.href} card={card} admin={admin} onDeleted={onDeleted} />
+            <TournamentTile key={card.href} card={card} admin={admin} onDeleted={onDeleted} />
           ))}
         </div>
       )}
     </Section>
-  );
-}
-
-function TournamentCard({
-  card,
-  admin,
-  onDeleted,
-}: {
-  card: HomeTournamentCard;
-  admin: boolean;
-  onDeleted: () => void;
-}) {
-  const { openEdit } = useTournamentEdit();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const canDelete = admin && card.playedMatches === 0;
-
-  const confirmDelete = async () => {
-    try {
-      setBusy(true);
-      const result = await deleteUnplayedTournament(dataConnect, { id: card.id });
-      if (!result.data.tournament) {
-        window.alert("No se puede eliminar: ya tiene partidos jugados.");
-        setConfirmOpen(false);
-        return;
-      }
-      setConfirmOpen(false);
-      onDeleted();
-    } catch (err) {
-      console.error(err);
-      window.alert("No se pudo eliminar el torneo.");
-      setConfirmOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <article className="home-card home-tour">
-      <div className="home-tour__body">
-        <div className="home-tour__top">
-          {card.categoryName ? (
-            <span className="home-chip home-chip--round" title={card.categoryName}>
-              {card.categoryName}
-            </span>
-          ) : (
-            <span />
-          )}
-          <span className={`home-status ${card.phase === "active" ? "is-active" : "is-soon"}`}>
-            <span className="home-status__dot" aria-hidden />
-            {card.phase === "active" ? "En curso" : "Próximamente"}
-          </span>
-        </div>
-        <h3>
-          <Link to={card.href} onClick={markScrollTopAfterNav}>
-            {card.name}
-          </Link>
-        </h3>
-        {card.meta ? <p className="home-tour__meta">{card.meta}</p> : null}
-        {card.description ? <p className="home-tour__desc">{card.description}</p> : null}
-        <dl className="home-tour__facts">
-          {card.startLabel && card.startDate ? (
-            <div>
-              <dt>
-                <CalendarDays size={16} aria-hidden />
-                {card.startLabel}:
-              </dt>
-              <dd>{card.startDate}</dd>
-            </div>
-          ) : null}
-          <div>
-            <dt>
-              <Users size={16} aria-hidden />
-              Equipos inscritos:
-            </dt>
-            <dd>{card.clubsLabel}</dd>
-          </div>
-          {card.prize ? (
-            <div>
-              <dt>
-                <Medal size={16} aria-hidden />
-                Premio al campeón:
-              </dt>
-              <dd className="is-gold">{card.prize}</dd>
-            </div>
-          ) : null}
-        </dl>
-      </div>
-      {admin ? (
-        <div className="home-tour__admin">
-          <button type="button" onClick={() => openEdit(card.id)}>
-            <Pencil size={16} />
-            Editar
-          </button>
-          {canDelete ? (
-            <button type="button" className="is-danger" onClick={() => setConfirmOpen(true)}>
-              <Trash2 size={16} />
-              Eliminar
-            </button>
-          ) : null}
-        </div>
-      ) : card.joinHref ? (
-        <a className="home-btn home-btn--gold home-btn--block" href={card.joinHref} target="_blank" rel="noreferrer">
-          Quiero participar
-          <ArrowRight size={18} aria-hidden />
-        </a>
-      ) : (
-        <Link to={card.href} className="home-btn home-btn--outline home-btn--block" onClick={markScrollTopAfterNav}>
-          Ver torneo
-          <ArrowRight size={18} aria-hidden />
-        </Link>
-      )}
-      <ConfirmModal
-        open={confirmOpen}
-        title={`Eliminar ${card.name}`}
-        message={`Se eliminará ${card.name}. Esta acción no se puede deshacer.`}
-        confirmLabel="Eliminar"
-        danger
-        busy={busy}
-        onConfirm={() => void confirmDelete()}
-        onCancel={() => {
-          if (!busy) setConfirmOpen(false);
-        }}
-      />
-    </article>
   );
 }
 

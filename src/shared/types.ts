@@ -56,16 +56,10 @@ export interface Tournament {
    * Si falta, se asume 90.
    */
   durationMinutes?: MatchDurationMinutes;
-  /**
-   * Minutos que el partido sigue «En vivo» tras su hora de fin.
-   * Si falta, se asume 10.
-   */
-  liveMarginMinutes?: LiveMarginMinutes;
   /** Fecha de inicio (YYYY-MM-DD). Si falta, se usa la de la temporada. */
   startDate?: string;
   /** Posiciones finales al cerrar el torneo: posición (1, 2, 3...) → clubId. */
   podium?: Record<string, string>;
-  description?: string;
   /** Premio al campeón en texto libre. Vacío = sin premio. */
   prize?: string;
   /**
@@ -225,17 +219,6 @@ export function asMatchDuration(value: unknown): MatchDurationMinutes {
     : 60;
 }
 
-/** Minutos que un partido sigue «En vivo» en la portada tras su hora de fin. */
-export type LiveMarginMinutes = 0 | 3 | 5 | 10 | 15;
-
-export const LIVE_MARGINS: LiveMarginMinutes[] = [0, 3, 5, 10, 15];
-
-export function asLiveMargin(value: unknown): LiveMarginMinutes {
-  return value === 0 || value === 3 || value === 5 || value === 10 || value === 15
-    ? value
-    : 10;
-}
-
 export function asCourtSlot(value: unknown): CourtSlotMinutes {
   return value === 30 ? 30 : 60;
 }
@@ -244,6 +227,8 @@ export interface Court {
   id: string;
   name: string;
   description: string;
+  /** Dirección o referencia del campo; "" si no se capturó. */
+  location: string;
   hourlyRate: number;
   active: boolean;
   order: number;

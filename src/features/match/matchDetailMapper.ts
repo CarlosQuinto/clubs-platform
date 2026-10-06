@@ -1,6 +1,8 @@
 import type { MatchDetailData, MatchPreviewData } from "../../infrastructure/dataconnect";
+import { courtPlaceLabel } from "../../domains/courts/courts";
 import { formationNodes } from "../../domains/matches/formations";
 import {
+  LIVE_MARGIN_MINUTES,
   liveMatchWindow,
   liveMinuteLabel,
   matchPagePhase,
@@ -8,7 +10,7 @@ import {
 } from "../../domains/matches/liveMatchPhase";
 import { formatFriendlyDate, formatFriendlyTime, formatShortDate } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
-import { asLiveMargin, asMatchDuration } from "../../shared/types";
+import { asMatchDuration } from "../../shared/types";
 import type {
   FormPillView,
   FormResult,
@@ -67,7 +69,7 @@ function phaseOf(match: MatchRow, now: Date) {
       matchDate: match.matchDate,
       startTime: match.startTime,
       durationMinutes: asMatchDuration(match.tournament.durationMinutes),
-      marginMinutes: asLiveMargin(match.tournament.liveMarginMinutes),
+      marginMinutes: LIVE_MARGIN_MINUTES,
     },
     now,
   );
@@ -79,7 +81,7 @@ function kickoff(match: MatchRow) {
       match.matchDate || "",
       match.startTime || "",
       asMatchDuration(match.tournament.durationMinutes),
-      asLiveMargin(match.tournament.liveMarginMinutes),
+      LIVE_MARGIN_MINUTES,
     )?.start ?? null
   );
 }
@@ -92,7 +94,7 @@ export function shouldPoll(data: MatchDetailData | null, now: Date): boolean {
     match.matchDate || "",
     match.startTime || "",
     asMatchDuration(match.tournament.durationMinutes),
-    asLiveMargin(match.tournament.liveMarginMinutes),
+    LIVE_MARGIN_MINUTES,
   );
   if (!window) return false;
   const at = now.getTime();
@@ -197,6 +199,7 @@ function squadOf(players: PlayerRow[], tally: ReturnType<typeof tallies>): Squad
       id: player.id,
       name: player.name,
       shirtNumber: shirt(player.shirtNumber),
+      position: player.position?.trim() ?? "",
       goals: row.goals,
       yellow: row.yellow,
       red: row.red,
@@ -247,6 +250,7 @@ function lineupOf(
   }
   const called = players.filter((player) => attendeeIds.has(player.id));
   const pool = called.length > 0 ? called : players;
+  const coach = club.players_on_club.find((player) => player.isCoach && player.name.trim());
   return {
     side,
     name: club.name,
@@ -258,6 +262,7 @@ function lineupOf(
       tally,
     ),
     benchIsSquad: called.length === 0,
+    coach: coach ? coach.name.trim() : null,
   };
 }
 
@@ -302,7 +307,7 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
   const awayScore = showScore ? (count(match.awayScore) ?? goals.away) : null;
   const penaltiesHome = count(match.penaltiesHome);
   const penaltiesAway = count(match.penaltiesAway);
-  const venue = (match.court?.name || match.venue).trim();
+  const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
   const mvps = match.matchClubReports_on_match
     .map((row) => row.mvp?.name?.trim())
     .filter((name): name is string => Boolean(name));
@@ -412,8 +417,25 @@ function formOf(matches: PreviewMatch[], clubId: string, tournamentId: string): 
 
 function standingOf(rows: MatchPreviewData["tournamentStandings"], clubId: string): StandingSummaryView {
   const row = rows.find((item) => item.club?.id === clubId);
-  if (!row || !row.pj || row.standingRank == null) return { label: null };
-  return { label: `${row.standingRank}.º de ${rows.length} · ${row.pts ?? 0} pts` };
+  if (!row || !row.pj || row.standingRank == null) {
+    return { label: null, rankLabel: null, points: null, breakdown: [] };
+  }
+  const rankLabel = `${row.standingRank}.º de ${rows.length}`;
+  const points = row.pts ?? 0;
+  return {
+    label: `${rankLabel} · ${points} pts`,
+    rankLabel,
+    points,
+    breakdown: [
+      { label: "PJ", value: row.pj },
+      { label: "G", value: row.g ?? 0 },
+      { label: "E", value: row.e ?? 0 },
+      { label: "P", value: row.p ?? 0 },
+      { label: "GF", value: row.gf ?? 0 },
+      { label: "GC", value: row.gc ?? 0 },
+      { label: "DG", value: row.dg ?? 0 },
+    ],
+  };
 }
 
 export function toMatchPreview(

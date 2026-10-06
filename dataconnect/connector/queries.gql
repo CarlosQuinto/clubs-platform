@@ -142,7 +142,6 @@ query HomePage($today: Date!)
     footballType
     startDate
     prize
-    description
     season { name startDate }
     category { name sortOrder }
     tournamentClubs_on_tournament { _count }
@@ -163,12 +162,15 @@ query HomePage($today: Date!)
     matchDate
     startTime
     venue
-    homeClub { name logoUrl }
-    awayClub { name logoUrl }
+    homeClub { id name logoUrl }
+    awayClub { id name logoUrl }
+    court { id name location }
     tournament {
       id
       name
       status
+      durationMinutes
+      startDate
       category { name }
     }
   }
@@ -220,11 +222,11 @@ query LiveMatches($from: Date!, $to: Date!)
     walkover
     homeClub { name logoUrl }
     awayClub { name logoUrl }
+    court { name location }
     tournament {
       id
       name
       durationMinutes
-      liveMarginMinutes
       category { name }
     }
   }
@@ -263,13 +265,15 @@ query MatchesPage
     matchDate
     startTime
     venue
-    homeClub { name slug logoUrl }
-    awayClub { name slug logoUrl }
-    court { id name }
+    homeClub { id name slug logoUrl }
+    awayClub { id name slug logoUrl }
+    court { id name location }
     tournament {
       id
       name
       status
+      durationMinutes
+      startDate
       category { name }
     }
   }
@@ -379,7 +383,7 @@ query TournamentScreen($id: String!)
     walkover
     homeClub { id name slug logoUrl }
     awayClub { id name slug logoUrl }
-    court { id name }
+    court { id name location }
   }
   tournamentStandings(
     where: { tournament: { id: { eq: $id } } }
@@ -444,13 +448,12 @@ query MatchDetail($id: String!)
     penaltiesHome
     penaltiesAway
     walkover
-    court { name imageUrl }
+    court { name imageUrl location }
     tournament {
       id
       name
       footballType
       durationMinutes
-      liveMarginMinutes
       category { name }
     }
     homeClub {
@@ -462,6 +465,7 @@ query MatchDetail($id: String!)
         id
         name
         shirtNumber
+        position
         imageUrl
         isCoach
       }
@@ -475,6 +479,7 @@ query MatchDetail($id: String!)
         id
         name
         shirtNumber
+        position
         imageUrl
         isCoach
       }
@@ -521,6 +526,12 @@ query MatchPreview($tournamentId: String!, $homeClubId: String!, $awayClubId: St
   ) {
     standingRank
     pj
+    g
+    e
+    p
+    gf
+    gc
+    dg
     pts
     club { id }
   }
@@ -617,7 +628,7 @@ query MatchesByTournament($tournamentId: String!) @auth(level: PUBLIC) {
     walkover
     homeClub { id name slug }
     awayClub { id name slug }
-    court { id name }
+    court { id name location }
   }
 }
 
@@ -719,6 +730,7 @@ query CourtsPage($date: Date!)
     id
     name
     description
+    location
     hourlyRate
     imageUrl
   }

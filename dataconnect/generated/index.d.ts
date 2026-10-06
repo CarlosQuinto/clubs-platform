@@ -302,6 +302,7 @@ export interface AdminCourtsData {
     id: string;
     name: string;
     description: string;
+    location: string;
     hourlyRate: number;
     active: boolean;
     sortOrder: number;
@@ -990,6 +991,7 @@ export interface CourtsPageData {
     id: string;
     name: string;
     description: string;
+    location: string;
     hourlyRate: number;
     imageUrl?: string | null;
   } & Court_Key)[];
@@ -1119,7 +1121,6 @@ export interface CreateTournamentVariables {
   footballType: string;
   durationMinutes: number;
   startDate: DateString;
-  description: string;
   prize?: string;
 }
 
@@ -1408,7 +1409,6 @@ export interface HomePageData {
     footballType: FootballType;
     startDate?: DateString | null;
     prize: string;
-    description: string;
     season: {
       name: string;
       startDate?: DateString | null;
@@ -1430,17 +1430,26 @@ export interface HomePageData {
     startTime?: string | null;
     venue: string;
     homeClub: {
+      id: string;
       name: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     awayClub: {
+      id: string;
       name: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
+    court?: {
+      id: string;
+      name: string;
+      location: string;
+    } & Court_Key;
     tournament: {
       id: string;
       name: string;
       status: TournamentStatus;
+      durationMinutes: number;
+      startDate?: DateString | null;
       category: {
         name: string;
       };
@@ -1639,11 +1648,14 @@ export interface LiveMatchesData {
       name: string;
       logoUrl?: string | null;
     };
+    court?: {
+      name: string;
+      location: string;
+    };
     tournament: {
       id: string;
       name: string;
       durationMinutes: number;
-      liveMarginMinutes: number;
       category: {
         name: string;
       };
@@ -1714,13 +1726,13 @@ export interface MatchDetailData {
     court?: {
       name: string;
       imageUrl?: string | null;
+      location: string;
     };
     tournament: {
       id: string;
       name: string;
       footballType: FootballType;
       durationMinutes: number;
-      liveMarginMinutes: number;
       category: {
         name: string;
       };
@@ -1734,6 +1746,7 @@ export interface MatchDetailData {
         id: string;
         name: string;
         shirtNumber: string;
+        position: string;
         imageUrl: string;
         isCoach: boolean;
       } & Player_Key)[];
@@ -1747,6 +1760,7 @@ export interface MatchDetailData {
         id: string;
         name: string;
         shirtNumber: string;
+        position: string;
         imageUrl: string;
         isCoach: boolean;
       } & Player_Key)[];
@@ -1825,6 +1839,12 @@ export interface MatchPreviewData {
   tournamentStandings: ({
     standingRank?: number | null;
     pj?: number | null;
+    g?: number | null;
+    e?: number | null;
+    p?: number | null;
+    gf?: number | null;
+    gc?: number | null;
+    dg?: number | null;
     pts?: number | null;
     club?: {
       id: string;
@@ -1922,6 +1942,7 @@ export interface MatchSlotHintsData {
   courts: ({
     id: string;
     name: string;
+    location: string;
     sortOrder: number;
   } & Court_Key)[];
   clubs: ({
@@ -2030,6 +2051,7 @@ export interface MatchesByTournamentData {
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
   } & Match_Key)[];
 }
@@ -2052,23 +2074,28 @@ export interface MatchesPageData {
     startTime?: string | null;
     venue: string;
     homeClub: {
+      id: string;
       name: string;
       slug: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     awayClub: {
+      id: string;
       name: string;
       slug: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
     tournament: {
       id: string;
       name: string;
       status: TournamentStatus;
+      durationMinutes: number;
+      startDate?: DateString | null;
       category: {
         name: string;
       };
@@ -2492,7 +2519,6 @@ export interface SaveCourtSettingsVariables {
 }
 
 export interface SaveCourtVariables {
-  userId?: string;
   id: string;
   name: string;
   description: string;
@@ -2501,6 +2527,7 @@ export interface SaveCourtVariables {
   imageUrl: string;
   sortOrder: number;
   active: boolean;
+  location?: string;
 }
 
 export interface SaveCourtWindowData {
@@ -2999,7 +3026,6 @@ export interface TournamentEditorData {
     legs: number;
     footballType: FootballType;
     durationMinutes: number;
-    liveMarginMinutes: number;
     startDate?: DateString | null;
     prize: string;
     season: {
@@ -3127,6 +3153,7 @@ export interface TournamentScreenData {
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
   } & Match_Key)[];
   tournamentStandings: ({
@@ -3277,7 +3304,6 @@ export interface UpdateTournamentSettingsVariables {
   footballType: string;
   durationMinutes: number;
   startDate?: DateString | null;
-  liveMarginMinutes?: number | null;
   prize?: string | null;
 }
 

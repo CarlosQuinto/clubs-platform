@@ -98,6 +98,8 @@ export function toCourtsPage(data: CourtsPageData, selection: CourtsSelection): 
       id: court.id,
       name: court.name,
       description: court.description.trim() || null,
+      // `?? ""`: un conector desplegado antes de este cambio no devuelve la columna.
+      location: (court.location ?? "").trim() || null,
       priceLabel: `$${money(court.hourlyRate)} / hora`,
       imageUrl: court.imageUrl?.trim() || null,
       selected: court.id === selected?.id,

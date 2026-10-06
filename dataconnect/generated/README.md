@@ -1841,6 +1841,7 @@ export interface AdminCourtsData {
     id: string;
     name: string;
     description: string;
+    location: string;
     hourlyRate: number;
     active: boolean;
     sortOrder: number;
@@ -1985,7 +1986,6 @@ export interface TournamentEditorData {
     legs: number;
     footballType: FootballType;
     durationMinutes: number;
-    liveMarginMinutes: number;
     startDate?: DateString | null;
     prize: string;
     season: {
@@ -2247,6 +2247,7 @@ export interface MatchSlotHintsData {
   courts: ({
     id: string;
     name: string;
+    location: string;
     sortOrder: number;
   } & Court_Key)[];
   clubs: ({
@@ -3574,7 +3575,6 @@ export interface HomePageData {
     footballType: FootballType;
     startDate?: DateString | null;
     prize: string;
-    description: string;
     season: {
       name: string;
       startDate?: DateString | null;
@@ -3596,17 +3596,26 @@ export interface HomePageData {
     startTime?: string | null;
     venue: string;
     homeClub: {
+      id: string;
       name: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     awayClub: {
+      id: string;
       name: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
+    court?: {
+      id: string;
+      name: string;
+      location: string;
+    } & Court_Key;
     tournament: {
       id: string;
       name: string;
       status: TournamentStatus;
+      durationMinutes: number;
+      startDate?: DateString | null;
       category: {
         name: string;
       };
@@ -3771,11 +3780,14 @@ export interface LiveMatchesData {
       name: string;
       logoUrl?: string | null;
     };
+    court?: {
+      name: string;
+      location: string;
+    };
     tournament: {
       id: string;
       name: string;
       durationMinutes: number;
-      liveMarginMinutes: number;
       category: {
         name: string;
       };
@@ -3998,23 +4010,28 @@ export interface MatchesPageData {
     startTime?: string | null;
     venue: string;
     homeClub: {
+      id: string;
       name: string;
       slug: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     awayClub: {
+      id: string;
       name: string;
       slug: string;
       logoUrl?: string | null;
-    };
+    } & Club_Key;
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
     tournament: {
       id: string;
       name: string;
       status: TournamentStatus;
+      durationMinutes: number;
+      startDate?: DateString | null;
       category: {
         name: string;
       };
@@ -4702,6 +4719,7 @@ export interface TournamentScreenData {
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
   } & Match_Key)[];
   tournamentStandings: ({
@@ -5005,13 +5023,13 @@ export interface MatchDetailData {
     court?: {
       name: string;
       imageUrl?: string | null;
+      location: string;
     };
     tournament: {
       id: string;
       name: string;
       footballType: FootballType;
       durationMinutes: number;
-      liveMarginMinutes: number;
       category: {
         name: string;
       };
@@ -5025,6 +5043,7 @@ export interface MatchDetailData {
         id: string;
         name: string;
         shirtNumber: string;
+        position: string;
         imageUrl: string;
         isCoach: boolean;
       } & Player_Key)[];
@@ -5038,6 +5057,7 @@ export interface MatchDetailData {
         id: string;
         name: string;
         shirtNumber: string;
+        position: string;
         imageUrl: string;
         isCoach: boolean;
       } & Player_Key)[];
@@ -5207,6 +5227,12 @@ export interface MatchPreviewData {
   tournamentStandings: ({
     standingRank?: number | null;
     pj?: number | null;
+    g?: number | null;
+    e?: number | null;
+    p?: number | null;
+    gf?: number | null;
+    gc?: number | null;
+    dg?: number | null;
     pts?: number | null;
     club?: {
       id: string;
@@ -5643,6 +5669,7 @@ export interface MatchesByTournamentData {
     court?: {
       id: string;
       name: string;
+      location: string;
     } & Court_Key;
   } & Match_Key)[];
 }
@@ -6291,6 +6318,7 @@ export interface CourtsPageData {
     id: string;
     name: string;
     description: string;
+    location: string;
     hourlyRate: number;
     imageUrl?: string | null;
   } & Court_Key)[];
@@ -9599,7 +9627,6 @@ export interface CreateTournamentVariables {
   footballType: string;
   durationMinutes: number;
   startDate: DateString;
-  description: string;
   prize?: string;
 }
 ```
@@ -9638,7 +9665,6 @@ const createTournamentVars: CreateTournamentVariables = {
   footballType: ..., 
   durationMinutes: ..., 
   startDate: ..., 
-  description: ..., 
   prize: ..., // optional
 };
 
@@ -9646,7 +9672,7 @@ const createTournamentVars: CreateTournamentVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await createTournament(createTournamentVars);
 // Variables can be defined inline as well.
-const { data } = await createTournament({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., prize: ..., });
+const { data } = await createTournament({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9684,14 +9710,13 @@ const createTournamentVars: CreateTournamentVariables = {
   footballType: ..., 
   durationMinutes: ..., 
   startDate: ..., 
-  description: ..., 
   prize: ..., // optional
 };
 
 // Call the `createTournamentRef()` function to get a reference to the mutation.
 const ref = createTournamentRef(createTournamentVars);
 // Variables can be defined inline as well.
-const ref = createTournamentRef({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., prize: ..., });
+const ref = createTournamentRef({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -10589,7 +10614,6 @@ The `SaveCourt` mutation requires an argument of type `SaveCourtVariables`, whic
 
 ```typescript
 export interface SaveCourtVariables {
-  userId?: string;
   id: string;
   name: string;
   description: string;
@@ -10598,6 +10622,7 @@ export interface SaveCourtVariables {
   imageUrl: string;
   sortOrder: number;
   active: boolean;
+  location?: string;
 }
 ```
 ### Return Type
@@ -10624,7 +10649,6 @@ import { connectorConfig, saveCourt, SaveCourtVariables } from '@clubs-platform/
 
 // The `SaveCourt` mutation requires an argument of type `SaveCourtVariables`:
 const saveCourtVars: SaveCourtVariables = {
-  userId: ..., // optional
   id: ..., 
   name: ..., 
   description: ..., 
@@ -10633,13 +10657,14 @@ const saveCourtVars: SaveCourtVariables = {
   imageUrl: ..., 
   sortOrder: ..., 
   active: ..., 
+  location: ..., // optional
 };
 
 // Call the `saveCourt()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await saveCourt(saveCourtVars);
 // Variables can be defined inline as well.
-const { data } = await saveCourt({ userId: ..., id: ..., name: ..., description: ..., hourlyRate: ..., football: ..., imageUrl: ..., sortOrder: ..., active: ..., });
+const { data } = await saveCourt({ id: ..., name: ..., description: ..., hourlyRate: ..., football: ..., imageUrl: ..., sortOrder: ..., active: ..., location: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -10664,7 +10689,6 @@ import { connectorConfig, saveCourtRef, SaveCourtVariables } from '@clubs-platfo
 
 // The `SaveCourt` mutation requires an argument of type `SaveCourtVariables`:
 const saveCourtVars: SaveCourtVariables = {
-  userId: ..., // optional
   id: ..., 
   name: ..., 
   description: ..., 
@@ -10673,12 +10697,13 @@ const saveCourtVars: SaveCourtVariables = {
   imageUrl: ..., 
   sortOrder: ..., 
   active: ..., 
+  location: ..., // optional
 };
 
 // Call the `saveCourtRef()` function to get a reference to the mutation.
 const ref = saveCourtRef(saveCourtVars);
 // Variables can be defined inline as well.
-const ref = saveCourtRef({ userId: ..., id: ..., name: ..., description: ..., hourlyRate: ..., football: ..., imageUrl: ..., sortOrder: ..., active: ..., });
+const ref = saveCourtRef({ id: ..., name: ..., description: ..., hourlyRate: ..., football: ..., imageUrl: ..., sortOrder: ..., active: ..., location: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -15377,7 +15402,6 @@ export interface UpdateTournamentSettingsVariables {
   footballType: string;
   durationMinutes: number;
   startDate?: DateString | null;
-  liveMarginMinutes?: number | null;
   prize?: string | null;
 }
 ```
@@ -15411,7 +15435,6 @@ const updateTournamentSettingsVars: UpdateTournamentSettingsVariables = {
   footballType: ..., 
   durationMinutes: ..., 
   startDate: ..., // optional
-  liveMarginMinutes: ..., // optional
   prize: ..., // optional
 };
 
@@ -15419,7 +15442,7 @@ const updateTournamentSettingsVars: UpdateTournamentSettingsVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await updateTournamentSettings(updateTournamentSettingsVars);
 // Variables can be defined inline as well.
-const { data } = await updateTournamentSettings({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., prize: ..., });
+const { data } = await updateTournamentSettings({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -15450,14 +15473,13 @@ const updateTournamentSettingsVars: UpdateTournamentSettingsVariables = {
   footballType: ..., 
   durationMinutes: ..., 
   startDate: ..., // optional
-  liveMarginMinutes: ..., // optional
   prize: ..., // optional
 };
 
 // Call the `updateTournamentSettingsRef()` function to get a reference to the mutation.
 const ref = updateTournamentSettingsRef(updateTournamentSettingsVars);
 // Variables can be defined inline as well.
-const ref = updateTournamentSettingsRef({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., prize: ..., });
+const ref = updateTournamentSettingsRef({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);

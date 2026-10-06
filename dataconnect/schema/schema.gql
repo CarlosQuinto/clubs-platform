@@ -279,10 +279,7 @@ type Tournament @table(name: "tournaments", key: "id")
   legs: Int! @default(value: 2)
   footballType: FootballType! @default(value: FUT_11)
   durationMinutes: Int! @default(value: 90)
-  # Minutos que un partido sigue «En vivo» en la portada después de su hora de fin.
-  liveMarginMinutes: Int! @default(value: 10)
   startDate: Date
-  description: String! @default(value: "")
   # Premio al campeón en texto libre («$25,000 MXN», «Trofeo + uniformes»); vacío = sin premio.
   prize: String! @col(dataType: "varchar(60)") @default(value: "")
   createdAt: Timestamp! @default(expr: "request.time")
@@ -313,6 +310,8 @@ type Court @table(name: "courts", key: "id")
   id: String! @col(dataType: "varchar(128)")
   name: String! @col(dataType: "varchar(15)")
   description: String! @col(dataType: "varchar(15)") @default(value: "")
+  # Dirección o referencia del campo; opcional. Se muestra antes del nombre («Col. Centro · Futbol 1»).
+  location: String! @col(dataType: "varchar(60)") @default(value: "")
   hourlyRate: Float! @col(dataType: "numeric(12,2)") @default(value: 0)
   active: Boolean! @default(value: true)
   sortOrder: Int! @default(value: 0)

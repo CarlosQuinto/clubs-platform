@@ -3,11 +3,18 @@ import { dataConnect, QueryFetchPolicy, searchClubs, teamsPage } from "../../inf
 import { teamLabel } from "../../shared/textLimits";
 import { CLUB_PAGE_SIZE } from "../shell/ClubDirectoryList";
 import { clubSearchKey, clubsMatching, toSearchClubs, toTeamsPage } from "./teamsMapper";
-import type { ClubCardView, TeamsPageModel, TeamsScopeView } from "./teamsViewState";
+import type {
+  ClubCardView,
+  DirectoryEmptyView,
+  TeamsPageModel,
+  TeamsScopeView,
+} from "./teamsViewState";
 
 const DESKTOP_QUERY = "(min-width: 800px)";
 const DESKTOP_PAGE_SIZE = 15;
 const STANDINGS_PAGE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
+const EMPTY_DELAY_MS = 3000;
 
 function useDirectoryPageSize() {
   const [wide, setWide] = useState(
@@ -29,6 +36,8 @@ export function useTeamsPage() {
   const [model, setModel] = useState<TeamsPageModel | null>(null);
   const [query, setQuery] = useState("");
   const [searchHits, setSearchHits] = useState<ClubCardView[] | null>(null);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [quietKey, setQuietKey] = useState<string | null>(null);
   const [scope, setScope] = useState<TeamsScopeView>({ seasonId: "", categoryId: "" });
   const scopeReady = useRef(false);
   const request = useRef(0);
@@ -91,23 +100,40 @@ export function useTeamsPage() {
     searchAbort.current?.abort();
     searchAbort.current = controller;
     setSearchHits(null);
-    void searchClubs(dataConnect, { term }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        const clubs = toSearchClubs(result.data.clubs);
-        searchCache.current.set(searchKey, clubs);
-        setSearchHits(clubs);
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
-        if (!loggedSearchMiss.current) {
-          loggedSearchMiss.current = true;
-          console.error(err);
-        }
-        setSearchHits(null);
-      });
-    return () => controller.abort();
+    setPendingKey(searchKey);
+    const settle = () => setPendingKey((key) => (key === searchKey ? null : key));
+    const timer = window.setTimeout(() => {
+      void searchClubs(dataConnect, { term }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          const clubs = toSearchClubs(result.data.clubs);
+          searchCache.current.set(searchKey, clubs);
+          setSearchHits(clubs);
+          settle();
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          if (!loggedSearchMiss.current) {
+            loggedSearchMiss.current = true;
+            console.error(err);
+          }
+          setSearchHits(null);
+          settle();
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [searching, searchKey, term]);
+
+  // «Sin resultados» solo tras 3 s sin cambios en la búsqueda; antes se muestra «Buscando…».
+  useEffect(() => {
+    setQuietKey(null);
+    if (!searching) return;
+    const timer = window.setTimeout(() => setQuietKey(searchKey), EMPTY_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [searching, searchKey]);
 
   useEffect(() => {
     if (prevQuery.current !== query) {
@@ -133,15 +159,19 @@ export function useTeamsPage() {
     [model, scope],
   );
 
+  let directoryEmpty: DirectoryEmptyView = null;
+  if (model && directory.length === 0) {
+    if (!searching) directoryEmpty = "none";
+    else if (quietKey === searchKey && pendingKey !== searchKey) directoryEmpty = "search";
+    else directoryEmpty = "loading";
+  }
+
   return {
     loading,
     error,
     query,
     directory: directory.slice(0, dirLimit),
-    directoryEmptyLabel:
-      searching && model && directory.length === 0
-        ? "Ningún equipo coincide con esa búsqueda."
-        : null,
+    directoryEmpty,
     hasMoreDirectory: directory.length > dirLimit,
     seasons: model?.seasons ?? [],
     categories: model?.categories ?? [],
@@ -156,5 +186,10 @@ export function useTeamsPage() {
     },
     onMoreStandings: () => setStandingsLimit((count) => count + STANDINGS_PAGE),
     onRefresh: load,
+    onCreated: () => {
+      searchCache.current.clear();
+      setSearchHits(null);
+      load();
+    },
   };
 }

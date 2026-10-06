@@ -1,0 +1,53 @@
+---
+description: Firebase Data Connect como única base de datos. Cómo se escriben las operaciones y qué ya está probado.
+alwaysApply: true
+---
+
+# Data Connect, sin Firestore
+
+La app guarda todo en Firebase Data Connect (PostgreSQL), las imágenes en Storage y la identidad en Firebase Auth. No hay Firestore en el código ni en `firebase.json`; `npm run check:firestore` falla si vuelve a aparecer. No lo reintroduzcas.
+
+## Cómo se escribe
+
+Servicio `clubs-platform-aem9u-service` (us-east4), dos conectores:
+
+- `app` (`dataconnect/connector`): lo usa el navegador. SDK en `dataconnect/generated`, importado solo desde `src/infrastructure/dataconnect.ts`.
+- `functions` (`dataconnect/functions`): todas las operaciones con `@auth(level: NO_ACCESS)`. Solo las corre el Admin SDK desde `functions/src/sql.ts`. Una función que manda correo lee de aquí los datos y los permisos (`FunctionsAdminGate`); no confía en lo que manda el cliente.
+
+Las mutaciones de superadmin llevan `@check` sobre `platformAdmin(key: { userId })` y luego `INSERT ... VALUES` o `UPDATE`/`DELETE`. Un `INSERT ... SELECT ... WHERE EXISTS` no persiste. Las de club validan el rol con `EXISTS` sobre `club_members` y `auth.uid`.
+
+- Enums con cast: `'PLAYED'::match_status`, `'MATCH'::court_hold_source`.
+- Booleanos como parámetro, no `true`/`false` escritos en el SQL.
+- `created_at` lleva `CURRENT_TIMESTAMP` cuando la columna es obligatoria.
+- No uses el placeholder `$10`: el conector lo lee mal. Quédate en `$1`–`$9`.
+- Una relación del esquema es la columna `<campo>_id` en SQL (`invitedBy` → `invited_by_id`). Si nombras mal una columna, el error es “Invalid SQL statement”.
+- `_executeReturningFirst` envuelve el SQL en `WITH "cte_0" AS (...)`. Dentro no puede haber un `WITH` que modifique datos; el error es “SQL execution failed”. Las CTE de solo lectura sí.
+- Una operación de varios pasos va en varios campos, **sin `@transaction`**: con esa directiva Data Connect junta los campos en una sola sentencia y cualquier `_execute` la rompe. Los primeros campos son `_execute` (admiten CTE que modifican), el último es `_executeReturningFirst`. Corren en orden y un `@check` que falla detiene los siguientes. Ordena los pasos para que repetir la operación sea seguro.
+- Comprobar el correo de la sesión: `@check(expr: "this == null || this.email == auth.token.email")` sobre el objeto dentro de `query @redact`.
+- Quitar un campo, una variable obligatoria o una operación rompe el conector (`schemaValidation: COMPATIBLE`), salvo `@retired`, valor por defecto o `--force` si nadie la usa.
+- Toda lectura usa `QueryFetchPolicy.SERVER_ONLY`; sin ella el SDK devuelve la caché y la lista no se actualiza tras guardar. Si la mutación devuelve `null`, el guardado falló.
+- No mandes variables que la operación no declara.
+- Cada pantalla tiene un mapper que arma solo lo que se pinta. La consulta pide esas columnas y nada más. Goles, tarjetas y plantillas de un partido se piden al abrir el resumen o el marcador, no en la lista.
+- Capas de `src/`: `app` → `features` → `domains` → `infrastructure` → `shared`. Solo `infrastructure` importa `firebase/*` o el SDK generado.
+- Prueba una operación nueva en el emulador (`firebase emulators:start --only dataconnect`); `debugDetails` muestra el SQL real. Después comprueba el flujo en el navegador.
+
+## Comportamiento probado
+
+- **Canchas.** Guardar incompleta avisa qué falta y el botón sigue activo. Nombre y descripción de 3 a 15 caracteres, obligatorios; ubicación opcional de 3 a 60 (letras, números, espacios y `.,#/-`), se muestra antes del nombre («Col. Centro · Futbol 1»). Un día pasado no se aparta ni se edita. Borrar una cancha borra sus apartados.
+- **Competición.** Altas, cierre, reapertura y borrado de temporadas, categorías y torneos refrescan la lista. Temporada: solo números y guión, hasta 11 caracteres. Crear un torneo lleva a `/torneos`. Solo se borra un torneo sin partidos jugados.
+- **Clubes y administradores.** Nombre, barrio, localidad, teléfono y correo se filtran al escribir. Si falta nombre, URL o localidad, el aviso lo dice. Invitar solo con correo válido; al invitar, el formulario vuelve a vacío y el rol a Administrador. El bote borra la invitación.
+- **Invitaciones.** Viven solo en SQL (`club_invites`, `platform_admin_invites`, `signup_invites`). `/invitar` acepta con la sesión del correo invitado y lleva al club; rechazar basta con el token. La invitación a superadmin se reclama al entrar con ese correo.
+- **Sesión.** Superadmin es solo una fila en `platform_admins` (`PlatformAdminById`).
+- **Editar torneo.** Al guardar, las tarjetas se actualizan. Si estás en la ficha de ese torneo, la página se recarga. Sumar equipos crea los partidos (uno, o ida y vuelta si son dos) y avisa una vez a cada club nuevo (`tournament_notices`). La jornada se guarda como número.
+- **Ficha del torneo.** Administrador: pastillas y Editar torneo, tabla con escudos, goleadores, calendario con fecha o “Por definir”, resumen, ingreso tardío y jornadas cerradas. Editar programa fecha, hora y cancha. Marcador guarda resultado, goles y tarjetas. Quien no es administrador no ve esos controles. Tabla y goleadores son vistas SQL.
+- **Cancha al programar.** El desplegable solo trae canchas con `football` y `active` en verdadero. Con fecha y hora, solo las libres en la apertura y sin un apartado que se cruce. El partido que se edita no se pisa a sí mismo. Si al guardar ya no está libre, no guarda y dice: “Esa cancha no está disponible en esa fecha y hora.” Las tres fechas sugeridas salen de la disponibilidad de ambos clubes, la apertura y los partidos que ya tienen. Si un club no tiene disponibilidad guardada, no hay propuestas. Programar avisa a ambos Presidentes solo si cambió fecha, hora o cancha (`schedule_notice_key`).
+- **Récord del club.** Se calcula con la fila de ese club en la tabla, no con la del líder.
+
+## Datos de prueba
+
+Categoría Prueba, torneo Liga Municipal con Parusina FC y Rival FC:
+
+- J1: Parusina FC vs Rival FC, 24 de octubre a las 7:00 p.m., sin cancha, jugado 1-0.
+- J2: Rival FC vs Parusina FC en Futbol 1.
+
+Carlos es Presidente de Rival FC. Localidad Zona Prueba. Las canchas abren de 10:00 a 22:00 todos los días.

@@ -22,12 +22,6 @@ export interface HomeAdView {
   href: string | null;
 }
 
-/** Próximo partido de la portada: la categoría va en un chip aparte del torneo. */
-export interface HomeMatchView extends UpcomingMatchView {
-  categoryName: string;
-  tournamentName: string;
-}
-
 export interface HomeTournamentCard {
   id: string;
   href: string;
@@ -36,7 +30,6 @@ export interface HomeTournamentCard {
   playedMatches: number;
   categoryName: string;
   meta: string;
-  description: string;
   /** «Inició:» o «Inicia:» con la fecha; null si no hay fecha. */
   startLabel: string | null;
   startDate: string | null;
@@ -48,7 +41,7 @@ export interface HomeTournamentCard {
 export interface HomePageModel {
   hero: HomeHeroView;
   ads: HomeAdView[];
-  matches: HomeMatchView[];
+  matches: UpcomingMatchView[];
   activeTournaments: HomeTournamentCard[];
   upcomingTournaments: HomeTournamentCard[];
 }

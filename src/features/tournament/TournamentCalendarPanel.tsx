@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, ChevronDown, ChevronRight, Clock, MapPin, Pencil } from "lucide-react";
-import { C, FormInput, FormSelect, PrimaryButton, SectionCard } from "../../shared/ui";
+import { C, SectionCard } from "../../shared/ui";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
-import { shortSlotLabel } from "../../domains/courts/courts";
 import { formatFriendlyTime } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
-import { freeCourtsAt, saveMatchSchedule } from "../../domains/matches/matchCommands";
-import { loadMatchSummary, loadSlotHints } from "./tournamentQueries";
-import type { Court, CourtSlotMinutes, TimeWindow } from "../../shared/types";
+import { loadMatchSummary } from "./tournamentQueries";
+import MatchScheduleForm from "../matches/MatchScheduleForm";
 import MatchScoreModal from "./MatchScoreModal";
 import type { CalendarMatchView, MatchSummaryView, RoundView } from "./tournamentViewState";
 
@@ -248,8 +246,8 @@ function MatchRow({
         />
       ) : null}
       {admin && editing ? (
-        <ScheduleForm
-          match={match}
+        <MatchScheduleForm
+          match={{ ...match, homeClubId: match.home.id, awayClubId: match.away.id }}
           durationMinutes={durationMinutes}
           startDate={startDate}
           onSaved={() => {
@@ -381,192 +379,3 @@ function SummarySide({
     </div>
   );
 }
-
-function ScheduleForm({
-  match,
-  durationMinutes,
-  startDate,
-  onSaved,
-}: {
-  match: CalendarMatchView;
-  durationMinutes: number;
-  startDate: string;
-  onSaved: () => void;
-}) {
-  const [date, setDate] = useState(match.isoDate);
-  const [time, setTime] = useState(match.time);
-  const [courtId, setCourtId] = useState(match.courtId);
-  const [courts, setCourts] = useState<Court[] | null>(null);
-  const [openWindows, setOpenWindows] = useState<TimeWindow[]>([]);
-  const [slotMinutes, setSlotMinutes] = useState<CourtSlotMinutes>(60);
-  const [freeIds, setFreeIds] = useState<string[] | null>(null);
-  const [suggestions, setSuggestions] = useState<{ date: string; time: string; courtId: string; courtName: string }[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    void loadSlotHints({
-      homeClubId: match.home.id,
-      awayClubId: match.away.id,
-      startDate,
-      durationMinutes,
-      ignoreMatchId: match.id,
-    })
-      .then((hints) => {
-        if (cancelled) return;
-        setCourts(hints.courts);
-        setOpenWindows(hints.openWindows);
-        setSlotMinutes(hints.slotMinutes);
-        setSuggestions(hints.suggestions);
-      })
-      .catch((err) => {
-        console.error(err);
-        if (!cancelled) setCourts([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [match.home.id, match.away.id, match.id, startDate, durationMinutes]);
-
-  useEffect(() => {
-    if (!date || !time || !courts) {
-      setFreeIds(null);
-      return;
-    }
-    let cancelled = false;
-    void freeCourtsAt({
-      date,
-      time,
-      durationMinutes,
-      ignoreMatchId: match.id,
-      courts,
-      openWindows,
-      slotMinutes,
-    })
-      .then((free) => {
-        if (cancelled) return;
-        const ids = free.map((court) => court.id);
-        setFreeIds(ids);
-        setCourtId((current) => (current && !ids.includes(current) ? "" : current));
-      })
-      .catch((err) => {
-        console.error(err);
-        if (!cancelled) setFreeIds(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [date, time, courts, openWindows, slotMinutes, durationMinutes, match.id]);
-
-  const listedCourts = useMemo(() => {
-    const all = courts || [];
-    if (!date || !time || !freeIds) return all;
-    return all.filter((court) => freeIds.includes(court.id));
-  }, [courts, date, time, freeIds]);
-
-  const save = async () => {
-    if (!date || !time) {
-      setError("Elige fecha y hora.");
-      return;
-    }
-    const court = courts?.find((item) => item.id === courtId);
-    try {
-      setBusy(true);
-      setError("");
-      await saveMatchSchedule({
-        matchId: match.id,
-        date,
-        time,
-        venue: court?.name || (courtId ? match.venue : ""),
-        courtId,
-        durationMinutes,
-        courts: courts || [],
-        openWindows,
-        slotMinutes,
-      });
-      onSaved();
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error && err.message ? err.message : "No se pudo guardar.");
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="match-schedule">
-      {suggestions.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
-          <span style={fieldLabel}>Fechas sugeridas</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.28rem" }}>
-            {suggestions.map((slot) => (
-              <button
-                key={`${slot.date}-${slot.time}-${slot.courtId}`}
-                type="button"
-                onClick={() => {
-                  setDate(slot.date);
-                  setTime(slot.time);
-                  setCourtId(slot.courtId);
-                }}
-                style={suggestionButton}
-              >
-                {shortSlotLabel(slot.date, slot.time)} · {slot.courtName}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      <div className="match-edit-when">
-        <label style={field}>
-          <span style={fieldLabel}>Fecha</span>
-          <FormInput type="date" value={date} aria-label="Fecha" onChange={(event) => setDate(event.target.value)} />
-        </label>
-        <label style={field}>
-          <span style={fieldLabel}>Hora</span>
-          <FormInput type="time" value={time} aria-label="Hora" onChange={(event) => setTime(event.target.value)} />
-        </label>
-      </div>
-      <label style={field}>
-        <span style={fieldLabel}>Cancha</span>
-        <FormSelect
-          aria-label="Cancha"
-          value={courtId}
-          onChange={(event) => setCourtId(event.target.value)}
-        >
-          <option value="">Sin cancha</option>
-          {listedCourts.map((court) => (
-            <option key={court.id} value={court.id}>
-              {court.name}
-            </option>
-          ))}
-        </FormSelect>
-      </label>
-      {error ? <p style={{ margin: 0, color: C.red, fontSize: "0.78rem" }}>{error}</p> : null}
-      <div className="match-edit-actions">
-        <PrimaryButton type="button" disabled={busy || courts === null} onClick={() => void save()}>
-          {busy ? "…" : "Guardar"}
-        </PrimaryButton>
-      </div>
-    </div>
-  );
-}
-
-const field = { display: "flex", flexDirection: "column", gap: "0.25rem" } as const;
-const fieldLabel = {
-  fontSize: "0.68rem",
-  fontWeight: 800,
-  letterSpacing: "0.04em",
-  textTransform: "uppercase",
-  color: C.gray500,
-} as const;
-
-const suggestionButton = {
-  border: "1px solid rgba(229, 223, 211, 0.7)",
-  background: "rgba(252, 250, 248, 0.55)",
-  color: C.navy900,
-  borderRadius: 7,
-  padding: "0.16rem 0.38rem",
-  fontSize: "0.62rem",
-  fontWeight: 700,
-  cursor: "pointer",
-} as const;

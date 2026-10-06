@@ -191,6 +191,12 @@ function CourtButton({
       <img src={court.imageUrl || courtDefault} alt="" />
       <span className="rent-court__copy">
         <strong>{court.name}</strong>
+        {court.location ? (
+          <span className="rent-court__place">
+            <MapPin size={11} aria-hidden="true" />
+            {court.location}
+          </span>
+        ) : null}
         {court.description ? <span className="rent-court__desc">{court.description}</span> : null}
         <span className="rent-court__price">{court.priceLabel}</span>
       </span>

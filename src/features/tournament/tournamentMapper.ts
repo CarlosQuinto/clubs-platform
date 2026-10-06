@@ -7,7 +7,7 @@ import {
   type TournamentScreenData,
   TournamentStatus,
 } from "../../infrastructure/dataconnect";
-import { suggestSlots, toMinutes } from "../../domains/courts/courts";
+import { courtPlaceLabel, suggestSlots, toMinutes } from "../../domains/courts/courts";
 import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type TimeWindow, type Weekday } from "../../shared/types";
 import type {
   CalendarMatchView,
@@ -97,7 +97,7 @@ function toRounds(matches: TournamentScreenData["matches"]): RoundView[] {
       round: label,
       isoDate: match.matchDate || "",
       time: match.startTime || "",
-      venue: match.court?.name || match.venue || "",
+      venue: courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim(),
       courtId: match.court?.id || "",
       home: mark(match.homeClub),
       away: mark(match.awayClub),
@@ -273,6 +273,7 @@ export function toSlotHints(
     id: court.id,
     name: court.name,
     description: "",
+    location: court.location ?? "",
     hourlyRate: 0,
     active: true,
     order: court.sortOrder,

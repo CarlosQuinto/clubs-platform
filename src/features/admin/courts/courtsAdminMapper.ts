@@ -40,6 +40,7 @@ export function toCourtsAdmin(data: AdminCourtsData): CourtsAdminView {
       id: court.id,
       name: court.name,
       description: court.description,
+      location: court.location ?? "",
       hourlyRate: court.hourlyRate,
       active: court.active,
       order: court.sortOrder,

@@ -3,6 +3,9 @@ import { isoDate } from "../../shared/helpers";
 export type LiveMatchPhase = "upcoming" | "live" | "finished";
 
 const MINUTE = 60_000;
+
+/** Minutos que un partido sigue «En vivo» después de su hora de fin. Igual para todos los torneos. */
+export const LIVE_MARGIN_MINUTES = 3;
 const TIME_RE = /^(\d{2}):(\d{2})$/;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

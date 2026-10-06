@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trophy } from "lucide-react";
 import { isIsoDate, todayIso } from "../../../domains/courts/courts";
@@ -6,10 +7,8 @@ import {
   categoryName,
   isCategoryName,
   isTournamentName,
-  isTournamentNote,
   isTournamentPrize,
   tournamentName,
-  tournamentNote,
   tournamentPrize,
 } from "../../../shared/textLimits";
 import { addCategory, addTournament } from "../../../domains/competition/competitionCommands";
@@ -26,7 +25,6 @@ import {
   C,
   FormInput,
   FormSelect,
-  FormTextarea,
   PrimaryButton,
   RADIUS,
   SectionCard,
@@ -50,7 +48,6 @@ export default function TournamentsAdmin({
   const [footballType, setFootballType] = useState<FootballType>(7);
   const [duration, setDuration] = useState<MatchDurationMinutes>(60);
   const [startDate, setStartDate] = useState(todayIso);
-  const [description, setDescription] = useState("");
   const [prize, setPrize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -75,7 +72,6 @@ export default function TournamentsAdmin({
     selectedCats.length > 0 &&
     isIsoDate(startDate) &&
     !dateOutsideSeason &&
-    isTournamentNote(description) &&
     isTournamentPrize(prize) &&
     FOOTBALL_TYPES.includes(footballType) &&
     MATCH_DURATIONS.includes(duration) &&
@@ -106,13 +102,11 @@ export default function TournamentsAdmin({
           footballType: football,
           durationMinutes: duration,
           startDate,
-          description: description.trim(),
           prize: prize.trim(),
         });
       }
       onChange();
       setName("");
-      setDescription("");
       setPrize("");
       setSelectedCats([]);
       setStartDate(todayIso());
@@ -245,15 +239,6 @@ export default function TournamentsAdmin({
             placeholder="Ej. $25,000 MXN"
           />
         </Field>
-        <Field label="Descripción (opcional)">
-          <FormTextarea
-            rows={2}
-            maxLength={100}
-            value={description}
-            onChange={(e) => setDescription(tournamentNote(e.target.value))}
-            style={{ resize: "none" }}
-          />
-        </Field>
         {error && (
           <p style={{ margin: 0, color: C.red, fontSize: "0.72rem" }}>{error}</p>
         )}
@@ -276,7 +261,7 @@ export default function TournamentsAdmin({
   );
 }
 
-function CategoryPicker({
+export function CategoryPicker({
   categories,
   selectedIds,
   onChange,
@@ -293,6 +278,14 @@ function CategoryPicker({
   const [error, setError] = useState("");
   const creatingRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  } | null>(null);
 
   const selected = categories.filter((c) => selectedIds.includes(c.id));
   const pendingIds = selectedIds.filter(
@@ -303,11 +296,56 @@ function CategoryPicker({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    // ESC cierra solo el panel, no el modal que lo contiene (useModalLock escucha en burbuja).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      toggleRef.current?.focus();
     };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [open]);
+
+  // Panel flotante (fixed, en portal): no estira ni lo recorta el scroll del modal.
+  // Abre hacia arriba si abajo no cabe y arriba hay más espacio.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null);
+      return;
+    }
+    const fit = () => {
+      const rect = toggleRef.current?.getBoundingClientRect();
+      const panel = panelRef.current;
+      if (!rect || !panel) return;
+      const height = panel.scrollHeight;
+      const below = window.innerHeight - rect.bottom - 14;
+      const above = rect.top - 14;
+      const up = height > below && above > below;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8));
+      setPlace(
+        up
+          ? { left, bottom: window.innerHeight - rect.top + 6, maxHeight: above }
+          : { left, top: rect.bottom + 6, maxHeight: below },
+      );
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("scroll", fit, true);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("scroll", fit, true);
+    };
+  }, [open, available.length, error]);
 
   const addId = (id: string) => {
     if (!selectedIds.includes(id)) onChange([...selectedIds, id]);
@@ -389,6 +427,7 @@ function CategoryPicker({
       ))}
       <div style={{ position: "relative" }}>
         <button
+          ref={toggleRef}
           type="button"
           aria-label="Añadir categoría"
           title="Añadir categoría"
@@ -408,14 +447,20 @@ function CategoryPicker({
         >
           <Plus size={16} />
         </button>
-        {open && (
+        {open && createPortal(
           <div
+            ref={panelRef}
             style={{
-              position: "absolute",
-              zIndex: 30,
-              top: "calc(100% + 6px)",
-              left: 0,
-              width: 260,
+              position: "fixed",
+              zIndex: 1000,
+              left: place?.left ?? 0,
+              top: place?.top,
+              bottom: place?.bottom,
+              maxHeight: place?.maxHeight,
+              overflowY: "auto",
+              boxSizing: "border-box",
+              visibility: place ? "visible" : "hidden",
+              width: "min(260px, calc(100vw - 16px))",
               padding: "0.75rem",
               backgroundColor: C.white,
               border: `1px solid ${C.gray200}`,
@@ -511,7 +556,8 @@ function CategoryPicker({
                 {error}
               </p>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { type TournamentEditorData } from "../../infrastructure/dataconnect";
-import { asLiveMargin, asMatchDuration, type ClubSummary, type Match, type Tournament } from "../../shared/types";
+import { asMatchDuration, type ClubSummary, type Match, type Tournament } from "../../shared/types";
 
 export interface TournamentEditorModel {
   tournament: Tournament;
@@ -23,7 +23,6 @@ export function toTournamentEditor(data: TournamentEditorData): TournamentEditor
     legs: row.legs === 1 ? 1 : 2,
     footballType: row.footballType === "FUT_7" ? 7 : row.footballType === "FUT_9" ? 9 : 11,
     durationMinutes: asMatchDuration(row.durationMinutes),
-    liveMarginMinutes: asLiveMargin(row.liveMarginMinutes),
     startDate: row.startDate || undefined,
     prize: row.prize ?? "",
   };

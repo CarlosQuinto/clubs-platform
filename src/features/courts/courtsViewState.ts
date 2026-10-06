@@ -2,6 +2,8 @@ export interface CourtCardView {
   id: string;
   name: string;
   description: string | null;
+  /** Dirección o referencia; null si la cancha no la tiene. */
+  location: string | null;
   priceLabel: string;
   imageUrl: string | null;
   selected: boolean;
