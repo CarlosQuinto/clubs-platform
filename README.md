@@ -130,7 +130,7 @@ flowchart LR
   - `app` (`dataconnect/connector/*.gql`, 47 queries y 97 mutations): lo usa el navegador con `@auth(level: PUBLIC)` o `USER`. Genera el SDK en `dataconnect/generated`.
   - `functions` (`dataconnect/functions/functions.gql`, 7 queries y 2 mutations): todas `@auth(level: NO_ACCESS)`. Solo las ejecuta el Admin SDK desde las funciones, que así leen de SQL los datos del correo en vez de confiar en lo que manda el cliente.
 - **Cloud Functions.** Siete *callables* en [`functions/src`](functions/src). No hay triggers. Validan permisos con la operación `FunctionsAdminGate` ([`sql.ts`](functions/src/sql.ts)).
-- **Hosting.** Sirve `dist/` y reescribe toda ruta a `/index.html` ([`firebase.json`](firebase.json)). `sw.js`, `index.html` y el manifiesto van con `Cache-Control: no-cache` para que cada despliegue se detecte al momento; `assets/*` (con hash) se cachean un año.
+- **Hosting.** Sirve `dist/` y reescribe toda ruta a `/index.html` ([`firebase.json`](firebase.json)). Todo se sirve con `Cache-Control: no-cache` (incluidas las rutas reescritas a `index.html` y `sw.js`) para que cada despliegue se detecte al momento; solo `assets/*` (con hash en el nombre) se cachean un año: Hosting aplica todas las reglas de `headers` que coinciden y gana la última.
 
 ### Capas de `src/`
 
