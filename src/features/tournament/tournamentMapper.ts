@@ -3,22 +3,25 @@ import {
   type MatchScoreSheetData,
   type MatchSlotHintsData,
   MatchStatus,
-  type MatchSummaryData,
   type TournamentScreenData,
   TournamentStatus,
 } from "../../infrastructure/dataconnect";
 import { courtPlaceLabel, suggestSlots, toMinutes } from "../../domains/courts/courts";
+import { tournamentPhase } from "../../domains/competition/tournamentPhase";
+import { formatFriendlyDate, formatFriendlyTime, formatShortDate } from "../../shared/helpers";
+import { matchPath } from "../../shared/paths";
 import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type TimeWindow, type Weekday } from "../../shared/types";
+import { clubInitials } from "../teams/teamsMapper";
+import type { LiveMatchView, UpcomingMatchView } from "../matches/matchesViewState";
 import type {
+  CalendarCardView,
   CalendarMatchView,
   ClubMark,
   MatchScoreSheetView,
-  MatchSummaryView,
   PodiumSlotView,
   RoundView,
   ScoreCardView,
   ScoreGoalView,
-  SummarySideView,
   TournamentScreenView,
 } from "./tournamentViewState";
 
@@ -29,6 +32,8 @@ const FOOTBALL_LABEL: Record<FootballType, string> = {
 };
 
 const PODIUM_ORDER = [2, 1, 3] as const;
+
+const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 
 const PLACE_LABEL: Record<number, string> = {
   1: "Campeón",
@@ -84,11 +89,80 @@ function toPodium(
       placeLabel: PLACE_LABEL[place],
       clubName: slot?.club.name ?? null,
       clubHref: clubHref(slot?.club.slug),
+      logoUrl: slot?.club.logoUrl?.trim() || null,
     };
   });
 }
 
-function toRounds(matches: TournamentScreenData["matches"]): RoundView[] {
+type ScreenMatch = TournamentScreenData["matches"][number];
+
+function dateParts(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return { day, month: MONTHS[month - 1] || "" };
+}
+
+function score(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Tarjeta de próximo partido (la misma de portada y /partidos), sin categoría ni torneo: ya están en la cabecera. */
+function toFixture(
+  match: CalendarMatchView,
+  durationMinutes: number,
+  startDate: string,
+): UpcomingMatchView {
+  const date = dateParts(match.isoDate);
+  return {
+    id: match.id,
+    href: matchPath(match.id),
+    isoDate: date ? match.isoDate : "",
+    day: date?.day ?? 0,
+    month: date?.month ?? "",
+    dateLabel: date ? formatFriendlyDate(match.isoDate) : "",
+    time: match.time,
+    timeLabel: match.time ? formatFriendlyTime(match.time) : null,
+    venue: match.venue || null,
+    homeClubId: match.home.id,
+    awayClubId: match.away.id,
+    homeName: match.home.name,
+    awayName: match.away.name,
+    homeLogo: match.home.logoUrl,
+    awayLogo: match.away.logoUrl,
+    categoryName: "",
+    tournamentName: "",
+    courtId: match.courtId,
+    durationMinutes,
+    tournamentStartDate: startDate,
+  };
+}
+
+/** Tarjeta de marcador (la de «Resultados de hoy» en la portada) con la fecha del partido. */
+function toResult(match: CalendarMatchView, row: ScreenMatch): LiveMatchView {
+  const penaltiesHome = score(row.penaltiesHome);
+  const penaltiesAway = score(row.penaltiesAway);
+  return {
+    id: match.id,
+    href: matchPath(match.id),
+    phase: "finished",
+    pending: false,
+    minuteLabel: null,
+    homeName: match.home.name,
+    awayName: match.away.name,
+    homeLogo: match.home.logoUrl,
+    awayLogo: match.away.logoUrl,
+    homeScore: match.homeScore ?? 0,
+    awayScore: match.awayScore ?? 0,
+    penaltiesLabel:
+      penaltiesHome != null && penaltiesAway != null ? `${penaltiesHome}–${penaltiesAway} pen.` : null,
+    walkover: match.walkover,
+    subtitle: formatShortDate(match.isoDate),
+    timeLabel: match.time ? formatFriendlyTime(match.time) : "",
+    venue: match.venue || null,
+  };
+}
+
+function toRounds(matches: ScreenMatch[], durationMinutes: number, startDate: string): RoundView[] {
   const rounds: RoundView[] = [];
   for (const match of matches) {
     const label = roundNumber(match.roundLabel);
@@ -106,33 +180,44 @@ function toRounds(matches: TournamentScreenData["matches"]): RoundView[] {
       played: match.status === MatchStatus.PLAYED,
       walkover: match.walkover,
     };
+    const card: CalendarCardView = {
+      score: row,
+      fixture: row.played ? null : toFixture(row, durationMinutes, startDate),
+      result: row.played ? toResult(row, match) : null,
+    };
     const current = rounds[rounds.length - 1];
-    if (current && current.label === label) current.matches.push(row);
-    else rounds.push({ label, collapsed: false, matches: [row] });
+    if (current && current.label === label) current.matches.push(card);
+    else rounds.push({ label, collapsed: false, matches: [card] });
   }
   const open: RoundView[] = [];
   const finished: RoundView[] = [];
   for (const round of rounds) {
-    const collapsed = round.matches.length > 0 && round.matches.every((match) => match.played);
+    const collapsed = round.matches.length > 0 && round.matches.every((match) => match.score.played);
     (collapsed ? finished : open).push({ ...round, collapsed });
   }
   return [...open, ...finished];
 }
 
-export function toTournamentScreen(data: TournamentScreenData): TournamentScreenView {
+export function toTournamentScreen(data: TournamentScreenData, today: string): TournamentScreenView {
   const tournament = data.tournaments[0];
   if (!tournament) throw new Error("La respuesta no trae torneo.");
   const podium = toPodium(tournament.tournamentPodiums_on_tournament);
+  const durationMinutes = asMatchDuration(tournament.durationMinutes);
+  const startDate = tournament.startDate || "";
   return {
     title: tournament.name,
-    chips: [
+    subtitle: [
       tournament.season.name,
       tournament.category.name,
       FOOTBALL_LABEL[tournament.footballType],
-    ].filter((chip) => chip.trim()),
+    ]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" · "),
+    phase: tournamentPhase(tournament.status, startDate || tournament.season.startDate, today),
     prize: (tournament.prize ?? "").trim(),
-    durationMinutes: asMatchDuration(tournament.durationMinutes),
-    startDate: tournament.startDate || "",
+    durationMinutes,
+    startDate,
     showPodium:
       tournament.status === TournamentStatus.FINISHED && podium.some((slot) => slot.clubName),
     podium,
@@ -143,6 +228,7 @@ export function toTournamentScreen(data: TournamentScreenData): TournamentScreen
       clubHref: clubHref(row.club?.slug),
       clubSlug: row.club?.slug?.trim() || null,
       logoUrl: row.club?.logoUrl?.trim() || null,
+      initials: clubInitials(row.club?.name || "Club"),
       played: count(row.pj),
       won: count(row.g),
       drawn: count(row.e),
@@ -162,55 +248,7 @@ export function toTournamentScreen(data: TournamentScreenData): TournamentScreen
       goals: count(row.goals),
       assists: count(row.assists),
     })),
-    rounds: toRounds(data.matches),
-  };
-}
-
-function personName(stored: string | null | undefined, linked: string | null | undefined): string {
-  return stored?.trim() || linked?.trim() || "";
-}
-
-function shortName(full: string): string {
-  const parts = full.trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return full.trim();
-  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toLocaleUpperCase("es")}.`;
-}
-
-function goalLine(goal: MatchSummaryData["matches"][number]["matchGoals_on_match"][number]): string {
-  const scorer = shortName(personName(goal.scorerName, goal.scorer?.name)) || "Jugador";
-  if (goal.isOwnGoal) return `${scorer} (autogol)`;
-  if (goal.isPenalty) return `${scorer} (P)`;
-  const assist = personName(goal.assistName, goal.assist?.name);
-  return assist ? `${scorer} (${assist})` : scorer;
-}
-
-function sideSummary(
-  clubId: string,
-  goals: MatchSummaryData["matches"][number]["matchGoals_on_match"],
-  cards: MatchSummaryData["matches"][number]["matchCards_on_match"],
-): SummarySideView {
-  return {
-    goals: goals.filter((goal) => goal.club.id === clubId).map(goalLine),
-    yellow: cards
-      .filter((card) => card.club.id === clubId && card.color === "YELLOW")
-      .map((card) => shortName(personName(card.playerName, card.player?.name)) || "Jugador"),
-    red: cards
-      .filter((card) => card.club.id === clubId && card.color === "RED")
-      .map((card) => shortName(personName(card.playerName, card.player?.name)) || "Jugador"),
-  };
-}
-
-export function toMatchSummary(
-  data: MatchSummaryData,
-  homeClubId: string,
-  awayClubId: string,
-): MatchSummaryView {
-  const match = data.matches[0];
-  const goals = match?.matchGoals_on_match ?? [];
-  const cards = match?.matchCards_on_match ?? [];
-  return {
-    home: sideSummary(homeClubId, goals, cards),
-    away: sideSummary(awayClubId, goals, cards),
+    rounds: toRounds(data.matches, durationMinutes, startDate),
   };
 }
 

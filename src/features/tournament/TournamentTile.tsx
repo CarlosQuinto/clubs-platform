@@ -5,13 +5,8 @@ import { useTournamentEdit } from "./TournamentEditModal";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { markScrollTopAfterNav } from "../shell/PlatformLayout";
 import { dataConnect, deleteUnplayedTournament } from "../../infrastructure/dataconnect";
+import { TOURNAMENT_STATUS } from "./tournamentStatus";
 import type { TournamentTileView } from "./tournamentArchiveViewState";
-
-const STATUS = {
-  active: { className: "is-active", label: "En curso" },
-  upcoming: { className: "is-soon", label: "Próximamente" },
-  finished: { className: "is-done", label: "Finalizado" },
-} as const;
 
 export default function TournamentTile({
   card,
@@ -26,7 +21,7 @@ export default function TournamentTile({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const canDelete = admin && card.playedMatches === 0;
-  const status = STATUS[card.phase];
+  const status = TOURNAMENT_STATUS[card.phase];
 
   const confirmDelete = async () => {
     try {

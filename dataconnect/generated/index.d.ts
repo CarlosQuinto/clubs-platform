@@ -3116,6 +3116,7 @@ export interface TournamentScreenData {
     prize: string;
     season: {
       name: string;
+      startDate?: DateString | null;
     };
     category: {
       name: string;
@@ -3125,6 +3126,7 @@ export interface TournamentScreenData {
       club: {
         name: string;
         slug: string;
+        logoUrl?: string | null;
       };
     })[];
   })[];
@@ -3137,6 +3139,8 @@ export interface TournamentScreenData {
     status: MatchStatus;
     homeScore?: number | null;
     awayScore?: number | null;
+    penaltiesHome?: number | null;
+    penaltiesAway?: number | null;
     walkover: boolean;
     homeClub: {
       id: string;

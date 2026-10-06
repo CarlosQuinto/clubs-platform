@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { CalendarClock, Trophy, X } from "lucide-react";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
@@ -11,6 +12,7 @@ export default function FixtureCard({
   editing = false,
   onEdit,
   onSaved,
+  actions,
 }: {
   match: UpcomingMatchView;
   admin?: boolean;
@@ -18,6 +20,8 @@ export default function FixtureCard({
   editing?: boolean;
   onEdit?: (id: string | null) => void;
   onSaved?: () => void;
+  /** Botones extra del superadmin (p. ej. «Marcador» en la ficha de torneo), junto a «Programar». */
+  actions?: ReactNode;
 }) {
   const canEdit = admin && Boolean(match.id) && Boolean(onEdit);
   const open = canEdit && editing;
@@ -25,10 +29,17 @@ export default function FixtureCard({
     <article className="home-card home-fixture">
       <Link to={match.href} className="home-fixture__link">
         <div className="home-fixture__head">
-          <time className="home-fixture__date" dateTime={match.isoDate} aria-label={match.dateLabel}>
-            <span className="home-fixture__day">{match.day}</span>
-            <span className="home-fixture__month">{match.month}</span>
-          </time>
+          {match.isoDate ? (
+            <time className="home-fixture__date" dateTime={match.isoDate} aria-label={match.dateLabel}>
+              <span className="home-fixture__day">{match.day}</span>
+              <span className="home-fixture__month">{match.month}</span>
+            </time>
+          ) : (
+            <span className="home-fixture__date is-tbd" aria-label="Fecha por definir">
+              <span className="home-fixture__month">Por</span>
+              <span className="home-fixture__month">definir</span>
+            </span>
+          )}
           <div className="home-fixture__when">
             <strong className={match.timeLabel ? undefined : "is-tbd"}>
               {match.timeLabel || "Hora por definir"}
@@ -52,16 +63,19 @@ export default function FixtureCard({
           </div>
         ) : null}
       </Link>
-      {canEdit ? (
+      {canEdit || actions ? (
         <div className="home-fixture__admin">
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={() => onEdit?.(open ? null : match.id)}
-          >
-            {open ? <X size={16} aria-hidden /> : <CalendarClock size={16} aria-hidden />}
-            {open ? "Cerrar" : match.time ? "Reprogramar" : "Programar"}
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => onEdit?.(open ? null : match.id)}
+            >
+              {open ? <X size={16} aria-hidden /> : <CalendarClock size={16} aria-hidden />}
+              {open ? "Cerrar" : match.time ? "Reprogramar" : "Programar"}
+            </button>
+          ) : null}
+          {actions}
         </div>
       ) : null}
       {open ? (

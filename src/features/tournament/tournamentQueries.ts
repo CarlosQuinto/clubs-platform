@@ -2,13 +2,12 @@ import {
   dataConnect,
   matchScoreSheet,
   matchSlotHints,
-  matchSummary,
   QueryFetchPolicy,
   scheduleCourts,
 } from "../../infrastructure/dataconnect";
 import { addDays, todayIso } from "../../domains/courts/courts";
-import { toMatchScoreSheet, toMatchSummary, toSlotHints } from "./tournamentMapper";
-import type { MatchScoreSheetView, MatchSummaryView } from "./tournamentViewState";
+import { toMatchScoreSheet, toSlotHints } from "./tournamentMapper";
+import type { MatchScoreSheetView } from "./tournamentViewState";
 
 export async function loadSlotHints(input: {
   homeClubId: string;
@@ -42,15 +41,6 @@ export async function loadSlotHints(input: {
 export async function loadCourts() {
   const result = await scheduleCourts(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY });
   return result.data.courts.map((court) => ({ id: court.id, name: court.name }));
-}
-
-export async function loadMatchSummary(
-  matchId: string,
-  homeClubId: string,
-  awayClubId: string,
-): Promise<MatchSummaryView> {
-  const result = await matchSummary(dataConnect, { matchId }, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY });
-  return toMatchSummary(result.data, homeClubId, awayClubId);
 }
 
 export async function loadMatchScoreSheet(matchId: string): Promise<MatchScoreSheetView | null> {

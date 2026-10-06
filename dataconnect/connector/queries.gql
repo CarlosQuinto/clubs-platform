@@ -362,11 +362,11 @@ query TournamentScreen($id: String!)
     startDate
     durationMinutes
     prize
-    season { name }
+    season { name startDate }
     category { name }
     tournamentPodiums_on_tournament(orderBy: [{ place: ASC }]) {
       place
-      club { name slug }
+      club { name slug logoUrl }
     }
   }
   matches(
@@ -381,6 +381,8 @@ query TournamentScreen($id: String!)
     status
     homeScore
     awayScore
+    penaltiesHome
+    penaltiesAway
     walkover
     homeClub { id name slug logoUrl }
     awayClub { id name slug logoUrl }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dataConnect, QueryFetchPolicy, tournamentScreen } from "../../infrastructure/dataconnect";
+import { todayIso } from "../../domains/courts/courts";
 import { toTournamentScreen } from "./tournamentMapper";
 import type { TournamentScreenView } from "./tournamentViewState";
 
@@ -40,7 +41,7 @@ export function useTournamentScreen(tournamentId: string): {
           return;
         }
         setMissing(false);
-        setView(toTournamentScreen(result.data));
+        setView(toTournamentScreen(result.data, todayIso()));
       })
       .catch((err: unknown) => {
         console.error(err);

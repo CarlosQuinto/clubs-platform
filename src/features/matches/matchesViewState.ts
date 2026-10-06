@@ -34,3 +34,28 @@ export interface MatchesPageModel {
   tournaments: TournamentOptionView[];
   matches: (UpcomingMatchView & { tournamentId: string })[];
 }
+
+/** Tarjeta de marcador (portada «En vivo» y ficha de torneo): «live» mientras se juega (más el margen), luego «finished». */
+export interface LiveMatchView {
+  id: string;
+  /** Página del partido. */
+  href: string;
+  phase: "live" | "finished";
+  /** Terminó por hora pero el superadmin aún no lo finaliza: el marcador puede cambiar. */
+  pending: boolean;
+  /** «74'» mientras está en vivo; null si ya terminó. */
+  minuteLabel: string | null;
+  homeName: string;
+  awayName: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
+  /** null = todavía sin resultado guardado. */
+  homeScore: number | null;
+  awayScore: number | null;
+  /** «4–3 pen.» cuando hubo penales. */
+  penaltiesLabel: string | null;
+  walkover: boolean;
+  subtitle: string;
+  timeLabel: string;
+  venue: string | null;
+}

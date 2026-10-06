@@ -23,7 +23,6 @@ import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
 import { C, PrimaryButton, RADIUS } from "../../shared/ui";
 import { useAuth } from "../../domains/auth/AuthContext";
 import {
-  DEFAULT_CLUB_LOGO,
   DEFAULT_PLATFORM_HERO_IMAGES,
   PLATFORM_DESCRIPTION,
   PLATFORM_HEADLINE,
@@ -37,6 +36,8 @@ import type {
   LiveMatchView,
 } from "./homeViewState";
 import FixtureCard from "../matches/FixtureCard";
+import ResultCard from "../matches/ResultCard";
+import SectionHead from "../shell/SectionHead";
 import type { UpcomingMatchView } from "../matches/matchesViewState";
 
 const MATCH_PAGE = 6;
@@ -299,21 +300,7 @@ function Section({
   return (
     <section id={id} className={`home-section home-section--${tone}`}>
       <div className="home-inner">
-        <header className="home-section__head">
-          <div className="home-section__title">
-            <span className="home-section__icon" aria-hidden>
-              {icon}
-            </span>
-            <div>
-              <h2>
-                {live ? <span className="home-live-dot" aria-hidden /> : null}
-                {title}
-              </h2>
-              <p>{subtitle}</p>
-            </div>
-          </div>
-          {action ? <div className="home-section__action">{action}</div> : null}
-        </header>
+        <SectionHead icon={icon} title={title} subtitle={subtitle} live={live} action={action} />
         {children}
       </div>
     </section>
@@ -342,75 +329,10 @@ function LiveSection({ matches }: { matches: LiveMatchView[] }) {
     >
       <div className="home-grid">
         {matches.map((match) => (
-          <LiveMatchCard key={match.id} match={match} />
+          <ResultCard key={match.id} match={match} />
         ))}
       </div>
     </Section>
-  );
-}
-
-function LiveMatchCard({ match }: { match: LiveMatchView }) {
-  const live = match.phase === "live";
-  const scored = match.homeScore != null && match.awayScore != null;
-  const home = scored ? String(match.homeScore) : live ? "0" : "–";
-  const away = scored ? String(match.awayScore) : live ? "0" : "–";
-  const note = [match.walkover ? "W.O." : null, match.penaltiesLabel].filter(Boolean).join(" · ");
-  const label = live
-    ? ["En vivo", match.minuteLabel].filter(Boolean).join(" ")
-    : match.pending
-      ? "Por confirmar"
-      : "Terminado";
-  const place = [match.timeLabel, match.venue].filter(Boolean).join(" · ");
-  return (
-    <Link
-      to={match.href}
-      className="home-card home-live"
-      aria-label={`${match.homeName} ${home}, ${match.awayName} ${away}. ${label}.`}
-    >
-      <div className="home-live__top">
-        <span className={`home-status ${live ? "is-live" : match.pending ? "is-pending" : "is-done"}`}>
-          {live ? <span className="home-status__dot" aria-hidden /> : null}
-          {label}
-        </span>
-        {match.subtitle ? (
-          <span className="home-chip" title={match.subtitle}>
-            {match.subtitle}
-          </span>
-        ) : null}
-      </div>
-      <div className="home-live__face">
-        <TeamFace name={match.homeName} logo={match.homeLogo} role="Local" />
-        <div className="home-score">
-          <span>{home}</span>
-          <span className="home-score__sep" aria-hidden>
-            :
-          </span>
-          <span>{away}</span>
-        </div>
-        <TeamFace name={match.awayName} logo={match.awayLogo} role="Visita" />
-      </div>
-      {note ? <p className="home-live__note">{note}</p> : null}
-      {place ? (
-        <div className="home-card__foot">
-          <MapPin size={15} aria-hidden />
-          <span>{place}</span>
-        </div>
-      ) : null}
-    </Link>
-  );
-}
-
-function TeamFace({ name, logo, role }: { name: string; logo: string | null; role: string }) {
-  return (
-    <div className="home-team-face">
-      <span className="home-crest home-crest--lg">
-        <img src={logo || DEFAULT_CLUB_LOGO} alt="" />
-      </span>
-      <span className="home-team-face__name" title={name}>
-        {name}
-      </span>
-      <span className="home-team-face__role">{role}</span>
-    </div>
   );
 }
 

@@ -5,16 +5,19 @@ import { C } from "../../shared/ui";
 export function ArchiveSection({
   title,
   count,
+  countLabel,
   collapsed = false,
   children,
 }: {
   title: string;
   count: number;
+  /** Texto del contador; por omisión «N torneos». */
+  countLabel?: string;
   collapsed?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!collapsed);
-  const label = count === 1 ? "1 torneo" : `${count} torneos`;
+  const label = countLabel ?? (count === 1 ? "1 torneo" : `${count} torneos`);
   const heading = (
     <>
       {collapsed && <ChevronDown size={16} className={open ? "is-open" : ""} />}

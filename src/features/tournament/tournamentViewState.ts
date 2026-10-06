@@ -1,7 +1,11 @@
+import type { LiveMatchView, UpcomingMatchView } from "../matches/matchesViewState";
+import type { TournamentPhase } from "./tournamentStatus";
+
 export interface PodiumSlotView {
   placeLabel: string;
   clubName: string | null;
   clubHref: string | null;
+  logoUrl: string | null;
 }
 
 export interface StandingRowView {
@@ -54,34 +58,37 @@ export interface CalendarMatchView {
   walkover: boolean;
 }
 
+/** Un partido del calendario: `fixture` si falta jugarlo, `result` si ya tiene marcador; `score` alimenta «Marcador». */
+export interface CalendarCardView {
+  score: CalendarMatchView;
+  fixture: UpcomingMatchView | null;
+  result: LiveMatchView | null;
+}
+
 export interface RoundView {
   label: string;
   collapsed: boolean;
-  matches: CalendarMatchView[];
+  matches: CalendarCardView[];
+}
+
+export interface TournamentStandingView extends StandingRowView {
+  /** Siglas del escudo cuando el club no tiene logo. */
+  initials: string;
 }
 
 export interface TournamentScreenView {
   title: string;
-  chips: string[];
+  /** «Temporada · Categoría · Fútbol 7». */
+  subtitle: string;
+  phase: TournamentPhase;
   prize: string;
   durationMinutes: number;
   startDate: string;
   showPodium: boolean;
   podium: PodiumSlotView[];
-  standings: StandingRowView[];
+  standings: TournamentStandingView[];
   scorers: ScorerRowView[];
   rounds: RoundView[];
-}
-
-export interface SummarySideView {
-  goals: string[];
-  yellow: string[];
-  red: string[];
-}
-
-export interface MatchSummaryView {
-  home: SummarySideView;
-  away: SummarySideView;
 }
 
 export interface ScorePlayerView {
