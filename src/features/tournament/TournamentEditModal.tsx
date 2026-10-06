@@ -45,6 +45,7 @@ import {
   type Tournament,
 } from "../../shared/types";
 import ConfirmModal from "../../shared/ConfirmModal";
+import { isTournamentPrize, tournamentPrize } from "../../shared/textLimits";
 import Field from "../admin/Field";
 import {
   C,
@@ -146,6 +147,7 @@ export default function TournamentEditModal({
   const [draftStartDate, setDraftStartDate] = useState("");
   const [draftDuration, setDraftDuration] = useState<MatchDurationMinutes>(60);
   const [draftMargin, setDraftMargin] = useState<LiveMarginMinutes>(10);
+  const [draftPrize, setDraftPrize] = useState("");
   const [saveOpen, setSaveOpen] = useState(false);
   const [lateEntry, setLateEntry] = useState<LateEntryChoice | null>(null);
   const [lateEntryHint, setLateEntryHint] = useState(false);
@@ -164,6 +166,7 @@ export default function TournamentEditModal({
     setDraftStartDate(tournament.startDate || "");
     setDraftDuration(asMatchDuration(tournament.durationMinutes));
     setDraftMargin(asLiveMargin(tournament.liveMarginMinutes));
+    setDraftPrize(tournament.prize || "");
     setSaveOpen(false);
     setReady(true);
   }, [tournamentId, hasTournament]);
@@ -196,7 +199,10 @@ export default function TournamentEditModal({
   const savedStartDate = tournament.startDate || "";
   const savedDuration = asMatchDuration(tournament.durationMinutes);
   const savedMargin = asLiveMargin(tournament.liveMarginMinutes);
+  const savedPrize = tournament.prize || "";
+  const prizeOk = isTournamentPrize(draftPrize);
   const dirty =
+    draftPrize.trim() !== savedPrize ||
     draftLegs !== savedLegs ||
     draftFootballType !== savedFootballType ||
     draftStartDate !== savedStartDate ||
@@ -240,6 +246,7 @@ export default function TournamentEditModal({
     setDraftStartDate(savedStartDate);
     setDraftDuration(savedDuration);
     setDraftMargin(savedMargin);
+    setDraftPrize(savedPrize);
     setSaveOpen(false);
     onClose();
   };
@@ -259,6 +266,7 @@ export default function TournamentEditModal({
         durationMinutes: draftDuration,
         startDate: draftStartDate || null,
         liveMarginMinutes: draftMargin,
+        prize: draftPrize.trim(),
       });
       if (settings.data.tournament == null) throw new Error("No se pudo guardar.");
       const previous = new Set(tournament.clubIds);
@@ -282,6 +290,7 @@ export default function TournamentEditModal({
         startDate: draftStartDate || undefined,
         durationMinutes: draftDuration,
         liveMarginMinutes: draftMargin,
+        prize: draftPrize.trim(),
       };
       const { toCreate, toDelete } = diffFixtures(updated, matches);
       for (const match of toDelete) {
@@ -480,6 +489,14 @@ export default function TournamentEditModal({
               onChange={(e) => setDraftStartDate(e.target.value)}
             />
           </Field>
+          <Field label="Premio al campeón" hint={`Solo para ${catLabel}. Vacío = sin premio.`}>
+            <FormInput
+              value={draftPrize}
+              maxLength={60}
+              placeholder="Ej. $25,000 MXN"
+              onChange={(e) => setDraftPrize(tournamentPrize(e.target.value))}
+            />
+          </Field>
         </div>
 
         <div
@@ -527,7 +544,7 @@ export default function TournamentEditModal({
           </SecondaryButton>
           <PrimaryButton
             type="button"
-            disabled={!dirty || busy || !loaded}
+            disabled={!dirty || !prizeOk || busy || !loaded}
             onClick={() => {
               setLateEntry(null);
               setLateEntryHint(false);
@@ -554,6 +571,8 @@ export default function TournamentEditModal({
             savedDuration,
             draftMargin,
             savedMargin,
+            draftPrize.trim(),
+            savedPrize,
             clubNames,
             playedReturns,
           )}
@@ -878,6 +897,8 @@ function saveMessage(
   savedDuration: MatchDurationMinutes,
   draftMargin: LiveMarginMinutes,
   savedMargin: LiveMarginMinutes,
+  draftPrize: string,
+  savedPrize: string,
   clubNames: Record<string, string>,
   playedReturns: { homeClubId: string; awayClubId: string }[],
 ) {
@@ -910,6 +931,9 @@ function saveMessage(
   }
   if (draftMargin !== savedMargin) {
     lines.push(`Cada partido sigue en vivo ${draftMargin} minutos tras su hora de fin.`);
+  }
+  if (draftPrize !== savedPrize) {
+    lines.push(draftPrize ? `El premio al campeón pasa a «${draftPrize}».` : "Se quita el premio al campeón.");
   }
   if (draftStartDate !== savedStartDate) {
     lines.push(

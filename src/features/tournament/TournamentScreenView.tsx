@@ -73,6 +73,11 @@ export default function TournamentScreenView() {
             {chip}
           </span>
         ))}
+        {view.prize ? (
+          <span style={prizeChip}>
+            <Trophy size={13} aria-hidden /> Premio al campeón: {view.prize}
+          </span>
+        ) : null}
         {isSuperAdmin ? (
           <button type="button" onClick={() => openEdit(id)} style={editButton}>
             <Pencil size={14} /> Editar torneo
@@ -195,6 +200,16 @@ const metaChip = {
   border: `1px solid ${C.gray200}`,
   borderRadius: RADIUS.full,
   padding: "0.2rem 0.6rem",
+} as const;
+
+const prizeChip = {
+  ...metaChip,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.3rem",
+  color: "#765100",
+  backgroundColor: "rgba(254, 198, 103, 0.22)",
+  borderColor: "rgba(205, 154, 64, 0.55)",
 } as const;
 
 const editButton = {

@@ -7,8 +7,10 @@ import {
   isCategoryName,
   isTournamentName,
   isTournamentNote,
+  isTournamentPrize,
   tournamentName,
   tournamentNote,
+  tournamentPrize,
 } from "../../../shared/textLimits";
 import { addCategory, addTournament } from "../../../domains/competition/competitionCommands";
 import {
@@ -49,6 +51,7 @@ export default function TournamentsAdmin({
   const [duration, setDuration] = useState<MatchDurationMinutes>(60);
   const [startDate, setStartDate] = useState(todayIso);
   const [description, setDescription] = useState("");
+  const [prize, setPrize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const creating = useRef(false);
@@ -73,6 +76,7 @@ export default function TournamentsAdmin({
     isIsoDate(startDate) &&
     !dateOutsideSeason &&
     isTournamentNote(description) &&
+    isTournamentPrize(prize) &&
     FOOTBALL_TYPES.includes(footballType) &&
     MATCH_DURATIONS.includes(duration) &&
     !busy;
@@ -103,11 +107,13 @@ export default function TournamentsAdmin({
           durationMinutes: duration,
           startDate,
           description: description.trim(),
+          prize: prize.trim(),
         });
       }
       onChange();
       setName("");
       setDescription("");
+      setPrize("");
       setSelectedCats([]);
       setStartDate(todayIso());
       setDuration(60);
@@ -223,6 +229,20 @@ export default function TournamentsAdmin({
             selectedIds={selectedCats}
             onChange={setSelectedCats}
             onCreated={onChange}
+          />
+        </Field>
+        <Field
+          label="Premio al campeón (opcional)"
+          hint="Se aplica a todas las categorías; luego puedes cambiarlo en cada una."
+        >
+          <FormInput
+            value={prize}
+            maxLength={60}
+            onChange={(e) => {
+              setPrize(tournamentPrize(e.target.value));
+              setError("");
+            }}
+            placeholder="Ej. $25,000 MXN"
           />
         </Field>
         <Field label="Descripción (opcional)">

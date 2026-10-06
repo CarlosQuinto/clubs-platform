@@ -7,6 +7,7 @@ query TournamentEditor($id: String!) @auth(level: USER) {
     durationMinutes
     liveMarginMinutes
     startDate
+    prize
     season { id startDate endDate }
     category { name }
     tournamentClubs_on_tournament { club { id } }
@@ -351,13 +352,15 @@ mutation UpdateTournamentSettings(
   $durationMinutes: Int!
   $startDate: Date
   $liveMarginMinutes: Int
+  $prize: String
 ) @auth(level: USER) {
   query {
     platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
       user { id }
     }
   }
-  # Sin margen (clientes anteriores) se conserva el guardado.
+  # Sin margen o sin premio (clientes anteriores) se conserva lo guardado.
+  # El premio sigue la misma regla que isTournamentPrize() en src/shared/textLimits.ts.
   tournament: _executeReturningFirst(
     sql: """
       UPDATE tournaments
@@ -365,12 +368,21 @@ mutation UpdateTournamentSettings(
           football_type = $3::football_type,
           duration_minutes = $4,
           start_date = $5,
-          live_margin_minutes = COALESCE($6, live_margin_minutes)
+          live_margin_minutes = COALESCE($6, live_margin_minutes),
+          prize = COALESCE(btrim($7), prize)
       WHERE id = $1
         AND ($6 IS NULL OR $6 IN (0, 3, 5, 10, 15))
+        AND (
+          $7 IS NULL
+          OR btrim($7) = ''
+          OR (
+            char_length(btrim($7)) <= 60
+            AND btrim($7) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)*$'
+          )
+        )
       RETURNING id
     """
-    params: [$id, $legs, $footballType, $durationMinutes, $startDate, $liveMarginMinutes]
+    params: [$id, $legs, $footballType, $durationMinutes, $startDate, $liveMarginMinutes, $prize]
   )
 }
 

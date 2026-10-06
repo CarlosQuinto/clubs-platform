@@ -66,6 +66,8 @@ export interface Tournament {
   /** Posiciones finales al cerrar el torneo: posición (1, 2, 3...) → clubId. */
   podium?: Record<string, string>;
   description?: string;
+  /** Premio al campeón en texto libre. Vacío = sin premio. */
+  prize?: string;
   /**
    * Tabla de posiciones materializada. Si falta, la página la calcula con los partidos.
    * Un arreglo vacío es válido (torneo sin clubes).

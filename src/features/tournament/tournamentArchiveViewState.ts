@@ -6,6 +6,7 @@ export interface TournamentCardView {
   toneIndex: number;
   meta: string;
   startLabel: string | null;
+  prize: string;
   joinHref: string | null;
   playedMatches: number;
 }

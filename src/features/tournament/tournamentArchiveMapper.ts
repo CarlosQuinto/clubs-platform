@@ -61,6 +61,7 @@ function toCard(tournament: TournamentRow, joinBase: string, today: string): Tou
       " · ",
     ),
     startLabel: upcoming && begins ? `Inicia ${begins}` : null,
+    prize: (tournament.prize ?? "").trim(),
     joinHref,
     playedMatches: clubCount(tournament.matches_on_tournament),
   };

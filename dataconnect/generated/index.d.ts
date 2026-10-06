@@ -1106,6 +1106,7 @@ export interface CreateTournamentData {
   };
   grouped?: unknown | null;
   tournament?: unknown | null;
+  prized?: unknown | null;
 }
 
 export interface CreateTournamentVariables {
@@ -1119,6 +1120,7 @@ export interface CreateTournamentVariables {
   durationMinutes: number;
   startDate: DateString;
   description: string;
+  prize?: string;
 }
 
 export interface DeclineClubInviteData {
@@ -1394,12 +1396,19 @@ export interface HomePageData {
   platformHeroImages: ({
     url: string;
   })[];
+  platformStats: ({
+    clubs?: number | null;
+    players?: number | null;
+    courts?: number | null;
+  })[];
   tournaments: ({
     id: string;
     name: string;
     status: TournamentStatus;
     footballType: FootballType;
     startDate?: DateString | null;
+    prize: string;
+    description: string;
     season: {
       name: string;
       startDate?: DateString | null;
@@ -2955,6 +2964,7 @@ export interface TournamentArchiveData {
     status: TournamentStatus;
     footballType: FootballType;
     startDate?: DateString | null;
+    prize: string;
     season: {
       name: string;
       active: boolean;
@@ -2991,6 +3001,7 @@ export interface TournamentEditorData {
     durationMinutes: number;
     liveMarginMinutes: number;
     startDate?: DateString | null;
+    prize: string;
     season: {
       id: string;
       startDate?: DateString | null;
@@ -3076,6 +3087,7 @@ export interface TournamentScreenData {
     footballType: FootballType;
     startDate?: DateString | null;
     durationMinutes: number;
+    prize: string;
     season: {
       name: string;
     };
@@ -3266,6 +3278,7 @@ export interface UpdateTournamentSettingsVariables {
   durationMinutes: number;
   startDate?: DateString | null;
   liveMarginMinutes?: number | null;
+  prize?: string | null;
 }
 
 export interface User_Key {

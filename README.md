@@ -62,9 +62,9 @@ Hay tres tipos de usuario:
 
 | Ruta | Qué ofrece |
 |---|---|
-| `/` | Carrusel de portada, anuncios rotativos, sección «En vivo» con el marcador de los partidos de hoy, próximos partidos, tarjetas de torneos activos y próximos. Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
-| `/torneos` | Archivo de torneos: en curso, próximos y finalizados. El superadmin puede borrar un torneo que no tenga partidos jugados. |
-| `/torneos/:id` | Ficha del torneo: tabla de posiciones con escudos, goleadores, calendario por jornada (fecha u “Por definir”), resumen de partido y podio cuando el torneo está finalizado y tiene podio guardado. |
+| `/` | Portada con diseño «Carbón y Oro»: héroe con carrusel, temporada vigente, botones (inscribirse, registrar equipo, rentar cancha) y cifras reales de la vista `PlatformStat` (clubes activos, jugadores y canchas si la renta está activa); sección «En vivo» con el marcador y el minuto de los partidos de hoy; próximos partidos de 6 en 6 (en escritorio rotan cada 6 s); torneos con pestañas «En curso / Próximos», fecha de inicio, equipos inscritos y premio al campeón; y al final un bloque oscuro con los anuncios de `home` rotando o, sin anuncios vigentes, una invitación a registrar ligas. Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
+| `/torneos` | Archivo de torneos: en curso, próximos y finalizados, con el premio al campeón si tiene. El superadmin puede borrar un torneo que no tenga partidos jugados. |
+| `/torneos/:id` | Ficha del torneo: premio al campeón, tabla de posiciones con escudos, goleadores, calendario por jornada (fecha u “Por definir”), resumen de partido y podio cuando el torneo está finalizado y tiene podio guardado. |
 | `/equipos` | Directorio de clubes y posiciones por temporada y categoría. |
 | `/partidos` | Próximos partidos con filtros. |
 | `/partido/:id` | Página del partido: marcador, minuto y estado (por empezar, en vivo, por confirmar, final), cronología de goles y tarjetas, estadísticas, alineaciones en una cancha con la formación de cada club, y previa (posición en la tabla, forma reciente, historial entre ambos y convocados). Las tarjetas de partido de la portada, de `/partidos` y del calendario del torneo llevan aquí. El superadmin ve el botón «Marcador en vivo». |
@@ -237,7 +237,7 @@ Plantilla en [`functions/.env.example`](functions/.env.example). `functions/.env
 Primer arranque en un proyecto vacío:
 
 1. Abre `/registro` y crea la primera cuenta. Si `platform_admins` está vacía (vista `PlatformClaimState`), el registro llama a `BootstrapPlatformAdmin` y esa cuenta queda como superadministrador. La portada también ofrece reclamar la administración mientras nadie lo haya hecho.
-2. En `/admin?tab=competition` crea temporadas (solo números y guion, hasta 11 caracteres), categorías y torneos. Crear un torneo lleva a `/torneos`.
+2. En `/admin?tab=competition` crea temporadas (solo números y guion, hasta 11 caracteres), categorías y torneos. Crear un torneo lleva a `/torneos`. El **premio al campeón** es opcional y se aplica a todas las categorías elegidas; después se cambia por categoría en «Editar torneo».
 3. En `/admin?tab=clubs` crea clubes (nombre, URL y localidad son obligatorios) o aprueba solicitudes en `/admin?tab=inbox`. Al aprobar se crea el club y se invita por correo al capitán como Presidente.
 4. En la ficha del torneo suma equipos para generar los partidos, programa fecha, hora y cancha, y captura marcadores.
 5. Opcional: en `/admin?tab=courts` da de alta canchas y el horario de apertura, y activa el módulo público de canchas.
@@ -371,6 +371,7 @@ Al rechazar, la app ejecuta `RejectTeamApplication` y la función manda el corre
 
 - La sección «En vivo» de `/` lee los partidos de ayer y hoy con `LiveMatches` (pública). Un partido está **en vivo** desde su hora de inicio hasta inicio + `tournaments.duration_minutes` + `tournaments.live_margin_minutes`. Después aparece como **Terminado**, con su resultado, hasta el fin del día. La fase se calcula en el navegador con la hora local (`domains/matches/liveMatchPhase.ts`); no hay estado «en curso» en `matches`.
 - El margen (0, 3, 5, 10 o 15 min; 10 por defecto) se cambia en «Editar torneo». La misma lista se valida en el SQL de `UpdateTournamentSettings`.
+- **Premio al campeón** (`tournaments.prize`, texto libre, vacío = sin premio): hasta 60 caracteres, letras, números y `. , + $ / ( ) -`, sin dobles espacios. La misma regla está en `tournamentPrize()`/`isTournamentPrize()` (`textLimits.ts`) y en el SQL de `CreateTournament` y `UpdateTournamentSettings`. `CreateTournament` ya ocupa `$1`–`$9` en el INSERT, así que valida el premio en el paso `grouped` (sin grupo, el INSERT falla por llave foránea antes de escribir) y lo guarda en el último paso `prized`. Sin `$prize` (clientes anteriores) `UpdateTournamentSettings` conserva el guardado.
 - **Marcador en vivo.** Desde `/partido/:id`, el superadmin registra cada gol (normal, penal, autogol o «Sin asignar») y cada tarjeta al momento, con su minuto. El minuto se calcula con la hora de inicio programada y se puede corregir. Usa `AddLiveMatchGoal`, `DeleteLiveMatchGoal`, `AddLiveMatchCard` y `DeleteLiveMatchCard`:
   - Mientras el partido sigue `SCHEDULED`, cada cambio recalcula `home_score`/`away_score` contando las filas de `match_goals`. El autogol se guarda en el `club_id` del equipo al que se le suma y lo marca un jugador rival.
   - La tabla y los goleadores solo cuentan `PLAYED`, así que el marcador parcial no los toca.
@@ -444,6 +445,7 @@ Vistas SQL (`@view`):
 | Vista | Contenido |
 |---|---|
 | `PlatformClaimState` | `open = true` si `platform_admins` está vacía |
+| `PlatformStat` | Cifras de la portada: clubes activos, jugadores activos (sin cuerpo técnico) de esos clubes y canchas activas |
 | `MatchListing` | Partidos `SCHEDULED` con fecha y hora, con `starts_at` para ordenar |
 | `TournamentStanding` | PJ, G, E, P, GF, GC, DG, puntos y posición por torneo |
 | `TournamentScorer` | Goles y asistencias por jugador (sin autogoles) |

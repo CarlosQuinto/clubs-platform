@@ -111,6 +111,12 @@ function ArchiveCard({
           <strong>{card.name}</strong>
           <span className="tour-card__meta">{card.meta}</span>
           {card.startLabel ? <span className="tour-card__start">{card.startLabel}</span> : null}
+          {card.prize ? (
+            <span className="tour-card__prize">
+              <Trophy size={13} aria-hidden />
+              Premio: {card.prize}
+            </span>
+          ) : null}
         </span>
       </Link>
       {card.categoryName ? (

@@ -1987,6 +1987,7 @@ export interface TournamentEditorData {
     durationMinutes: number;
     liveMarginMinutes: number;
     startDate?: DateString | null;
+    prize: string;
     season: {
       id: string;
       startDate?: DateString | null;
@@ -3561,12 +3562,19 @@ export interface HomePageData {
   platformHeroImages: ({
     url: string;
   })[];
+  platformStats: ({
+    clubs?: number | null;
+    players?: number | null;
+    courts?: number | null;
+  })[];
   tournaments: ({
     id: string;
     name: string;
     status: TournamentStatus;
     footballType: FootballType;
     startDate?: DateString | null;
+    prize: string;
+    description: string;
     season: {
       name: string;
       startDate?: DateString | null;
@@ -3640,6 +3648,7 @@ const { data } = await homePage(dataConnect, homePageVars);
 
 console.log(data.platformSettings);
 console.log(data.platformHeroImages);
+console.log(data.platformStats);
 console.log(data.tournaments);
 console.log(data.matches);
 console.log(data.adPlacements);
@@ -3649,6 +3658,7 @@ homePage(homePageVars).then((response) => {
   const data = response.data;
   console.log(data.platformSettings);
   console.log(data.platformHeroImages);
+  console.log(data.platformStats);
   console.log(data.tournaments);
   console.log(data.matches);
   console.log(data.adPlacements);
@@ -3681,6 +3691,7 @@ const { data } = await executeQuery(ref);
 
 console.log(data.platformSettings);
 console.log(data.platformHeroImages);
+console.log(data.platformStats);
 console.log(data.tournaments);
 console.log(data.matches);
 console.log(data.adPlacements);
@@ -3690,6 +3701,7 @@ executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.platformSettings);
   console.log(data.platformHeroImages);
+  console.log(data.platformStats);
   console.log(data.tournaments);
   console.log(data.matches);
   console.log(data.adPlacements);
@@ -4398,6 +4410,7 @@ export interface TournamentArchiveData {
     status: TournamentStatus;
     footballType: FootballType;
     startDate?: DateString | null;
+    prize: string;
     season: {
       name: string;
       active: boolean;
@@ -4649,6 +4662,7 @@ export interface TournamentScreenData {
     footballType: FootballType;
     startDate?: DateString | null;
     durationMinutes: number;
+    prize: string;
     season: {
       name: string;
     };
@@ -9586,6 +9600,7 @@ export interface CreateTournamentVariables {
   durationMinutes: number;
   startDate: DateString;
   description: string;
+  prize?: string;
 }
 ```
 ### Return Type
@@ -9603,6 +9618,7 @@ export interface CreateTournamentData {
   };
   grouped?: unknown | null;
   tournament?: unknown | null;
+  prized?: unknown | null;
 }
 ```
 ### Using `CreateTournament`'s action shortcut function
@@ -9623,13 +9639,14 @@ const createTournamentVars: CreateTournamentVariables = {
   durationMinutes: ..., 
   startDate: ..., 
   description: ..., 
+  prize: ..., // optional
 };
 
 // Call the `createTournament()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await createTournament(createTournamentVars);
 // Variables can be defined inline as well.
-const { data } = await createTournament({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., });
+const { data } = await createTournament({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9638,6 +9655,7 @@ const { data } = await createTournament(dataConnect, createTournamentVars);
 console.log(data.query);
 console.log(data.grouped);
 console.log(data.tournament);
+console.log(data.prized);
 
 // Or, you can use the `Promise` API.
 createTournament(createTournamentVars).then((response) => {
@@ -9645,6 +9663,7 @@ createTournament(createTournamentVars).then((response) => {
   console.log(data.query);
   console.log(data.grouped);
   console.log(data.tournament);
+  console.log(data.prized);
 });
 ```
 
@@ -9666,12 +9685,13 @@ const createTournamentVars: CreateTournamentVariables = {
   durationMinutes: ..., 
   startDate: ..., 
   description: ..., 
+  prize: ..., // optional
 };
 
 // Call the `createTournamentRef()` function to get a reference to the mutation.
 const ref = createTournamentRef(createTournamentVars);
 // Variables can be defined inline as well.
-const ref = createTournamentRef({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., });
+const ref = createTournamentRef({ userId: ..., id: ..., name: ..., seasonId: ..., categoryId: ..., groupId: ..., footballType: ..., durationMinutes: ..., startDate: ..., description: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -9684,6 +9704,7 @@ const { data } = await executeMutation(ref);
 console.log(data.query);
 console.log(data.grouped);
 console.log(data.tournament);
+console.log(data.prized);
 
 // Or, you can use the `Promise` API.
 executeMutation(ref).then((response) => {
@@ -9691,6 +9712,7 @@ executeMutation(ref).then((response) => {
   console.log(data.query);
   console.log(data.grouped);
   console.log(data.tournament);
+  console.log(data.prized);
 });
 ```
 
@@ -15356,6 +15378,7 @@ export interface UpdateTournamentSettingsVariables {
   durationMinutes: number;
   startDate?: DateString | null;
   liveMarginMinutes?: number | null;
+  prize?: string | null;
 }
 ```
 ### Return Type
@@ -15389,13 +15412,14 @@ const updateTournamentSettingsVars: UpdateTournamentSettingsVariables = {
   durationMinutes: ..., 
   startDate: ..., // optional
   liveMarginMinutes: ..., // optional
+  prize: ..., // optional
 };
 
 // Call the `updateTournamentSettings()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await updateTournamentSettings(updateTournamentSettingsVars);
 // Variables can be defined inline as well.
-const { data } = await updateTournamentSettings({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., });
+const { data } = await updateTournamentSettings({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -15427,12 +15451,13 @@ const updateTournamentSettingsVars: UpdateTournamentSettingsVariables = {
   durationMinutes: ..., 
   startDate: ..., // optional
   liveMarginMinutes: ..., // optional
+  prize: ..., // optional
 };
 
 // Call the `updateTournamentSettingsRef()` function to get a reference to the mutation.
 const ref = updateTournamentSettingsRef(updateTournamentSettingsVars);
 // Variables can be defined inline as well.
-const ref = updateTournamentSettingsRef({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., });
+const ref = updateTournamentSettingsRef({ userId: ..., id: ..., legs: ..., footballType: ..., durationMinutes: ..., startDate: ..., liveMarginMinutes: ..., prize: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);

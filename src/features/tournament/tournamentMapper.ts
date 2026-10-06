@@ -130,6 +130,7 @@ export function toTournamentScreen(data: TournamentScreenData): TournamentScreen
       tournament.category.name,
       FOOTBALL_LABEL[tournament.footballType],
     ].filter((chip) => chip.trim()),
+    prize: (tournament.prize ?? "").trim(),
     durationMinutes: asMatchDuration(tournament.durationMinutes),
     startDate: tournament.startDate || "",
     showPodium:

@@ -798,22 +798,33 @@ mutation CreateTournament(
   $durationMinutes: Int!
   $startDate: Date!
   $description: String!
+  $prize: String! = ""
 ) @auth(level: USER) {
   query {
     platformAdmin(key: { userId: $userId }) @check(message: "No se pudo guardar.") {
       user { id }
     }
   }
+  # El INSERT del torneo ya usa $1–$9: el premio se valida aquí (sin grupo, el torneo falla
+  # por la llave foránea antes de escribirse) y se guarda en el último paso.
+  # Misma regla que isTournamentPrize() en src/shared/textLimits.ts.
   grouped: _executeReturningFirst(
     sql: """
       INSERT INTO tournament_groups (id, label)
       SELECT $1, btrim($2)
       WHERE char_length(btrim($2)) BETWEEN 3 AND 50
         AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
+        AND (
+          btrim($3) = ''
+          OR (
+            char_length(btrim($3)) <= 60
+            AND btrim($3) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)*$'
+          )
+        )
       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label
       RETURNING id
     """
-    params: [$groupId, $name]
+    params: [$groupId, $name, $prize]
   )
   tournament: _executeReturningFirst(
     sql: """
@@ -860,6 +871,22 @@ mutation CreateTournament(
       $startDate
       $description
     ]
+  )
+  prized: _executeReturningFirst(
+    sql: """
+      UPDATE tournaments
+      SET prize = btrim($2)
+      WHERE id = $1
+        AND (
+          btrim($2) = ''
+          OR (
+            char_length(btrim($2)) <= 60
+            AND btrim($2) ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,+$/()-]+)*$'
+          )
+        )
+      RETURNING id
+    """
+    params: [$id, $prize]
   )
 }
 

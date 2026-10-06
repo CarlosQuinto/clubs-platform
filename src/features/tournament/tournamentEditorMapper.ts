@@ -25,6 +25,7 @@ export function toTournamentEditor(data: TournamentEditorData): TournamentEditor
     durationMinutes: asMatchDuration(row.durationMinutes),
     liveMarginMinutes: asLiveMargin(row.liveMarginMinutes),
     startDate: row.startDate || undefined,
+    prize: row.prize ?? "",
   };
   const clubs: ClubSummary[] = data.clubs.map((club) => ({
     id: club.id,

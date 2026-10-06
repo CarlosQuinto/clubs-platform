@@ -116,7 +116,7 @@ export default function PlatformLayout({
   const loginButton = (
     <button
       type="button"
-      className="platform-auth-btn is-in"
+      className="platform-auth-btn is-in platform-topbar__login"
       onClick={() => {
         closeMenu();
         navigate("/login");
@@ -142,6 +142,23 @@ export default function PlatformLayout({
       {label}
     </Link>
   );
+
+  // Enlaces visibles en la barra superior desde escritorio; el cajón sigue para móvil y administración.
+  const topLinks: { to: string; label: string; active: boolean }[] = [
+    { to: "/", label: "Inicio", active: pathname === "/" },
+    {
+      to: "/torneos",
+      label: "Torneos",
+      active: pathname === "/torneos" || pathname.startsWith("/torneos/"),
+    },
+    {
+      to: "/partidos",
+      label: "Partidos",
+      active: pathname === "/partidos" || pathname.startsWith("/partido/"),
+    },
+    { to: "/equipos", label: "Equipos", active: pathname === "/equipos" },
+    ...(showCourts ? [{ to: "/canchas", label: "Canchas", active: pathname === "/canchas" }] : []),
+  ];
 
   const sidebar = (
     <aside className={menuOpen ? "platform-sidebar is-open" : "platform-sidebar"}>
@@ -304,10 +321,25 @@ export default function PlatformLayout({
             {logoUrl ? (
               <img src={logoUrl} alt="" />
             ) : (
-              <Shield className="platform-topbar__mark" color={C.amber} />
+              <span className="platform-topbar__mark">
+                <Shield color={C.amber} />
+              </span>
             )}
             <span>{brandName}</span>
           </Link>
+          <nav className="platform-topbar__nav" aria-label="Secciones">
+            {topLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                aria-current={link.active ? "page" : undefined}
+                className={link.active ? "is-on" : undefined}
+                onClick={() => onDestinationClick(link.to)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
           {user ? (
             <div className="platform-topbar__space">
               <SpaceSwitcher variant="topbar" />

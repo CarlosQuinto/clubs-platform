@@ -14,6 +14,9 @@ const SPACED_LABEL_RE = new RegExp(`^[${LATIN_LETTERS}0-9]+(?: [${LATIN_LETTERS}
 const TOURNAMENT_NOTE_RE = new RegExp(
   `^[${LATIN_LETTERS}0-9.,¡!¿?-]+(?: [${LATIN_LETTERS}0-9.,¡!¿?-]+)*$`,
 );
+const TOURNAMENT_PRIZE_RE = new RegExp(
+  `^[${LATIN_LETTERS}0-9.,+$/()-]+(?: [${LATIN_LETTERS}0-9.,+$/()-]+)*$`,
+);
 
 function singleSpaces(value: string) {
   return value.replace(/ {2,}/g, " ").replace(/^ +/, "");
@@ -62,6 +65,19 @@ export function isTournamentNote(value: string) {
   const clean = value.trim();
   if (!clean) return true;
   return clean.length <= 100 && TOURNAMENT_NOTE_RE.test(clean);
+}
+
+/** Premio al campeón: opcional, hasta 60 caracteres («$25,000 MXN», «Trofeo + uniformes»). */
+export function tournamentPrize(value: string, max = 60) {
+  return singleSpaces(
+    value.replace(new RegExp(`[^${LATIN_LETTERS}0-9.,+$/()\\- ]`, "g"), ""),
+  ).slice(0, max);
+}
+
+export function isTournamentPrize(value: string) {
+  const clean = value.trim();
+  if (!clean) return true;
+  return clean.length <= 60 && TOURNAMENT_PRIZE_RE.test(clean);
 }
 
 const COURT_NOTE_RE = new RegExp(`^[${LATIN_LETTERS}0-9.,-]+(?: [${LATIN_LETTERS}0-9.,-]+)*$`);

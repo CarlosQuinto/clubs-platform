@@ -63,6 +63,7 @@ export interface RoundView {
 export interface TournamentScreenView {
   title: string;
   chips: string[];
+  prize: string;
   durationMinutes: number;
   startDate: string;
   showPodium: boolean;

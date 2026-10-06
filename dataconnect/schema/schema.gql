@@ -283,6 +283,8 @@ type Tournament @table(name: "tournaments", key: "id")
   liveMarginMinutes: Int! @default(value: 10)
   startDate: Date
   description: String! @default(value: "")
+  # Premio al campeón en texto libre («$25,000 MXN», «Trofeo + uniformes»); vacío = sin premio.
+  prize: String! @col(dataType: "varchar(60)") @default(value: "")
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
@@ -616,6 +618,25 @@ type PlatformClaimState @view(sql: """
 """) {
   id: Int
   open: Boolean
+}
+
+# Cifras públicas de la portada: clubes activos, jugadores (sin cuerpo técnico) y canchas.
+type PlatformStat @view(sql: """
+  SELECT
+    1 AS id,
+    (SELECT count(*)::int FROM clubs WHERE active AND deleted_at IS NULL) AS clubs,
+    (
+      SELECT count(*)::int
+      FROM players p
+      JOIN clubs c ON c.id = p.club_id
+      WHERE p.active AND NOT p.is_coach AND c.active AND c.deleted_at IS NULL
+    ) AS players,
+    (SELECT count(*)::int FROM courts WHERE active) AS courts
+""") {
+  id: Int
+  clubs: Int
+  players: Int
+  courts: Int
 }
 
 type MatchListing @view(sql: """

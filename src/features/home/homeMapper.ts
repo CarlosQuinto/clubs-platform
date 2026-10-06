@@ -11,22 +11,22 @@ import {
   PLATFORM_HEADLINE,
 } from "../../domains/clubs/clubDefaults";
 import { tournamentPhase } from "../../domains/competition/tournamentPhase";
-import { liveMatchPhase, liveMatchWindow } from "../../domains/matches/liveMatchPhase";
+import { liveMatchPhase, liveMatchWindow, liveMinuteLabel } from "../../domains/matches/liveMatchPhase";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatFriendlyDate, formatFriendlyTime } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
 import { asLiveMargin, asMatchDuration } from "../../shared/types";
 import { formatCalendarDate } from "../tournament/tournamentMapper";
-import type { UpcomingMatchView } from "../matches/matchesViewState";
 import type {
   HomeAdView,
+  HomeMatchView,
   HomePageModel,
+  HomeStatView,
   HomeTournamentCard,
   LiveMatchView,
 } from "./homeViewState";
 
 const MATCH_LIMIT = 12;
-const TONE_COUNT = 4;
 const MONTHS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 const TIME_RE = /^\d{2}:\d{2}$/;
 const LIVE_SOON_MS = 2 * 60_000;
@@ -72,12 +72,10 @@ function phaseOf(tournament: TournamentRow, today: string) {
 function toTournamentCard(
   tournament: TournamentRow,
   joinBase: string,
-  today: string,
+  phase: "active" | "upcoming",
 ): HomeTournamentCard {
   const clubs = clubCount(tournament.tournamentClubs_on_tournament);
-  const clubLabel = clubs === 1 ? "1 club" : `${clubs} clubes`;
   const begins = formatCalendarDate(tournament.startDate || tournament.season.startDate);
-  const upcoming = phaseOf(tournament, today) === "upcoming";
   const joinHref =
     tournament.status === TournamentStatus.FINISHED || !joinBase
       ? null
@@ -89,20 +87,60 @@ function toTournamentCard(
     id: tournament.id,
     href: `/torneos/${tournament.id}`,
     name: tournament.name,
+    phase,
     playedMatches: clubCount(tournament.matches_on_tournament),
     categoryName: tournament.category.name,
-    toneIndex: (Math.max(1, tournament.category.sortOrder) - 1) % TONE_COUNT,
-    meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType], clubLabel].join(" · "),
-    startLabel: upcoming && begins ? `Inicia ${begins}` : null,
+    meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType]]
+      .filter((part) => part.trim())
+      .join(" · "),
+    // `?? ""`: un servidor sin el último despliegue de Data Connect no trae estos campos.
+    description: (tournament.description ?? "").trim(),
+    startLabel: begins ? (phase === "active" ? "Inició" : "Inicia") : null,
+    startDate: begins || null,
+    clubsLabel: clubs === 1 ? "1 equipo" : `${clubs} equipos`,
+    prize: (tournament.prize ?? "").trim(),
     joinHref,
   };
+}
+
+function plural(value: number, one: string, many: string) {
+  return value === 1 ? one : many;
+}
+
+function toStats(
+  row: HomePageData["platformStats"][number] | undefined,
+  courtsEnabled: boolean,
+): HomeStatView[] {
+  if (!row) return [];
+  const clubs = row.clubs ?? 0;
+  const players = row.players ?? 0;
+  const courts = courtsEnabled ? (row.courts ?? 0) : 0;
+  return [
+    { value: clubs, label: plural(clubs, "Club activo", "Clubes activos") },
+    { value: players, label: plural(players, "Jugador registrado", "Jugadores registrados") },
+    { value: courts, label: plural(courts, "Cancha", "Canchas") },
+  ].filter((stat) => stat.value > 0);
+}
+
+/** Temporada más repetida entre los torneos vigentes, con cuántos están en curso. */
+function seasonLabel(active: TournamentRow[], upcoming: TournamentRow[]): string | null {
+  const pool = active.length > 0 ? active : upcoming;
+  const counts = new Map<string, number>();
+  for (const tournament of pool) {
+    const name = tournament.season.name.trim();
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const season = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!season) return null;
+  if (active.length === 0) return `Temporada ${season} · Próximos torneos`;
+  return `Temporada ${season} · ${active.length} ${plural(active.length, "torneo en curso", "torneos en curso")}`;
 }
 
 function toMatch(
   match: HomePageData["matches"][number],
   today: string,
   time: string,
-): UpcomingMatchView | null {
+): HomeMatchView | null {
   if (!match.matchDate || !match.startTime || !TIME_RE.test(match.startTime)) return null;
   if (!LIVE.has(match.tournament.status)) return null;
   if (match.matchDate < today) return null;
@@ -125,6 +163,8 @@ function toMatch(
     homeLogo: match.homeClub.logoUrl?.trim() || null,
     awayLogo: match.awayClub.logoUrl?.trim() || null,
     subtitle: [match.tournament.category.name, match.tournament.name].filter(Boolean).join(" · "),
+    categoryName: match.tournament.category.name,
+    tournamentName: match.tournament.name,
     courtId: null,
   };
 }
@@ -157,12 +197,19 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
   const joinBase = settings?.whatsapp?.trim() || "";
   const active: HomeTournamentCard[] = [];
   const upcoming: HomeTournamentCard[] = [];
+  const activeRows: TournamentRow[] = [];
+  const upcomingRows: TournamentRow[] = [];
   for (const tournament of data.tournaments) {
-    const card = toTournamentCard(tournament, joinBase, today);
     const phase = phaseOf(tournament, today);
-    if (phase === "upcoming") upcoming.push(card);
-    else if (phase === "active") active.push(card);
+    if (phase === "upcoming") {
+      upcoming.push(toTournamentCard(tournament, joinBase, phase));
+      upcomingRows.push(tournament);
+    } else if (phase === "active") {
+      active.push(toTournamentCard(tournament, joinBase, phase));
+      activeRows.push(tournament);
+    }
   }
+  const courtsEnabled = settings?.courtsEnabled === true;
   const byName = (a: HomeTournamentCard, b: HomeTournamentCard) => a.name.localeCompare(b.name, "es");
   active.sort(byName);
   upcoming.sort(byName);
@@ -179,7 +226,9 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
       images: images.length > 0 ? images : [...DEFAULT_PLATFORM_HERO_IMAGES],
       headline: settings?.headline.trim() || PLATFORM_HEADLINE,
       tagline: settings?.tagline.trim() || PLATFORM_DESCRIPTION,
-      courtsEnabled: settings?.courtsEnabled === true,
+      courtsEnabled,
+      seasonLabel: seasonLabel(activeRows, upcomingRows),
+      stats: toStats(data.platformStats?.[0], courtsEnabled),
     },
     ads: toAds(data.adPlacements, today),
     matches,
@@ -227,6 +276,7 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
     if (phase !== "live" && phase !== "finished") return [];
     // Finalizado por el superadmin antes de la hora de fin: ya es resultado, no «en vivo».
     if (match.status === "PLAYED") phase = "finished";
+    const window = liveWindow(match);
     const penaltiesHome = score(match.penaltiesHome);
     const penaltiesAway = score(match.penaltiesAway);
     const venue = match.venue.trim();
@@ -235,6 +285,10 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
       href: matchPath(match.id),
       phase,
       pending: phase === "finished" && match.status !== "PLAYED",
+      minuteLabel:
+        phase === "live" && window
+          ? liveMinuteLabel(window.start, now, asMatchDuration(match.tournament.durationMinutes))
+          : null,
       homeName: match.homeClub.name,
       awayName: match.awayClub.name,
       homeLogo: match.homeClub.logoUrl?.trim() || null,

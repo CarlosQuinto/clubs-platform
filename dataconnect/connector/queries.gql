@@ -126,6 +126,11 @@ query HomePage($today: Date!)
   platformHeroImages(orderBy: [{ position: ASC }]) {
     url
   }
+  platformStats(limit: 1) {
+    clubs
+    players
+    courts
+  }
   tournaments(
     where: {
       _or: [{ status: { eq: ACTIVE } }, { status: { eq: UPCOMING } }]
@@ -136,6 +141,8 @@ query HomePage($today: Date!)
     status
     footballType
     startDate
+    prize
+    description
     season { name startDate }
     category { name sortOrder }
     tournamentClubs_on_tournament { _count }
@@ -305,6 +312,7 @@ query TournamentArchive
     status
     footballType
     startDate
+    prize
     season {
       name
       active
@@ -348,6 +356,7 @@ query TournamentScreen($id: String!)
     footballType
     startDate
     durationMinutes
+    prize
     season { name }
     category { name }
     tournamentPodiums_on_tournament(orderBy: [{ place: ASC }]) {
