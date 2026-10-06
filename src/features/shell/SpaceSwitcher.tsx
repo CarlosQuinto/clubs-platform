@@ -271,7 +271,6 @@ export default function SpaceSwitcher({
         confirmLabel="Cerrar sesión"
         danger
         busy={loggingOut}
-        zIndex={1100}
         onConfirm={() => void doLogout()}
         onCancel={() => setConfirmLogout(false)}
       />

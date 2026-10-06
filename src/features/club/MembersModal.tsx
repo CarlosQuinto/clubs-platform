@@ -482,7 +482,6 @@ export function MembersPanel({
       cancelLabel="Volver"
       danger
       busy={canceling}
-      zIndex={10001}
       onConfirm={() => void confirmCancel()}
       onCancel={() => {
         if (!canceling) setCancelInvite(null);

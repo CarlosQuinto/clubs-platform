@@ -85,7 +85,6 @@ export default function AdImageCropper({
       confirmLabel="Usar recorte"
       busy={busy}
       confirmDisabled={!area}
-      zIndex={90}
       onConfirm={() => void confirm()}
       onCancel={onCancel}
     >

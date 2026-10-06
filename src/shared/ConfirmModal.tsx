@@ -16,7 +16,7 @@ export default function ConfirmModal({
   confirmHint,
   dangerAction,
   readOnly = false,
-  zIndex = 80,
+  zIndex = 10100,
   onConfirm,
   onCancel,
 }: {
@@ -43,6 +43,9 @@ export default function ConfirmModal({
 
   // Portal al body: un ancestro con transform o backdrop-filter (la cabecera, una tarjeta
   // con hover) volvería relativo a él el `position: fixed` y el modal quedaría fuera de pantalla.
+  // Al no vivir dentro del modal que lo abre, su z-index compite con todos los overlays de la
+  // app: el valor por defecto debe superar al mayor que anide una confirmación (hoja del
+  // marcador en vivo y modales de club, 10000).
   return createPortal(
     <div
       role="dialog"
