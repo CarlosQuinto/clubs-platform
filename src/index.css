@@ -698,14 +698,14 @@
   gap: 0.35rem;
 }
 
+/* Sin borde: el anuncio se ve entero, como en la franja de la portada. */
 .ad-slot__frame {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 1;
   overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid #e5dfd3;
-  background: #f5f0e6;
+  border-radius: 16px;
+  background: #1c1b1b;
 }
 
 .ad-slot__image {
@@ -7920,6 +7920,31 @@ a.home-card:hover,
 }
 
 /* ── Publicidad / invitación ── */
+/* Con anuncios: franja negra de lado a lado, sin caja, para que el anuncio ocupe todo el ancho. */
+.home-section--promo-ads {
+  position: relative;
+  overflow: hidden;
+  padding: 1.25rem 0 1.75rem;
+  background: #000;
+  color: #fff;
+}
+
+.home-section--promo-ads .home-promo__glow {
+  right: -8rem;
+  bottom: -14rem;
+}
+
+.home-section--promo-ads .home-promo__ads-head {
+  margin-bottom: 0.75rem;
+}
+
+/* En móvil la imagen se sale del relleno de .home-inner y llega a los bordes de la pantalla. */
+.home-section--promo-ads .home-promo__frame {
+  width: auto;
+  margin: 0 -1rem;
+  border-radius: 0;
+}
+
 .home-promo {
   position: relative;
   overflow: hidden;
@@ -8103,6 +8128,16 @@ a.home-card:hover,
 
   .home-promo {
     padding: 3rem;
+  }
+
+  .home-section--promo-ads {
+    padding: 1.5rem 0 2.25rem;
+  }
+
+  .home-section--promo-ads .home-promo__frame {
+    width: 100%;
+    margin: 0;
+    border-radius: 16px;
   }
 }
 

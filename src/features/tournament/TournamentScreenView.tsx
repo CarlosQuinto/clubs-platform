@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { Medal, Pencil, Trophy } from "lucide-react";
 import PlatformLayout from "../shell/PlatformLayout";
+import AdSlot from "../shell/AdSlot";
 import { ScorersTable, StandingsTable } from "./TournamentTables";
 import { useTournamentEdit } from "./TournamentEditModal";
 import { C, RADIUS, SectionCard } from "../../shared/ui";
@@ -55,6 +56,7 @@ export default function TournamentScreenView() {
 
   return (
     <PlatformLayout>
+      <AdSlot placement="tournament" layout="top" />
       <BackLink />
       {error ? (
         <p style={{ color: C.red, margin: "0.75rem 0 0" }}>

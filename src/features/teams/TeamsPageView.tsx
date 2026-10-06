@@ -11,6 +11,7 @@ import {
   Shield,
 } from "lucide-react";
 import PlatformLayout from "../shell/PlatformLayout";
+import AdSlot from "../shell/AdSlot";
 import { FormInput, FormSelect } from "../../shared/ui";
 import { useAuth } from "../../domains/auth/AuthContext";
 import RegisterClubModal from "./RegisterClubModal";
@@ -27,6 +28,7 @@ export default function TeamsPageView() {
   return (
     <PlatformLayout>
       <div className="teams-page">
+        <AdSlot placement="teams" layout="top" />
         <header className="teams-head">
           <span className="teams-head__icon" aria-hidden="true">
             <Shield size={24} />

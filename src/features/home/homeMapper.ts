@@ -177,7 +177,8 @@ function toAds(rows: HomePageData["adPlacements"], today: string): HomeAdView[] 
   return rows
     .flatMap((row) => {
       const ad = row.ad;
-      if (!ad || ad.status !== "EN_CURSO" || !ad.imageUrl) return [];
+      // Las fechas mandan; «Pausado» es el único freno manual (igual que la consulta).
+      if (!ad || ad.status === "PAUSADO" || !ad.imageUrl) return [];
       if (ad.startsOn.slice(0, 10) > today || today > ad.endsOn.slice(0, 10)) return [];
       const imageUrl = safeAdImageUrl(ad.imageUrl);
       if (!imageUrl) return [];

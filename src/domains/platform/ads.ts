@@ -1,7 +1,7 @@
 /** Inventario de publicidad. El cobro vive fuera de la app. */
 
 export const AD_PLACEMENTS = [
-  { id: "home", label: "Inicio, bajo la portada" },
+  { id: "home", label: "Inicio, franja al final de la portada" },
   { id: "tournament", label: "Ficha de torneo" },
   { id: "club", label: "Página del club" },
   { id: "teams", label: "Página de equipos" },
@@ -146,11 +146,12 @@ export function isPlatformAdImageUrl(url: string) {
   }
 }
 
+/** Las fechas deciden la vigencia; «Pausado» es el único freno manual. Misma regla que `LiveAds`. */
 export function isAdLive(ad: Ad, placement: AdPlacement, today = todayIso()) {
   const start = calendarDay(ad.startsAt);
   const end = calendarDay(ad.endsAt);
   return (
-    ad.status === "EN_CURSO" &&
+    ad.status !== "PAUSADO" &&
     ad.placements.includes(placement) &&
     ad.imageUrl.trim().length > 0 &&
     start <= today &&

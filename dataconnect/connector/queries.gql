@@ -174,11 +174,12 @@ query HomePage($today: Date!)
       category { name }
     }
   }
+  # Las fechas deciden la vigencia; «Pausado» es el único freno manual (un programado cuya fecha llegó sale solo).
   adPlacements(
     where: {
       placement: { eq: HOME }
       ad: {
-        status: { eq: EN_CURSO }
+        status: { ne: PAUSADO }
         startsOn: { le: $today }
         endsOn: { ge: $today }
       }
@@ -754,12 +755,13 @@ query CourtHoldsOnDate($date: Date!) @auth(level: PUBLIC) {
   }
 }
 
+# Las fechas deciden la vigencia; «Pausado» es el único freno manual (un programado cuya fecha llegó sale solo).
 query LiveAds($today: Date!, $placement: AdPlacementKind!) @auth(level: PUBLIC) {
   adPlacements(
     where: {
       placement: { eq: $placement }
       ad: {
-        status: { eq: EN_CURSO }
+        status: { ne: PAUSADO }
         startsOn: { le: $today }
         endsOn: { ge: $today }
       }

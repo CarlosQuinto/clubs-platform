@@ -597,7 +597,11 @@ function TournamentsSection({
   );
 }
 
-/** Bloque oscuro del final: los anuncios vigentes rotando o, sin anuncios, la invitación a ligas y canchas. */
+/**
+ * Final de la portada. Con anuncios vigentes es una franja negra de lado a lado con el anuncio
+ * a todo el ancho del contenido (sin caja alrededor, para que se vea más); sin anuncios, la caja
+ * oscura con la invitación a ligas y canchas.
+ */
 function PromoSection({
   ads,
   courtsEnabled,
@@ -615,62 +619,68 @@ function PromoSection({
     </Link>
   ) : null;
 
+  if (ad) {
+    const image = <img src={ad.imageUrl} alt={ad.brand} />;
+    return (
+      <section className="home-section home-section--promo-ads" aria-label="Publicidad">
+        <div className="home-promo__glow" aria-hidden />
+        <div className="home-inner">
+          <div className="home-promo__ads">
+            <div className="home-promo__ads-head">
+              <span className="home-promo__pill">Publicidad</span>
+              <span className="home-promo__brand">{ad.brand}</span>
+              {ads.length > 1 ? (
+                <span className="home-promo__dots" aria-hidden>
+                  {ads.map((item, i) => (
+                    <span key={`${item.imageUrl}-${i}`} className={i === index ? "is-on" : undefined} />
+                  ))}
+                </span>
+              ) : null}
+              {manage}
+            </div>
+            {ad.href ? (
+              <a href={ad.href} target="_blank" rel="noopener noreferrer" className="home-promo__frame">
+                {image}
+              </a>
+            ) : (
+              <div className="home-promo__frame">{image}</div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="home-section home-section--card home-section--promo" aria-label="Publicidad">
       <div className="home-inner">
         <div className="home-promo">
           <div className="home-promo__glow" aria-hidden />
-          {ad ? (
-            <div className="home-promo__ads">
-              <div className="home-promo__ads-head">
-                <span className="home-promo__pill">Publicidad</span>
-                <span className="home-promo__brand">{ad.brand}</span>
-                {ads.length > 1 ? (
-                  <span className="home-promo__dots" aria-hidden>
-                    {ads.map((item, i) => (
-                      <span key={`${item.imageUrl}-${i}`} className={i === index ? "is-on" : undefined} />
-                    ))}
-                  </span>
-                ) : null}
-                {manage}
-              </div>
-              {ad.href ? (
-                <a href={ad.href} target="_blank" rel="noopener noreferrer" className="home-promo__frame">
-                  <img src={ad.imageUrl} alt={ad.brand} />
-                </a>
+          <div className="home-promo__cta">
+            <div className="home-promo__copy">
+              <span className="home-promo__pill">Gestión integral deportiva</span>
+              <h2>¿Administras una liga o eres dueño de canchas?</h2>
+              <p>
+                Lleva tu torneo con calendario, resultados en vivo, tabla de posiciones y
+                goleadores en un solo lugar.
+              </p>
+              {manage}
+            </div>
+            <div className="home-promo__actions">
+              <Link to="/contacto#formulario" className="home-btn home-btn--gold home-btn--lg">
+                Registrar mi liga
+              </Link>
+              {courtsEnabled ? (
+                <Link to="/canchas" className="home-btn home-btn--glass home-btn--lg">
+                  Renta una cancha
+                </Link>
               ) : (
-                <div className="home-promo__frame">
-                  <img src={ad.imageUrl} alt={ad.brand} />
-                </div>
+                <Link to="/registrar-equipo#formulario" className="home-btn home-btn--glass home-btn--lg">
+                  Registra tu equipo
+                </Link>
               )}
             </div>
-          ) : (
-            <div className="home-promo__cta">
-              <div className="home-promo__copy">
-                <span className="home-promo__pill">Gestión integral deportiva</span>
-                <h2>¿Administras una liga o eres dueño de canchas?</h2>
-                <p>
-                  Lleva tu torneo con calendario, resultados en vivo, tabla de posiciones y
-                  goleadores en un solo lugar.
-                </p>
-                {manage}
-              </div>
-              <div className="home-promo__actions">
-                <Link to="/contacto#formulario" className="home-btn home-btn--gold home-btn--lg">
-                  Registrar mi liga
-                </Link>
-                {courtsEnabled ? (
-                  <Link to="/canchas" className="home-btn home-btn--glass home-btn--lg">
-                    Renta una cancha
-                  </Link>
-                ) : (
-                  <Link to="/registrar-equipo#formulario" className="home-btn home-btn--glass home-btn--lg">
-                    Registra tu equipo
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </section>
