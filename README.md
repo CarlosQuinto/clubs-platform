@@ -106,7 +106,7 @@ Las Cloud Functions envían correos HTML y texto para: invitación a un club, in
 
 ### PWA
 
-`vite-plugin-pwa` genera el manifiesto y el service worker con `registerType: "autoUpdate"`. Nombre, nombre corto y descripción salen de [`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts); el ícono es `public/icon.svg`. El modo es `generateSW`: `dist/sw.js` precachea los archivos del build. El registro vive en [`src/main.tsx`](src/main.tsx) (`registerSW` de `virtual:pwa-register`): cuando se activa una versión nueva tras un despliegue, la pestaña se recarga sola una vez, así nadie se queda con el bundle anterior del precache. Los datos (Data Connect y Functions) siguen necesitando conexión.
+`vite-plugin-pwa` genera el manifiesto y el service worker con `registerType: "autoUpdate"`. Nombre, nombre corto y descripción salen de [`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts); el ícono es `public/icon.svg`. El modo es `generateSW`: `dist/sw.js` precachea los archivos del build. El registro vive en [`src/app/pwa.ts`](src/app/pwa.ts) (`registerSW` de `virtual:pwa-register`): cuando se activa una versión nueva tras un despliegue, la pestaña se recarga sola, así nadie se queda con el bundle anterior del precache. Con freno de una recarga por minuto: justo después de un despliegue el CDN puede entregar alternadamente el `sw.js` viejo y el nuevo, y sin el freno la pestaña entraría en un bucle de recargas. Los datos (Data Connect y Functions) siguen necesitando conexión.
 
 ---
 
