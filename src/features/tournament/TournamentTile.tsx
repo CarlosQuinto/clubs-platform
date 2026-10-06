@@ -65,7 +65,8 @@ export default function TournamentTile({
           </span>
         </div>
         <h3>
-          <Link to={card.href} onClick={markScrollTopAfterNav}>
+          {/* Se estira sobre toda la tarjeta (::after); los botones quedan encima con su propia acción. */}
+          <Link to={card.href} className="home-tour__link" onClick={markScrollTopAfterNav}>
             {card.name}
           </Link>
         </h3>

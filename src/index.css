@@ -7759,8 +7759,34 @@ a.home-card:hover,
 
 /* ── Torneos ── */
 .home-tour {
+  position: relative;
   gap: 1.25rem;
   padding: 1.5rem;
+}
+
+/* Toda la tarjeta lleva al torneo: el enlace del título se estira sobre ella. */
+.home-tour__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.home-tour__link:focus-visible {
+  outline: none;
+}
+
+.home-tour__link:focus-visible::after {
+  outline: 2px solid var(--gold-deep);
+  outline-offset: 2px;
+}
+
+/* Los botones quedan por encima del enlace estirado y conservan su acción. */
+.home-tour__admin,
+.home-tour > .home-btn {
+  position: relative;
+  z-index: 1;
 }
 
 .home-tour__body {
@@ -7792,7 +7818,7 @@ a.home-card:hover,
   overflow-wrap: anywhere;
 }
 
-.home-tour h3 a:hover {
+.home-tour:hover h3 a {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
