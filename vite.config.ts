@@ -12,6 +12,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // El registro vive en src/main.tsx (virtual:pwa-register): con ese import el plugin ya no inyecta
+      // registerSW.js. skipWaiting + clientsClaim explícitos: el SW nuevo toma el control al instante y
+      // el registro recarga la pestaña una vez (con `injectRegister: false` el plugin los desactivaría).
+      workbox: { skipWaiting: true, clientsClaim: true },
       includeAssets: ["icon.svg"],
       manifest: {
         // Personaliza estos valores en src/domains/clubs/clubDefaults.ts

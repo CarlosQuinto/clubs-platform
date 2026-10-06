@@ -106,7 +106,7 @@ Las Cloud Functions envían correos HTML y texto para: invitación a un club, in
 
 ### PWA
 
-`vite-plugin-pwa` genera el manifiesto y el service worker con `registerType: "autoUpdate"`. Nombre, nombre corto y descripción salen de [`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts); el ícono es `public/icon.svg`. El modo es `generateSW`: `dist/sw.js` precachea los archivos del build. Los datos (Data Connect y Functions) siguen necesitando conexión.
+`vite-plugin-pwa` genera el manifiesto y el service worker con `registerType: "autoUpdate"`. Nombre, nombre corto y descripción salen de [`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts); el ícono es `public/icon.svg`. El modo es `generateSW`: `dist/sw.js` precachea los archivos del build. El registro vive en [`src/main.tsx`](src/main.tsx) (`registerSW` de `virtual:pwa-register`): cuando se activa una versión nueva tras un despliegue, la pestaña se recarga sola una vez, así nadie se queda con el bundle anterior del precache. Los datos (Data Connect y Functions) siguen necesitando conexión.
 
 ---
 
@@ -130,7 +130,7 @@ flowchart LR
   - `app` (`dataconnect/connector/*.gql`, 47 queries y 97 mutations): lo usa el navegador con `@auth(level: PUBLIC)` o `USER`. Genera el SDK en `dataconnect/generated`.
   - `functions` (`dataconnect/functions/functions.gql`, 7 queries y 2 mutations): todas `@auth(level: NO_ACCESS)`. Solo las ejecuta el Admin SDK desde las funciones, que así leen de SQL los datos del correo en vez de confiar en lo que manda el cliente.
 - **Cloud Functions.** Siete *callables* en [`functions/src`](functions/src). No hay triggers. Validan permisos con la operación `FunctionsAdminGate` ([`sql.ts`](functions/src/sql.ts)).
-- **Hosting.** Sirve `dist/` y reescribe toda ruta a `/index.html` ([`firebase.json`](firebase.json)).
+- **Hosting.** Sirve `dist/` y reescribe toda ruta a `/index.html` ([`firebase.json`](firebase.json)). `sw.js`, `index.html` y el manifiesto van con `Cache-Control: no-cache` para que cada despliegue se detecte al momento; `assets/*` (con hash) se cachean un año.
 
 ### Capas de `src/`
 
