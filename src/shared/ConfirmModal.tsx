@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useModalLock } from "./useModalLock";
 import { C, PrimaryButton, RADIUS, SecondaryButton, SHADOWS } from "./ui";
 
@@ -40,7 +41,9 @@ export default function ConfirmModal({
   useModalLock(open ? onCancel : null);
   if (!open) return null;
 
-  return (
+  // Portal al body: un ancestro con transform o backdrop-filter (la cabecera, una tarjeta
+  // con hover) volvería relativo a él el `position: fixed` y el modal quedaría fuera de pantalla.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -165,6 +168,7 @@ export default function ConfirmModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
