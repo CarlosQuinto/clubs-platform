@@ -274,9 +274,10 @@ function buildLineup(club, footballType, subs) {
 
 // ---------- torneos y partidos ----------
 
-/** Todos contra todos (método del círculo), igual que src/domains/tournaments/fixtures.ts. */
+/** Todos contra todos (método del círculo), igual que src/domains/competition/fixtures.ts: clubes ordenados por id. */
 function roundRobin(teams, legs) {
-  const list = teams.length % 2 ? [...teams, null] : [...teams];
+  const sorted = [...teams].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const list = sorted.length % 2 ? [...sorted, null] : sorted;
   const n = list.length;
   const rounds = [];
   for (let r = 0; r < n - 1; r++) {

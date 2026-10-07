@@ -2093,10 +2093,26 @@
   min-width: 0;
 }
 
+/* iOS pinta date/time con apariencia nativa: ancho mínimo propio, valor centrado y sin altura si está vacío */
 input[type="date"],
-input[type="time"] {
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.5em;
+  margin: 0;
 }
 
 .hours-form {

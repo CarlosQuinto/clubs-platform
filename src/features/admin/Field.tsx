@@ -16,7 +16,7 @@ export default function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", minWidth: 0 }}>
       <span
         style={{
           fontSize: "0.7rem",

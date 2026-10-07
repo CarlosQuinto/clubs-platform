@@ -27,12 +27,15 @@ export function fixtureShape(clubCount: number, legs: number) {
 /** Partido conservado al pasar a 1 partido cuya jornada no es la de ida que le toca. */
 export type RelabelFixture = { match: Match; round: string };
 
-/** Round-robin (método del círculo). `legs` 1 = solo ida, 2 = ida y vuelta. */
+/**
+ * Round-robin (método del círculo). `legs` 1 = solo ida, 2 = ida y vuelta.
+ * Los ids se ordenan para que el plan no dependa del orden de inscripción: guardar con los mismos clubes da siempre las mismas jornadas.
+ */
 export function generateRoundRobin(
   clubIds: string[],
   legs: number,
 ): PlannedFixture[] {
-  const teams = [...clubIds];
+  const teams = [...clubIds].sort();
   if (teams.length < 2) return [];
 
   const slots: (string | null)[] =
@@ -162,6 +165,7 @@ function diffDoubleLeg(tournament: Tournament, matches: Match[]) {
   const plan = generateRoundRobin(tournament.clubIds, 2);
   const unused = new Set(matches);
   const toCreate: PlannedFixture[] = [];
+  const toRelabel: RelabelFixture[] = [];
 
   for (const fixture of plan) {
     const candidates = matches
@@ -171,7 +175,12 @@ function diffDoubleLeg(tournament: Tournament, matches: Match[]) {
       toCreate.push(fixture);
       continue;
     }
-    unused.delete(candidates[0]);
+    const kept = candidates[0];
+    unused.delete(kept);
+    // El que se queda pasa a la jornada que le toca en el plan (los jugados no se mueven)
+    if (!isPlayed(kept) && (kept.round || "").trim() !== fixture.round) {
+      toRelabel.push({ match: kept, round: fixture.round });
+    }
   }
 
   const enrolled = new Set(tournament.clubIds);
@@ -182,7 +191,7 @@ function diffDoubleLeg(tournament: Tournament, matches: Match[]) {
     return !isPlayed(m);
   });
 
-  return { plan, toCreate, toDelete, toRelabel: [] as RelabelFixture[] };
+  return { plan, toCreate, toDelete, toRelabel };
 }
 
 export function diffFixtures(tournament: Tournament, matches: Match[]) {
