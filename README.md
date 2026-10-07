@@ -525,6 +525,37 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up
 
 Para actualizar: `git pull` y el mismo comando. Las migraciones `0*` nuevas se aplican una vez y las funciones `1*` siempre. Si prefieres otro proxy (nginx, Traefik) o dos dominios (`app.` y `api.`), usa solo `docker-compose.yml` y apunta tu proxy a `web:80` y `kong:8000`.
 
+Con `DB_SEED=false` la base arranca vacía: el primer usuario que se registre queda como superadministrador, así que regístrate en cuanto el sitio responda. No uses la semilla en un servidor público (sus usuarios de prueba tienen contraseñas conocidas).
+
+### Ejemplo: Hetzner + DuckDNS
+
+Así está montado el servidor de pruebas: un VPS de [Hetzner Cloud](https://console.hetzner.cloud) (*Cost-Optimized*, 2 vCPU y 4 GB, unos 5 €/mes) y un subdominio gratuito de [DuckDNS](https://www.duckdns.org).
+
+1. Crea el servidor con Ubuntu 24.04, IPv4 pública y tu llave SSH. Asígnale un *Firewall* con entrada TCP 22, 80 y 443, UDP 443 e ICMP desde cualquier IP, y sin reglas de salida (sin reglas, la salida queda abierta). No hace falta volumen: el disco de 40 GB alcanza.
+2. En DuckDNS crea el subdominio (p. ej. `miliga.duckdns.org`) y apúntalo a la IP del servidor. Comprueba con `ping` que resuelve antes de arrancar, o Caddy no podrá sacar el certificado.
+3. En el servidor instala Docker (`curl -fsSL https://get.docker.com | sh`) y Node 20 (`curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt install -y nodejs`).
+4. Si el repositorio es privado, dale al servidor una *deploy key* de solo lectura y clona por SSH:
+   ```bash
+   ssh-keygen -t ed25519 -N "" -f ~/.ssh/github_deploy -C "servidor"
+   printf "Host github.com
+  IdentityFile ~/.ssh/github_deploy
+" >> ~/.ssh/config
+   cat ~/.ssh/github_deploy.pub   # GitHub → Settings → Deploy keys → Add deploy key (sin permiso de escritura)
+   git clone git@github.com:CarlosQuinto/clubs-platform.git
+   ```
+5. Sigue los pasos de arriba con `DOMAIN=miliga.duckdns.org`.
+
+Hetzner bloquea la salida a los puertos 25 y 465 en las cuentas nuevas: para Gmail usa `SMTP_PORT=587` (la API ya prueba 465 y luego 587). Para cargar la contraseña de aplicación sin que quede en el historial de la terminal:
+
+```bash
+cd docker
+read -rsp "Contraseña de aplicación: " P; echo; P=${P// /}
+sed -i -e "s|^SMTP_PASS=.*|SMTP_PASS=$P|" -e "s|^GMAIL_APP_PASSWORD=.*|GMAIL_APP_PASSWORD=$P|" .env; unset P
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up -d
+```
+
+Para cambiar luego a otro servidor o dominio: `pg_dump` de la base, el volumen de Storage y los mismos pasos con el `DOMAIN` nuevo.
+
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) comprueba tipos, build, `check:firebase`, `db:check`, la API y que ambas imágenes se construyen. No despliega.
 
 ---
