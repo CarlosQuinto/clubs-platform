@@ -17,7 +17,7 @@ import {
   saveHeader,
   saveSocial,
 } from "../../../domains/platform/platformCommands";
-import { uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+import { isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 import type { PlatformCover } from "../../../shared/types";
 import {
   DEFAULT_PLATFORM_HERO_IMAGES,
@@ -84,7 +84,7 @@ const CAROUSEL_FILE_MAX_BYTES = 50 * 1024 * 1024;
 const URL_TIP = "Usa una URL que empiece con http:// o https://, sin espacios.";
 
 function isStoredImage(url: string) {
-  return url.includes("firebasestorage.googleapis.com");
+  return isStoredImageUrl(url);
 }
 
 /** Valores guardados, ya limpios, contra los que se compara cada formulario. */

@@ -13,7 +13,7 @@ import {
 
 // 👇 IMPORTACIONES DE STORAGE Y COMPRESIÓN 👇
 import { useClub } from "../../../domains/clubs/ClubContext";
-import { deleteStoredImage, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 
 // ── COMPONENTE SWITCH (SLIDER) PERSONALIZADO ──
 const ToggleSwitch = ({
@@ -168,7 +168,7 @@ export default function PlayerForm({
       if (
         oldImage &&
         oldImage !== playerImageUrl &&
-        oldImage.includes("firebasestorage.googleapis.com")
+        isStoredImageUrl(oldImage)
       ) {
         try {
           await deleteStoredImage(oldImage);

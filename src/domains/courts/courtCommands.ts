@@ -1,15 +1,15 @@
 import {
   adminCourts,
   type AdminCourtsData,
-  clearCourtWindows,
+  type CourtHoldOutside,
+  type MatchOutside,
   dataConnect,
   deleteCourt,
   deleteManualCourtHold,
   QueryFetchPolicy,
   saveCourt,
   saveCourtHold,
-  saveCourtSettings,
-  saveCourtWindow,
+  saveCourtModule as saveCourtModuleRpc,
 } from "../../infrastructure/dataconnect";
 import { sessionUserId } from "../../infrastructure/auth";
 import { savedRow } from "../../shared/saved";
@@ -18,23 +18,33 @@ export async function loadCourts(): Promise<AdminCourtsData> {
   return (await adminCourts(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })).data;
 }
 
-export async function saveCourtModule(enabled: boolean, slotMinutes: number, windows: {
-  weekday: number;
-  startTime: string;
-  endTime: string;
-}[]) {
-  const userId = sessionUserId();
-  const settings = await saveCourtSettings(dataConnect, { userId, enabled, slotMinutes });
-  savedRow(settings.data.settings);
-  await clearCourtWindows(dataConnect, { userId });
-  for (const window of windows) {
-    const result = await saveCourtWindow(dataConnect, {
-      userId,
-      id: crypto.randomUUID(),
-      ...window,
-    });
-    savedRow(result.data.window);
+export type { CourtHoldOutside, MatchOutside };
+
+export type CourtModuleResult =
+  | { saved: true; removed: CourtHoldOutside[]; unscheduledMatches: MatchOutside[] }
+  | { saved: false; conflicts: CourtHoldOutside[]; matchConflicts: MatchOutside[] };
+
+/**
+ * Guarda interruptor, paso y franjas en una sola llamada. Si hay rentas o partidos programados fuera del
+ * nuevo horario y no se fuerza, no guarda nada y los devuelve; con `force` elimina las rentas y deja los
+ * partidos por programar, y devuelve ambos para avisar por correo.
+ */
+export async function saveCourtModule(
+  enabled: boolean,
+  slotMinutes: number,
+  windows: { weekday: number; startTime: string; endTime: string }[],
+  force = false,
+): Promise<CourtModuleResult> {
+  const result = await saveCourtModuleRpc(dataConnect, { enabled, slotMinutes, windows, force });
+  const data = result.data;
+  if (data.saved) {
+    return { saved: true, removed: data.removed ?? [], unscheduledMatches: data.unscheduledMatches ?? [] };
   }
+  if (data.conflicts?.length || data.matchConflicts?.length) {
+    return { saved: false, conflicts: data.conflicts ?? [], matchConflicts: data.matchConflicts ?? [] };
+  }
+  savedRow(data.saved);
+  throw new Error("No se pudo guardar.");
 }
 
 export async function upsertCourt(input: {

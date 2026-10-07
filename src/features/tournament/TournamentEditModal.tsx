@@ -11,7 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { Pencil, Plus, X } from "lucide-react";
-import { diffFixtures, lateWalkoverFixtures, playedReturnsIfSingleLeg, tournamentLegs, expectedMatchCount, type LateEntryChoice } from "../../domains/competition/fixtures";
+import { diffFixtures, fixtureShape, lateWalkoverFixtures, playedReturnsIfSingleLeg, tournamentLegs, expectedMatchCount, type LateEntryChoice } from "../../domains/competition/fixtures";
 import {
   addTournamentClub,
   dataConnect,
@@ -20,6 +20,7 @@ import {
   markMatchWalkover,
   QueryFetchPolicy,
   removeTournamentClub,
+  setMatchRound,
   tournamentEditor,
   updateTournamentSettings,
 } from "../../infrastructure/dataconnect";
@@ -29,7 +30,7 @@ import { notifyTournamentEdited } from "../../domains/competition/tournamentEdit
 import { toTournamentEditor, type TournamentEditorModel } from "./tournamentEditorMapper";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { useModalLock } from "../../shared/useModalLock";
-import { isPlayed } from "../../domains/competition/stats";
+import { calendarStatus, isPlayed } from "../../domains/competition/stats";
 import {
   FOOTBALL_TYPES,
   asFootballType,
@@ -203,6 +204,15 @@ export default function TournamentEditModal({
     draftDuration !== savedDuration ||
     !sameIdList(draftClubIds, tournament.clubIds);
   const planned = expectedMatchCount(draftClubIds.length, draftLegs);
+  const shape = fixtureShape(draftClubIds.length, draftLegs);
+  // Lo que el SQL desprograma al guardar: todo lo programado si cambia la duración; si solo avanza el
+  // inicio, lo programado antes de la fecha nueva.
+  const scheduledMatches = matches.filter((m) => calendarStatus(m) === "scheduled");
+  const unscheduleAll = draftDuration !== savedDuration ? scheduledMatches.length : 0;
+  const unscheduleBefore =
+    draftDuration === savedDuration && draftStartDate && (!savedStartDate || draftStartDate > savedStartDate)
+      ? scheduledMatches.filter((m) => (m.date || "") < draftStartDate).length
+      : 0;
   const playedReturns =
     draftLegs === 1
       ? playedReturnsIfSingleLeg(
@@ -256,7 +266,7 @@ export default function TournamentEditModal({
         legs: draftLegs,
         footballType: football,
         durationMinutes: draftDuration,
-        startDate: draftStartDate || null,
+        startDate: draftStartDate,
         prize: draftPrize.trim(),
       });
       if (settings.data.tournament == null) throw new Error("No se pudo guardar.");
@@ -282,9 +292,17 @@ export default function TournamentEditModal({
         durationMinutes: draftDuration,
         prize: draftPrize.trim(),
       };
-      const { toCreate, toDelete } = diffFixtures(updated, matches);
+      const { toCreate, toDelete, toRelabel } = diffFixtures(updated, matches);
       for (const match of toDelete) {
         if (!isPlayed(match)) await deleteUnplayedMatch(dataConnect, { userId, id: match.id });
+      }
+      for (const item of toRelabel) {
+        const relabeled = await setMatchRound(dataConnect, {
+          id: item.match.id,
+          roundLabel: item.round.slice(0, 16),
+          roundNumber: Number(item.round) || 0,
+        });
+        if (relabeled.data.match == null) throw new Error("No se pudo guardar.");
       }
       const fresh = new Set(addedClubIds);
       for (const fixture of toCreate) {
@@ -503,7 +521,7 @@ export default function TournamentEditModal({
             ? "Cargando calendario…"
             : draftClubIds.length < 2
               ? "Con 2 o más equipos se genera el calendario según este formato."
-              : `${planned} partido${planned === 1 ? "" : "s"} en esta categoría. Fecha, hora y sede se asignan en la ficha del torneo.`}
+              : `${planned} partido${planned === 1 ? "" : "s"} en esta categoría: ${shape.rounds} jornada${shape.rounds === 1 ? "" : "s"} de ${shape.perRound} partido${shape.perRound === 1 ? "" : "s"}${shape.bye ? " (con equipos impares, uno descansa en cada jornada)" : ""}. Fecha, hora y sede se asignan en la ficha del torneo.`}
         </p>
         </div>
 
@@ -522,7 +540,7 @@ export default function TournamentEditModal({
           </SecondaryButton>
           <PrimaryButton
             type="button"
-            disabled={!dirty || !prizeOk || busy || !loaded}
+            disabled={!dirty || !prizeOk || busy || !loaded || !draftStartDate}
             onClick={() => {
               setLateEntry(null);
               setLateEntryHint(false);
@@ -551,6 +569,8 @@ export default function TournamentEditModal({
             savedPrize,
             clubNames,
             playedReturns,
+            unscheduleAll,
+            unscheduleBefore,
           )}
           confirmLabel="Guardar cambios"
           danger={playedReturns.length > 0}
@@ -875,7 +895,10 @@ function saveMessage(
   savedPrize: string,
   clubNames: Record<string, string>,
   playedReturns: { homeClubId: string; awayClubId: string }[],
+  unscheduleAll: number,
+  unscheduleBefore: number,
 ) {
+  const plural = (n: number) => (n === 1 ? "" : "s");
   const added = draftClubIds.filter((id) => !tournament.clubIds.includes(id));
   const removed = tournament.clubIds.filter((id) => !draftClubIds.includes(id));
   const lines: string[] = [];
@@ -901,16 +924,22 @@ function saveMessage(
     lines.push(`El tipo pasa a ${footballTypeLabel(draftFootballType)}.`);
   }
   if (draftDuration !== savedDuration) {
-    lines.push(`Cada partido dura ${draftDuration} minutos.`);
+    lines.push(
+      `Cada partido dura ${draftDuration} minutos.` +
+        (unscheduleAll > 0
+          ? ` Se desprogramarán los ${unscheduleAll} partido${plural(unscheduleAll)} programado${plural(unscheduleAll)} y se liberarán sus canchas: habrá que volver a programarlos.`
+          : ""),
+    );
   }
   if (draftPrize !== savedPrize) {
     lines.push(draftPrize ? `El premio al campeón pasa a «${draftPrize}».` : "Se quita el premio al campeón.");
   }
   if (draftStartDate !== savedStartDate) {
     lines.push(
-      draftStartDate
-        ? `La fecha de inicio pasa a ${draftStartDate}.`
-        : "Se quita la fecha de inicio del torneo.",
+      `La fecha de inicio pasa a ${draftStartDate}.` +
+        (unscheduleBefore > 0
+          ? ` Los ${unscheduleBefore} partido${plural(unscheduleBefore)} programado${plural(unscheduleBefore)} antes de esa fecha se desprogramarán y se liberarán sus canchas.`
+          : ""),
     );
   }
   if (playedReturns.length) {

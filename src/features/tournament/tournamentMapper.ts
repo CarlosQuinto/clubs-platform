@@ -218,6 +218,9 @@ export function toTournamentScreen(data: TournamentScreenData, today: string): T
     prize: (tournament.prize ?? "").trim(),
     durationMinutes,
     startDate,
+    startLabel: formatCalendarDate(startDate || tournament.season.startDate),
+    seasonActive: tournament.season.active,
+    pendingMatches: data.matches.filter((match) => match.status !== MatchStatus.PLAYED).length,
     showPodium:
       tournament.status === TournamentStatus.FINISHED && podium.some((slot) => slot.clubName),
     podium,

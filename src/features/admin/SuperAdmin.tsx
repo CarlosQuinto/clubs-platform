@@ -490,7 +490,7 @@ function ClubsAdmin({
               <FormInput
                 type="email"
                 value={adminEmail}
-                maxLength={320}
+                maxLength={100}
                 onChange={(e) => {
                   setAdminEmail(emailText(e.target.value));
                   setError("");

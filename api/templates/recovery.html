@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#102a43">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+      <tr>
+        <td style="padding:28px 28px 8px">
+          <h1 style="margin:0 0 12px;font-size:20px">Restablece tu contraseña</h1>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.5">
+            Recibimos una solicitud para cambiar la contraseña de la cuenta <strong>{{ .Email }}</strong>.
+            Si fuiste tú, pulsa el botón; el enlace caduca en una hora.
+          </p>
+          <p style="margin:0 0 20px">
+            <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery" style="display:inline-block;padding:12px 20px;background:#102a43;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold">
+              Elegir nueva contraseña
+            </a>
+          </p>
+          <p style="margin:0 0 8px;font-size:13px;color:#52606d;line-height:1.5">
+            Si no pediste este cambio, ignora este correo: tu contraseña sigue siendo la misma.
+          </p>
+          <p style="margin:0 0 20px;font-size:12px;color:#829ab1;word-break:break-all">
+            Si el botón no funciona, copia este enlace en el navegador:<br />{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

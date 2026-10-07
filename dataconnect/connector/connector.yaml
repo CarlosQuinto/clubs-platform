@@ -1,5 +1,0 @@
-connectorId: "app"
-generate:
-  javascriptSdk:
-    outputDir: "../generated"
-    package: "@clubs-platform/dataconnect"

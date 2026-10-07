@@ -45,7 +45,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Separa las librerías de terceros (React, Firebase) en su propio archivo caché
+          // Separa las librerías de terceros (React, supabase-js) en su propio archivo caché
           if (id.includes("node_modules")) {
             return "vendor";
           }

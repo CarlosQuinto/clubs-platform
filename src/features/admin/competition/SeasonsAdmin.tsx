@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { CalendarRange, Trash2 } from "lucide-react";
-import { addSeason, removeSeason, toggleSeason } from "../../../domains/competition/competitionCommands";
+import { addSeason, closeSeason, removeSeason } from "../../../domains/competition/competitionCommands";
+import ConfirmModal from "../../../shared/ConfirmModal";
 import { isIsoDate } from "../../../domains/courts/courts";
 import type { Season } from "../../../shared/types";
 import { isSeasonLabel, seasonLabel } from "../../../shared/textLimits";
@@ -17,8 +18,17 @@ import {
 
 interface Props {
   seasons: Season[];
-  tournaments: { seasonId: string }[];
+  /** Torneos con su estado SQL: los que no están FINISHED impiden cerrar la temporada sin forzar. */
+  tournaments: { seasonId: string; status: string }[];
   onChange: () => void;
+}
+
+function closeMessage(season: Season, openTournaments: number) {
+  if (openTournaments > 0) {
+    const n = openTournaments;
+    return `Hay ${n} torneo${n === 1 ? "" : "s"} abierto${n === 1 ? "" : "s"} en ${season.name}. Ciérralos uno a uno desde su ficha o fuerza el cierre: la temporada no podrá reabrirse, los torneos quedarán finalizados y sus partidos programados se desprogramarán liberando las canchas.`;
+  }
+  return `La temporada ${season.name} quedará cerrada y no podrá reabrirse.`;
 }
 
 function formatSeasonRange(start?: string, end?: string) {
@@ -41,6 +51,10 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const creating = useRef(false);
+  const [closing, setClosing] = useState<Season | null>(null);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [closeError, setCloseError] = useState("");
   const datesReady = isIsoDate(startDate) && isIsoDate(endDate);
   const endBeforeStart = datesReady && endDate <= startDate;
   const canCreate = isSeasonLabel(name) && datesReady && endDate > startDate && !busy;
@@ -82,6 +96,44 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
     }
   };
 
+  const openTournamentsOf = (season: Season) =>
+    tournaments.filter((t) => t.seasonId === season.id && t.status !== "FINISHED").length;
+
+  const startClose = (season: Season) => {
+    setCloseError("");
+    setForceOpen(openTournamentsOf(season) > 0);
+    setClosing(season);
+  };
+
+  const cancelClose = () => {
+    if (closeBusy) return;
+    setClosing(null);
+    setForceOpen(false);
+    setCloseError("");
+  };
+
+  const confirmClose = async () => {
+    if (!closing) return;
+    setCloseBusy(true);
+    setCloseError("");
+    try {
+      const result = await closeSeason(closing.id, forceOpen);
+      if (!result.closed) {
+        // Alguien abrió un torneo mientras tanto: se pide forzar
+        setForceOpen(true);
+        return;
+      }
+      setClosing(null);
+      setForceOpen(false);
+      onChange();
+    } catch (err) {
+      console.error(err);
+      setCloseError("No se pudo cerrar la temporada.");
+    } finally {
+      setCloseBusy(false);
+    }
+  };
+
   const handleDelete = async (season: Season) => {
     const used = tournaments.filter((t) => t.seasonId === season.id).length;
     if (used > 0) {
@@ -117,6 +169,7 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
               type="date"
               required
               value={startDate}
+              max={endDate || undefined}
               onChange={(e) => {
                 setStartDate(e.target.value);
                 setError("");
@@ -128,6 +181,7 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
               type="date"
               required
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => {
                 setEndDate(e.target.value);
                 setError("");
@@ -186,18 +240,18 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
                 </Badge>
               </div>
               <div className="season-item__actions">
-                <SecondaryButton
-                  onClick={() =>
-                    void toggleSeason(s.id, !s.active).then(onChange)
-                  }
-                  style={{
-                    padding: "0.45rem 0.7rem",
-                    textAlign: "center",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {s.active ? "Cerrar" : "Reactivar"}
-                </SecondaryButton>
+                {s.active ? (
+                  <SecondaryButton
+                    onClick={() => startClose(s)}
+                    style={{
+                      padding: "0.45rem 0.7rem",
+                      textAlign: "center",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Cerrar
+                  </SecondaryButton>
+                ) : null}
                 <SecondaryButton
                   onClick={() => handleDelete(s)}
                   aria-label={`Eliminar ${s.name}`}
@@ -215,6 +269,18 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
           );
         })}
       </div>
+      <ConfirmModal
+        open={closing !== null}
+        title={closing ? `Cerrar la temporada ${closing.name}` : ""}
+        message={closing ? closeMessage(closing, forceOpen ? openTournamentsOf(closing) : 0) : ""}
+        confirmLabel={forceOpen ? "Forzar cierre" : "Cerrar temporada"}
+        cancelLabel="Volver"
+        danger
+        busy={closeBusy}
+        confirmHint={closeError || undefined}
+        onConfirm={() => void confirmClose()}
+        onCancel={cancelClose}
+      />
     </SectionCard>
   );
 }

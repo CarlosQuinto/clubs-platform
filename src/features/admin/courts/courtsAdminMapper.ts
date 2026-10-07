@@ -58,6 +58,7 @@ export function toCourtsAdmin(data: AdminCourtsData): CourtsAdminView {
       homeClubName: hold.match?.homeClub.name,
       awayClubName: hold.match?.awayClub.name,
       matchDurationMinutes: hold.match?.tournament.durationMinutes,
+      matchStartDate: hold.match?.tournament.startDate || undefined,
       note: hold.note,
       guestEmail: hold.guestEmail,
     })),

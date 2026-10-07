@@ -1,4 +1,5 @@
 import type { MatchDetailData, MatchPreviewData } from "../../infrastructure/dataconnect";
+import { matchMvp } from "../../domains/competition/stats";
 import { courtPlaceLabel } from "../../domains/courts/courts";
 import { formationNodes } from "../../domains/matches/formations";
 import {
@@ -36,6 +37,9 @@ const MINUTE = 60_000;
 const POLL_AFTER_END_MS = 60 * MINUTE;
 const POLL_BEFORE_START_MS = 2 * MINUTE;
 const UNASSIGNED = "Sin asignar";
+
+/** «Jornada 3» cuando la etiqueta es solo el número, como en el calendario del torneo. */
+const roundChip = (label: string) => (/^\d+$/.test(label.trim()) ? `Jornada ${label.trim()}` : label);
 
 const STATUS_LABEL: Record<MatchPagePhase, string> = {
   unscheduled: "Por programar",
@@ -308,9 +312,22 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
   const penaltiesHome = count(match.penaltiesHome);
   const penaltiesAway = count(match.penaltiesAway);
   const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
-  const mvps = match.matchClubReports_on_match
-    .map((row) => row.mvp?.name?.trim())
-    .filter((name): name is string => Boolean(name));
+  // Jugador del partido por club: el que nombró el club o, si no, el de más goles y asistencias
+  const mvpGoals = match.matchGoals_on_match.map((goal) => ({
+    clubId: goal.club.id,
+    scorerId: goal.scorer?.id || "",
+    assistId: goal.assist?.id || "",
+    isOwnGoal: goal.isOwnGoal,
+  }));
+  const squad = [...match.homeClub.players_on_club, ...match.awayClub.players_on_club];
+  const mvps = [homeId, awayId]
+    .map((clubId) => {
+      const named = reports.get(clubId)?.mvp?.name?.trim();
+      if (named) return named;
+      const derived = matchMvp(mvpGoals, clubId);
+      return squad.find((player) => player.id === derived)?.name.trim() || "";
+    })
+    .filter((name) => Boolean(name));
 
   const convocados = {
     home: squadOf(
@@ -362,7 +379,7 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
       tournamentName: match.tournament.name,
       tournamentHref: `/torneos/${match.tournament.id}`,
       category: match.tournament.category.name,
-      round: match.roundLabel,
+      round: roundChip(match.roundLabel),
     },
     timeline: timelineOf(match, sideOf),
     lineups: {

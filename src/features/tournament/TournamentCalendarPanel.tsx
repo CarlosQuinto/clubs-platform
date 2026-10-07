@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { CalendarX2, ClipboardList } from "lucide-react";
+import ConfirmModal from "../../shared/ConfirmModal";
+import { dataConnect, resetWalkoverMatch } from "../../infrastructure/dataconnect";
 import { ArchiveSection } from "../shell/ArchiveUI";
 import FixtureCard from "../matches/FixtureCard";
 import ResultCard from "../matches/ResultCard";
@@ -20,6 +22,33 @@ export default function TournamentCalendarPanel({
   // Un solo formulario de programar abierto a la vez, como en /partidos.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [scoring, setScoring] = useState<CalendarMatchView | null>(null);
+  // Un W.O. no se captura: primero se confirma que vuelva a «por programar».
+  const [resetting, setResetting] = useState<CalendarMatchView | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState("");
+
+  const openScore = (match: CalendarMatchView) => {
+    setResetError("");
+    if (match.walkover) setResetting(match);
+    else setScoring(match);
+  };
+
+  const confirmReset = async () => {
+    if (!resetting) return;
+    setResetBusy(true);
+    setResetError("");
+    try {
+      const result = await resetWalkoverMatch(dataConnect, { id: resetting.id });
+      if (!result.data.match) throw new Error("No se pudo reiniciar el partido.");
+      setResetting(null);
+      onSaved();
+    } catch (err) {
+      console.error(err);
+      setResetError("No se pudo reiniciar el partido.");
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   if (rounds.length === 0) {
     return (
@@ -41,7 +70,7 @@ export default function TournamentCalendarPanel({
               admin={admin}
               editing={editingId === card.score.id}
               onEdit={setEditingId}
-              onScore={setScoring}
+              onScore={openScore}
               onSaved={onSaved}
             />
           ))}
@@ -57,6 +86,26 @@ export default function TournamentCalendarPanel({
           }}
         />
       ) : null}
+      <ConfirmModal
+        open={resetting !== null}
+        title="Partido por ingreso tardío"
+        message={
+          resetting
+            ? `${resetting.home.name} vs ${resetting.away.name} se dio por terminado 3-0 por ingreso tardío. Si continúas dejará de ser W.O., el marcador vuelve a 0-0 y el partido quedará por programar para jugarse.`
+            : ""
+        }
+        confirmLabel="Continuar"
+        cancelLabel="Volver"
+        danger
+        busy={resetBusy}
+        confirmHint={resetError || undefined}
+        onConfirm={() => void confirmReset()}
+        onCancel={() => {
+          if (resetBusy) return;
+          setResetting(null);
+          setResetError("");
+        }}
+      />
     </div>
   );
 }

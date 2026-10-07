@@ -1,0 +1,47 @@
+# Producción en un VPS con un solo dominio y HTTPS automático (Caddy).
+#
+#   cd docker
+#   cp .env.example .env && node ../scripts/docker/generarEnv.mjs   (o npm run docker:env desde la raíz)
+#   # en .env: DOMAIN, SITE_URL=https://DOMAIN, SUPABASE_PUBLIC_URL=https://DOMAIN/api,
+#   #          API_EXTERNAL_URL=https://DOMAIN/api/auth/v1, ADDITIONAL_REDIRECT_URLS=https://DOMAIN/**
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up -d --build
+#
+# Caddy escucha en 80/443 y reenvía todo al frontend (nginx), que a su vez manda /api/* a Kong.
+# Postgres, la API y Studio dejan de exponerse al exterior (Studio: https://DOMAIN/api con usuario y contraseña).
+
+services:
+  caddy:
+    container_name: clubs-caddy
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - web
+
+  web:
+    profiles: ["web"]
+    ports: !reset []
+
+  db:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+    environment:
+      CORS_ORIGINS: https://${DOMAIN}
+
+  kong:
+    ports: !reset []
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -20,6 +20,7 @@ export default function CompetitionAdminView() {
   }));
   const tournaments = (screen.data?.tournaments ?? []).map((tournament) => ({
     seasonId: tournament.season.id,
+    status: tournament.status,
   }));
 
   return (

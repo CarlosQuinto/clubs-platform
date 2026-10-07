@@ -26,9 +26,18 @@ export async function addSeason(input: {
   savedRow(result.data.season);
 }
 
-export async function toggleSeason(id: string, active: boolean) {
-  const result = await setSeasonActive(dataConnect, { userId: sessionUserId(), id, active });
-  savedRow(result.data.season);
+/**
+ * Cierra una temporada (una cerrada no se reabre). Sin `force`, si tiene torneos abiertos no cierra y
+ * devuelve cuántos son; con `force` los finaliza primero (podio, partidos pendientes por programar).
+ */
+export async function closeSeason(id: string, force = false) {
+  const result = await setSeasonActive(dataConnect, { userId: sessionUserId(), id, active: false, force });
+  const openTournaments = result.data.openTournaments ?? 0;
+  if (!result.data.season) {
+    if (!force && openTournaments > 0) return { closed: false as const, openTournaments };
+    throw new Error("No se pudo guardar.");
+  }
+  return { closed: true as const, openTournaments, closedTournaments: result.data.closedTournaments ?? 0 };
 }
 
 export async function removeSeason(id: string) {

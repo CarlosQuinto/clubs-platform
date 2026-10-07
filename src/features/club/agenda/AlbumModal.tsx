@@ -15,7 +15,7 @@ import { useModalLock } from "../../../shared/useModalLock";
 import { C, RADIUS, SHADOWS, PrimaryButton } from "../../../shared/ui";
 
 // 👇 IMPORTACIONES DE STORAGE Y COMPRESIÓN 👇
-import { deleteStoredImage, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 
 interface AlbumModalProps {
   ev: any;
@@ -93,7 +93,6 @@ export default function AlbumModal({ ev, onClose, onSave }: AlbumModalProps) {
       for (const url of newlyUploadedPhotos) {
         try {
           await deleteStoredImage(url);
-          console.log("Foto cancelada eliminada:", url);
         } catch (e) {
           console.error("Error borrando foto cancelada", e);
         }
@@ -126,7 +125,7 @@ export default function AlbumModal({ ev, onClose, onSave }: AlbumModalProps) {
     const orphanedOld = oldUrls.filter(
       (oldUrl: string) =>
         !cleanUrls.includes(oldUrl) &&
-        oldUrl.includes("firebasestorage.googleapis.com"),
+        isStoredImageUrl(oldUrl),
     );
 
     // Unimos toda la basura y la destruimos en Storage
@@ -134,7 +133,6 @@ export default function AlbumModal({ ev, onClose, onSave }: AlbumModalProps) {
     for (const url of urlsToDelete) {
       try {
         await deleteStoredImage(url);
-        console.log("Foto eliminada definitivamente del servidor:", url);
       } catch (error) {
         console.error("Error limpiando foto", error);
       }

@@ -252,6 +252,8 @@ export interface CourtHold {
   awayClubName?: string;
   /** Duración del partido según su torneo. */
   matchDurationMinutes?: number;
+  /** Inicio del torneo (o de su temporada): el partido no puede ir antes. */
+  matchStartDate?: string;
   note?: string;
   guestEmail?: string;
 }

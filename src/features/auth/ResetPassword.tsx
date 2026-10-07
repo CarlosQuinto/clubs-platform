@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { applyNewPassword, checkResetCode } from "../../infrastructure/auth";
 import PlatformLayout from "../shell/PlatformLayout";
@@ -7,8 +7,8 @@ import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../../shared/ui";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const oobCode = params.get("oobCode") || "";
+  // El enlace del correo trae ?token_hash=…&type=recovery; checkResetCode lo guarda sin gastarlo y
+  // applyNewPassword lo verifica al guardar, con un cliente efímero que no deja la app con sesión.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -18,16 +18,11 @@ export default function ResetPassword() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!oobCode) {
-      setError("Este enlace no es válido. Pide uno nuevo desde iniciar sesión.");
-      setChecking(false);
-      return;
-    }
     let cancelled = false;
-    void checkResetCode(oobCode)
-      .then((accountEmail) => {
+    void checkResetCode()
+      .then((link) => {
         if (cancelled) return;
-        setEmail(accountEmail);
+        setEmail(link.email ?? "");
         setReady(true);
       })
       .catch(() => {
@@ -40,7 +35,7 @@ export default function ResetPassword() {
     return () => {
       cancelled = true;
     };
-  }, [oobCode]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +46,7 @@ export default function ResetPassword() {
     }
     setBusy(true);
     try {
-      await applyNewPassword(oobCode, password);
+      await applyNewPassword(password);
       navigate("/login", { replace: true, state: { passwordReset: true } });
     } catch (err) {
       const code = (err as { code?: string }).code || "";

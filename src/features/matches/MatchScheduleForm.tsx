@@ -117,6 +117,7 @@ export default function MatchScheduleForm({
         matchId: match.id,
         date,
         time,
+        startDate,
         venue: court?.name || (courtId ? match.venue : ""),
         courtId,
         durationMinutes,
@@ -158,7 +159,13 @@ export default function MatchScheduleForm({
       <div className="match-edit-when">
         <label style={field}>
           <span style={fieldLabel}>Fecha</span>
-          <FormInput type="date" value={date} aria-label="Fecha" onChange={(event) => setDate(event.target.value)} />
+          <FormInput
+            type="date"
+            value={date}
+            min={startDate || undefined}
+            aria-label="Fecha"
+            onChange={(event) => setDate(event.target.value)}
+          />
         </label>
         <label style={field}>
           <span style={fieldLabel}>Hora</span>

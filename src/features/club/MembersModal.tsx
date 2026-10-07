@@ -299,7 +299,7 @@ export function MembersPanel({
           <FormInput
             type="email"
             required
-            maxLength={320}
+            maxLength={100}
             autoComplete="email"
             placeholder="correo@ejemplo.com"
             value={email}

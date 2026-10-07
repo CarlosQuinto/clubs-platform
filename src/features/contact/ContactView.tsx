@@ -22,11 +22,17 @@ export default function ContactView() {
           <div>
             <h1>¿Tienes alguna duda?</h1>
             <p>
-              Solicita información sobre los torneos,{" "}
-              <Link to="/canchas" className="contact-intro__link" onClick={() => window.scrollTo(0, 0)}>
-                renta de canchas
-              </Link>{" "}
-              y disponibilidad.
+              {form.courtsEnabled ? (
+                <>
+                  Solicita información sobre los torneos,{" "}
+                  <Link to="/canchas" className="contact-intro__link" onClick={() => window.scrollTo(0, 0)}>
+                    renta de canchas
+                  </Link>{" "}
+                  y disponibilidad.
+                </>
+              ) : (
+                "Solicita información sobre los torneos y disponibilidad."
+              )}
             </p>
             <span className="contact-intro__rule" />
           </div>
@@ -64,7 +70,7 @@ export default function ContactView() {
                 onChange={(event) => form.onEmail(event.target.value)}
                 placeholder="Email"
                 required
-                maxLength={320}
+                maxLength={100}
                 autoComplete="email"
               />
             </Field>

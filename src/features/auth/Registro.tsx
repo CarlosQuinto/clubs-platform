@@ -8,6 +8,13 @@ import DestinationPicker from "./DestinationPicker";
 import { C, RADIUS, SHADOWS, FormInput, PrimaryButton } from "../../shared/ui";
 import { emailKey } from "../../shared/paths";
 import { signupInviteExists } from "../../domains/clubs/clubCommands";
+import { emailText, isPersonName, isRegisterEmail, personName } from "../../shared/textLimits";
+
+// Mismos topes que el resto de formularios (src/shared/textLimits.ts); el SQL recorta el nombre a 40
+// (db/migrations/0005_auth_display_name.sql). bcrypt ignora lo que pase de 72 bytes de contraseña.
+const NAME_LIMIT = 40;
+const EMAIL_LIMIT = 100;
+const PASSWORD_LIMIT = 72;
 
 export default function Registro() {
   const { user, loading, register, platformUnclaimed } = useAuth();
@@ -17,7 +24,7 @@ export default function Registro() {
   const configReady = platformUnclaimed !== null;
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(invitedEmail);
+  const [email, setEmail] = useState(emailText(invitedEmail));
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +36,7 @@ export default function Registro() {
   });
 
   useEffect(() => {
-    if (invitedEmail) setEmail(invitedEmail);
+    if (invitedEmail) setEmail(emailText(invitedEmail));
   }, [invitedEmail]);
 
   useEffect(() => {
@@ -40,6 +47,15 @@ export default function Registro() {
     e.preventDefault();
     setError("");
     const clean = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    if (!isPersonName(cleanName)) {
+      setError("Escribe tu nombre (3 a 40 letras).");
+      return;
+    }
+    if (!isRegisterEmail(clean)) {
+      setError("Escribe un correo válido.");
+      return;
+    }
     setBusy(true);
     try {
       if (!configReady) {
@@ -53,7 +69,7 @@ export default function Registro() {
           return;
         }
       }
-      await register(clean, password, name);
+      await register(clean, password, cleanName);
       setDone(true);
     } catch (err) {
       setError(authErrorMessage(err));
@@ -123,17 +139,19 @@ export default function Registro() {
             type="text"
             placeholder="Tu nombre"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setName(personName(e.target.value))}
             autoComplete="name"
+            maxLength={NAME_LIMIT}
             required
           />
           <FormInput
             type="email"
             placeholder="correo@ejemplo.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(emailText(e.target.value))}
             required
             autoComplete="email"
+            maxLength={EMAIL_LIMIT}
             readOnly={!!invitedEmail}
           />
           <FormInput
@@ -143,6 +161,7 @@ export default function Registro() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
+            maxLength={PASSWORD_LIMIT}
             autoComplete="new-password"
           />
 

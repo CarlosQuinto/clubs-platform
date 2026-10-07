@@ -13,7 +13,9 @@ import { buildPerms, ROLE_LABELS } from "../../domains/auth/roles";
 import { invalidateMySpaces } from "../../domains/auth/mySpaces";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { requestClubRefresh } from "./useClubScreen";
-import { deleteStoredImage, uploadImageFile } from "../../infrastructure/storage/uploadImage";
+import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../infrastructure/storage/uploadImage";
+import { savedRow } from "../../shared/saved";
+import { isCellPhone, isClubName, titleCase } from "../../shared/textLimits";
 
 // ── CUSTOM HOOK PARA RESIZE Y RESPONSIVIDAD ──
 // Soluciona el problema de window.innerWidth no reactivo al rotar la pantalla
@@ -273,7 +275,6 @@ export function useClubShell() {
       for (const urlToDelete of newlyUploadedLogos) {
         try {
           await deleteStoredImage(urlToDelete);
-          console.log("Logo cancelado, eliminado con éxito:", urlToDelete);
         } catch (error) {
           console.error("No se pudo eliminar el logo cancelado:", error);
         }
@@ -287,12 +288,23 @@ export function useClubShell() {
 
   const handleSaveClub = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Mismas reglas que el alta de club (create_club / save_club_profile): nombre en Title Case y teléfono de 10 a 15 dígitos
+    const name = titleCase(editClubName.trim().replace(/ {2,}/g, " "));
+    const phone = editClubPhone.trim();
+    if (!isClubName(name)) {
+      alert("El nombre del club debe tener de 3 a 30 letras o números.");
+      return;
+    }
+    if (phone && !isCellPhone(phone)) {
+      alert("El teléfono debe tener de 10 a 15 dígitos.");
+      return;
+    }
     try {
       const oldLogo = clubInfo?.logoUrl;
       if (
         oldLogo &&
         oldLogo !== editClubLogo &&
-        oldLogo.includes("firebasestorage.googleapis.com")
+        isStoredImageUrl(oldLogo)
       ) {
         try {
           await deleteStoredImage(oldLogo);
@@ -306,12 +318,13 @@ export function useClubShell() {
           await deleteStoredImage(url);
         } catch (e) {}
       }
-      await saveClubProfile(dataConnect, {
+      const saved = await saveClubProfile(dataConnect, {
         id: clubId,
-        name: editClubName,
+        name,
         logoUrl: editClubLogo,
-        presidentPhone: editClubPhone.trim(),
+        presidentPhone: phone,
       });
+      savedRow(saved.data.club);
       requestClubRefresh();
       invalidateMySpaces();
       setNewlyUploadedLogos([]);

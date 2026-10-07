@@ -15,4 +15,6 @@ export interface ContactFormView {
   error: string | null;
   topics: ContactTopicView[];
   whatsapp: string | null;
+  /** El módulo de canchas está activo: el texto enlaza a /canchas y se ofrece el tema «Renta de canchas». */
+  courtsEnabled: boolean;
 }

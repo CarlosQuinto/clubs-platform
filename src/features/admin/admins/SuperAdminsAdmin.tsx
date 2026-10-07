@@ -254,7 +254,7 @@ export default function SuperAdminsAdmin() {
                 setResendTo("");
               }}
               placeholder="correo@ejemplo.com"
-              maxLength={320}
+              maxLength={100}
               autoComplete="email"
               required
             />

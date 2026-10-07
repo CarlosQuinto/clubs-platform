@@ -137,7 +137,7 @@ export function cellPhone(value: string, maxDigits = 15) {
   return `${plus ? "+" : ""}${digits}`;
 }
 
-export function emailText(value: string, max = 320) {
+export function emailText(value: string, max = 100) {
   return value.replace(/\s/g, "").toLowerCase().slice(0, max);
 }
 
@@ -185,7 +185,7 @@ export function isCellPhone(value: string) {
 }
 
 export function isRegisterEmail(value: string) {
-  return value.length <= 320 && value === value.toLowerCase() && REGISTER_EMAIL_RE.test(value);
+  return value.length <= 100 && value === value.toLowerCase() && REGISTER_EMAIL_RE.test(value);
 }
 
 export function isTeamLabel(value: string) {
@@ -258,7 +258,7 @@ export function isHoldNote(value: string) {
 
 /** Correo de apartado: sin espacios, minúsculas y dominio con extensión de 2 a 10 letras. */
 export function isBookingEmail(value: string) {
-  return value.length <= 320 && BOOKING_EMAIL_RE.test(value);
+  return value.length <= 100 && BOOKING_EMAIL_RE.test(value);
 }
 
 /** Marca de un anuncio: letras, números y un espacio entre palabras, de 2 a 50. */
@@ -328,8 +328,9 @@ export function isCoverTagline(value: string) {
   return isCopyText(value, 120);
 }
 
-// Igual que el SQL: http(s), dominio con extensión y nada de espacios ni < > " '.
-const WEB_URL_RE = /^https?:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::[0-9]{1,5})?(?:[/?#][^\s<>"']*)?$/i;
+// http(s), dominio con extensión (o localhost, donde corre el stack en desarrollo) y nada de espacios ni < > " '.
+// El SQL es más laxo (^https?://[^[:space:]<>"']+$): lo que pasa aquí pasa allá.
+const WEB_URL_RE = /^https?:\/\/(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::[0-9]{1,5})?(?:[/?#][^\s<>"']*)?$/i;
 
 /** URL sin espacios en ningún lado. */
 export function webUrl(value: string, max: number) {

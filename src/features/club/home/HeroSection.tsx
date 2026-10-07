@@ -18,7 +18,7 @@ import {
 } from "../../../infrastructure/dataconnect";
 import { requestClubRefresh } from "../useClubScreen";
 import { useClub } from "../../../domains/clubs/ClubContext";
-import { deleteStoredImage, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 import {
   DEFAULT_CLUB_NAME,
   DEFAULT_CLUB_LOCATION,
@@ -174,7 +174,6 @@ export default function HeroSection({
       for (const urlToDelete of newlyUploadedImages) {
         try {
           await deleteStoredImage(urlToDelete);
-          console.log("Archivo cancelado eliminado con éxito:", urlToDelete);
         } catch (error) {
           console.error("No se pudo eliminar el archivo cancelado:", error);
         }
@@ -217,7 +216,7 @@ export default function HeroSection({
       const imagesToDelete = allTrackedImages.filter((trackedUrl: string) => {
         return (
           !images.includes(trackedUrl) &&
-          trackedUrl.includes("firebasestorage.googleapis.com")
+          isStoredImageUrl(trackedUrl)
         );
       });
       if (imagesToDelete.length > 0) {

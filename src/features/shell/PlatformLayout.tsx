@@ -157,7 +157,10 @@ export default function PlatformLayout({
       active: pathname === "/partidos" || pathname.startsWith("/partido/"),
     },
     { to: "/equipos", label: "Equipos", active: pathname === "/equipos" },
-    ...(showCourts ? [{ to: "/canchas", label: "Canchas", active: pathname === "/canchas" }] : []),
+    // Con el módulo de canchas apagado, su lugar lo ocupa Contacto
+    showCourts
+      ? { to: "/canchas", label: "Canchas", active: pathname === "/canchas" }
+      : { to: "/contacto", label: "Contacto", active: pathname === "/contacto" },
   ];
 
   const sidebar = (

@@ -1,3 +1,5 @@
+import { startedSeasons } from "../../domains/competition/stats";
+import { whatsappUrl } from "../../domains/platform/social";
 import { type TeamsPageData } from "../../infrastructure/dataconnect";
 import type {
   ClubCardView,
@@ -79,7 +81,7 @@ export function toClubCard(club: {
     locality: club.locality,
     logoUrl: club.logoUrl?.trim() || null,
     phoneLabel: phone ? phoneLabel(phone) : null,
-    phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
+    phoneHref: phone ? whatsappUrl(phone) : null,
   };
 }
 
@@ -186,13 +188,15 @@ function standingsFor(
 }
 
 export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
-  const seasons = [...data.seasons].sort((a, b) =>
+  // Solo temporadas en curso o pasadas; las futuras aún no tienen partidos que filtrar
+  const started = startedSeasons(data.seasons);
+  const seasons = [...started].sort((a, b) =>
     (b.startDate || "").localeCompare(a.startDate || ""),
   );
   const categories = [...data.categories].sort(
     (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "es"),
   );
-  const activeSeason = data.seasons.find((season) => season.active);
+  const activeSeason = started.find((season) => season.active);
   const logos = new Map<string, string>();
   for (const club of data.clubs) {
     const logo = club.logoUrl?.trim();

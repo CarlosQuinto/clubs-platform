@@ -23,7 +23,7 @@ import {
 import { requestClubRefresh } from "../useClubScreen";
 import { savedRow } from "../../../shared/saved";
 import { useClub } from "../../../domains/clubs/ClubContext";
-import { deleteStoredImage, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 import {
   C,
   RADIUS,
@@ -160,10 +160,9 @@ export default function GallerySection({
   const removeStagingPhoto = async (idx: number) => {
     const photoUrl = stagingPhotos[idx].url;
 
-    if (photoUrl.includes("firebasestorage.googleapis.com")) {
+    if (isStoredImageUrl(photoUrl)) {
       try {
         await deleteStoredImage(photoUrl);
-        console.log("Foto huérfana de preparación eliminada.");
       } catch (e) {
         console.error("Error al borrar foto de preparación", e);
       }
@@ -211,7 +210,6 @@ export default function GallerySection({
       for (const url of newlyUploadedModal) {
         try {
           await deleteStoredImage(url);
-          console.log("Foto cancelada del modal eliminada.");
         } catch (e) {
           console.error("Error borrando foto cancelada", e);
         }
@@ -328,11 +326,10 @@ export default function GallerySection({
       savedRow(removed.data.deleted);
       requestClubRefresh();
 
-      // Borrar de Storage si pertenece a Firebase
-      if (photoUrl && photoUrl.includes("firebasestorage.googleapis.com")) {
+      // Borrar de Storage si es un archivo nuestro
+      if (photoUrl && isStoredImageUrl(photoUrl)) {
         try {
           await deleteStoredImage(photoUrl);
-          console.log("Foto eliminada físicamente de Storage");
         } catch (e) {
           console.error("Error borrando foto física", e);
         }
@@ -352,7 +349,7 @@ export default function GallerySection({
       requestClubRefresh();
       await Promise.all(
         photos.map(async (p) => {
-          if (p.url && p.url.includes("firebasestorage.googleapis.com")) {
+          if (isStoredImageUrl(p.url)) {
             try {
               await deleteStoredImage(p.url);
             } catch (e) {}

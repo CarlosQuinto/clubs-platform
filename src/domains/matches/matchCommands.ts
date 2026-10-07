@@ -12,6 +12,7 @@ import {
   scheduleOfficialMatch,
 } from "../../infrastructure/dataconnect";
 import { courtsFreeAt } from "../courts/courts";
+import { formatFriendlyDate } from "../../shared/helpers";
 import type { Court, CourtHold, CourtSlotMinutes, TimeWindow } from "../../shared/types";
 import { sessionUserId } from "../../infrastructure/auth";
 import { notifyMatchScheduled } from "../../infrastructure/functions/callables";
@@ -83,6 +84,8 @@ export async function saveMatchSchedule(input: {
   matchId: string;
   date: string;
   time: string;
+  /** Inicio del torneo (o de su temporada): el partido no puede ir antes. "" si no hay. */
+  startDate: string;
   venue: string;
   courtId: string;
   durationMinutes: number;
@@ -92,6 +95,10 @@ export async function saveMatchSchedule(input: {
 }) {
   const userId = sessionUserId();
   const finish = endTime(input.time, input.durationMinutes);
+  // Misma regla que schedule_official_match en SQL
+  if (input.startDate && input.date < input.startDate) {
+    throw new Error(`El partido no puede ser antes del inicio del torneo (${formatFriendlyDate(input.startDate)}).`);
+  }
   if (input.courtId) {
     const free = await freeCourtsAt({
       date: input.date,

@@ -1,0 +1,261 @@
+// Pruebas del bloque del club (db/migrations/1011_fn_club.sql) sobre los datos dummy.
+// Sesiones: presidente (ADMIN), dt, tesorero y prensa son de dummy-club-halcones; admin es superadmin;
+// usuario no tiene rol. La BD es efímera: se muta libremente.
+
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+const HALCONES = "dummy-club-halcones";
+const BAHIA = "dummy-club-bahia";
+const P01 = "dummy-club-halcones-p01";
+const P03 = "dummy-club-halcones-p03";
+const EVENTO = "dummy-club-halcones-amistoso-1";
+const ENTRENO = "dummy-club-halcones-ent-1";
+const META = "dummy-club-halcones-meta-uniformes";
+const PARTIDO = "dummy-tour-apertura-j01-1"; // Halcones vs Leones
+const PARTIDO_AJENO = "dummy-tour-apertura-j01-2"; // Unión vs Bahía
+const ALBUM = "📸 Galería General";
+const FOTO1 = "dummy-club-halcones-album-general-1";
+const FOTO2 = "dummy-club-halcones-album-general-2";
+
+export async function run({ db, rpc, check }) {
+  if (!existsSync(join(ROOT, "scripts", "demo", "demo-seed.sql"))) {
+    check(true, "sin datos dummy: se omiten las pruebas del club");
+    return;
+  }
+  const count = async (sql) => (await db.query(sql)).rows[0].n;
+
+  // ---------- Sesión ----------
+  const anon = await rpc("anon", "save_player", { id: "x", clubId: HALCONES, name: "x", shirtNumber: "1", position: "Portero" });
+  check(anon.error?.code === "42501", "anónimo no puede escribir (42501)", anon);
+  const vacio = await rpc("admin", "save_player", {});
+  check(!vacio.error && vacio.data?.player === null, "variables obligatorias ausentes -> null, sin error", vacio);
+
+  // ---------- Plantilla ----------
+  const nuevo = await rpc("dt", "save_player", {
+    id: "prueba-p-1", clubId: HALCONES, name: "Nuevo Jugador", shirtNumber: "99", position: "Delantero",
+    detail: { variant: "", birthDate: "2000-01-01", imageUrl: "" },
+  });
+  check(nuevo.data?.player?.id === "prueba-p-1" && nuevo.data.player.name === "Nuevo Jugador", "save_player: DT crea jugador", nuevo);
+  const editado = await rpc("presidente", "save_player", { id: "prueba-p-1", clubId: HALCONES, name: "Jugador Editado", shirtNumber: "98", position: "Medio", isCoach: false, active: true, detail: { birthDate: "" } });
+  check(editado.data?.player?.name === "Jugador Editado", "save_player: presidente edita (upsert)", editado);
+  check((await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND shirt_number = '98' AND birth_date IS NULL`)) === 1, "save_player: cambios persistidos");
+  const prensaJugador = await rpc("prensa", "save_player", { id: "prueba-p-2", clubId: HALCONES, name: "No", shirtNumber: "1", position: "Portero" });
+  check(prensaJugador.data?.player === null, "save_player: prensa no puede", prensaJugador);
+  const otroClub = await rpc("presidente", "save_player", { id: "prueba-p-3", clubId: BAHIA, name: "No", shirtNumber: "1", position: "Portero" });
+  check(otroClub.data?.player === null, "save_player: presidente de Halcones no escribe en Bahía", otroClub);
+  const superJugador = await rpc("admin", "save_player", { id: "prueba-p-4", clubId: BAHIA, name: "Super", shirtNumber: "1", position: "Portero" });
+  check(superJugador.data?.player?.id === "prueba-p-4", "save_player: superadmin escribe en cualquier club", superJugador);
+  const borrarAjeno = await rpc("usuario", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
+  check(borrarAjeno.data?.deleted === null, "delete_player: usuario sin rol -> null", borrarAjeno);
+  const borrar = await rpc("dt", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
+  check(borrar.data?.deleted === 1, "delete_player: DT borra", borrar);
+  const borrarBahia = await rpc("presidente", "delete_player", { id: "prueba-p-4", clubId: BAHIA });
+  check(borrarBahia.data?.deleted === null, "delete_player: otro club -> null", borrarBahia);
+
+  // ---------- Agenda: eventos ----------
+  const evento = await rpc("dt", "save_club_event", {
+    id: "prueba-ev-1", clubId: HALCONES, eventType: "PARTIDO", matchType: "AMISTOSO", title: "Amistoso de prueba",
+    eventDate: "2026-11-01", eventTime: "18:00", detail: { location: "Campo Prueba", routine: [] },
+  });
+  check(evento.data?.event?.id === "prueba-ev-1" && evento.data.event.title === "Amistoso de prueba", "save_club_event: DT crea", evento);
+  check((await count(`SELECT count(*)::int AS n FROM club_events WHERE id = 'prueba-ev-1' AND location = 'Campo Prueba' AND match_type = 'AMISTOSO'`)) === 1, "save_club_event: detail.location persistido");
+  const entreno = await rpc("presidente", "save_club_event", { id: "prueba-ev-1", clubId: HALCONES, eventType: "ENTRENAMIENTO", matchType: null, title: "Ahora entreno", eventDate: "2026-11-02", eventTime: "19:00", detail: { location: "Por definir", routine: [{ id: "1" }] } });
+  check(entreno.data?.event?.title === "Ahora entreno", "save_club_event: upsert", entreno);
+  const eventoTesorero = await rpc("tesorero", "save_club_event", { id: "prueba-ev-2", clubId: HALCONES, eventType: "PARTIDO", title: "No", eventDate: "2026-11-01", eventTime: "18:00" });
+  check(eventoTesorero.data?.event === null, "save_club_event: tesorero no puede", eventoTesorero);
+
+  const marcador = await rpc("dt", "set_club_event_score", { id: EVENTO, clubId: HALCONES, scoreOurs: 3, scoreTheirs: 1, penaltiesOurs: null, penaltiesTheirs: null });
+  check(marcador.data?.event?.id === EVENTO, "set_club_event_score: DT", marcador);
+  check((await count(`SELECT count(*)::int AS n FROM club_events WHERE id = '${EVENTO}' AND score_ours = 3 AND score_theirs = 1 AND penalties_ours IS NULL`)) === 1, "set_club_event_score: persistido");
+  const marcadorPrensa = await rpc("prensa", "set_club_event_score", { id: EVENTO, clubId: HALCONES, scoreOurs: 0, scoreTheirs: 0 });
+  check(marcadorPrensa.data?.event === null, "set_club_event_score: prensa -> null", marcadorPrensa);
+  const marcadorClubFalso = await rpc("admin", "set_club_event_score", { id: EVENTO, clubId: BAHIA, scoreOurs: 0, scoreTheirs: 0 });
+  check(marcadorClubFalso.data?.event === null, "set_club_event_score: clubId que no es el del evento -> null", marcadorClubFalso);
+
+  const lineup = { mode: "Fut-11", formation: "4-3-3", positions: { gk: P01 } };
+  const alineacion = await rpc("presidente", "set_club_event_lineup", { id: EVENTO, clubId: HALCONES, lineup });
+  check(alineacion.data?.event?.id === EVENTO, "set_club_event_lineup", alineacion);
+  check((await count(`SELECT count(*)::int AS n FROM club_events WHERE id = '${EVENTO}' AND lineup ->> 'formation' = '4-3-3'`)) === 1, "set_club_event_lineup: jsonb persistido");
+  const porDefecto = await rpc("dt", "save_club_default_lineup", { clubId: HALCONES, mode: "Fut-7", lineup: { formation: "2-3-1", positions: {} } });
+  check(porDefecto.data?.lineup?.club_id === HALCONES && porDefecto.data.lineup.mode === "Fut-7", "save_club_default_lineup: DT", porDefecto);
+  const porDefecto2 = await rpc("dt", "save_club_default_lineup", { clubId: HALCONES, mode: "Fut-7", lineup: { formation: "3-2-1" } });
+  check(porDefecto2.data?.lineup?.mode === "Fut-7" && (await count(`SELECT count(*)::int AS n FROM club_default_lineups WHERE club_id = '${HALCONES}' AND mode = 'Fut-7' AND formation = '3-2-1'`)) === 1, "save_club_default_lineup: upsert por (club, modo)");
+  const porDefectoUsuario = await rpc("usuario", "save_club_default_lineup", { clubId: HALCONES, mode: "Fut-7", lineup: {} });
+  check(porDefectoUsuario.data?.lineup === null, "save_club_default_lineup: sin rol -> null", porDefectoUsuario);
+
+  const asistencia = await rpc("dt", "replace_club_event_attendees", { id: ENTRENO, clubId: HALCONES, labels: [P01, P03, "Invitado Pepe", ""] });
+  check(asistencia.data?.event?.event_id === ENTRENO && asistencia.data.cleared > 0 && asistencia.data.added === 3, "replace_club_event_attendees: DT sustituye", asistencia);
+  check((await count(`SELECT count(*)::int AS n FROM club_event_attendees WHERE event_id = '${ENTRENO}' AND player_id IS NOT NULL`)) === 2
+    && (await count(`SELECT count(*)::int AS n FROM club_event_attendees WHERE event_id = '${ENTRENO}' AND raw_label = 'Invitado Pepe' AND player_id IS NULL`)) === 1, "replace_club_event_attendees: jugadores enlazados y etiqueta libre");
+  const asistenciaBahia = await rpc("presidente", "replace_club_event_attendees", { id: ENTRENO, clubId: BAHIA, labels: [P01] });
+  check(asistenciaBahia.data?.event === null && asistenciaBahia.data.cleared === null, "replace_club_event_attendees: clubId ajeno -> null y no borra", asistenciaBahia);
+  check((await count(`SELECT count(*)::int AS n FROM club_event_attendees WHERE event_id = '${ENTRENO}'`)) === 3, "replace_club_event_attendees: intento denegado no tocó datos");
+  const asistenciaNull = await rpc("dt", "replace_club_event_attendees", { id: ENTRENO, clubId: HALCONES, labels: null });
+  check(asistenciaNull.data?.event?.event_id === ENTRENO && asistenciaNull.data.added === null, "replace_club_event_attendees: labels null vacía la lista", asistenciaNull);
+
+  const album = await rpc("presidente", "replace_club_event_album", { id: EVENTO, clubId: HALCONES, urls: ["https://a/1.jpg", "", "https://a/2.jpg"] });
+  check(album.data?.event?.event_id === EVENTO && album.data.added === 2, "replace_club_event_album", album);
+  check((await count(`SELECT count(*)::int AS n FROM club_event_photos WHERE event_id = '${EVENTO}' AND position = 2 AND url = 'https://a/2.jpg'`)) === 1, "replace_club_event_album: posición por orden recibido");
+  const albumPrensa = await rpc("prensa", "replace_club_event_album", { id: EVENTO, clubId: HALCONES, urls: [] });
+  check(albumPrensa.data?.event === null, "replace_club_event_album: prensa -> null", albumPrensa);
+
+  const stats = await rpc("dt", "replace_club_event_stats", {
+    id: EVENTO, clubId: HALCONES,
+    stats: {
+      goals: [{ scorer: P03, assist: P01, isPenalty: false, isOwnGoal: false }, { scorer: "dummy-club-bahia-p01", isPenalty: true }],
+      yellowCards: [P01, "dummy-club-bahia-p01"], redCards: [P03], goalkeepers: [{ id: P01, conceded: 1, saves: 4 }], mvp: P03,
+    },
+  });
+  check(stats.data?.event?.id === EVENTO && stats.data.added === 5, "replace_club_event_stats: DT", stats);
+  check((await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = '${EVENTO}' AND sort_order = 1 AND scorer_id IS NULL AND is_penalty`)) === 1, "replace_club_event_stats: goleador de otro club queda sin enlazar");
+  check((await count(`SELECT count(*)::int AS n FROM club_event_cards WHERE event_id = '${EVENTO}'`)) === 2
+    && (await count(`SELECT count(*)::int AS n FROM club_events WHERE id = '${EVENTO}' AND mvp_id = '${P03}'`)) === 1, "replace_club_event_stats: tarjetas solo del club y MVP");
+  const statsAjeno = await rpc("usuario", "replace_club_event_stats", { id: EVENTO, clubId: HALCONES, stats: { goals: [] } });
+  check(statsAjeno.data?.event === null && (await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = '${EVENTO}'`)) === 2, "replace_club_event_stats: sin rol -> null y no borra");
+
+  const borrarEvento = await rpc("tesorero", "delete_club_event", { id: "prueba-ev-1", clubId: HALCONES });
+  check(borrarEvento.data?.deleted === null, "delete_club_event: tesorero -> null", borrarEvento);
+  const borrarEvento2 = await rpc("presidente", "delete_club_event", { id: EVENTO, clubId: HALCONES });
+  check(borrarEvento2.data?.deleted === 1 && (await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = '${EVENTO}'`)) === 0, "delete_club_event: presidente borra con hijos", borrarEvento2);
+
+  // ---------- Agenda: partidos oficiales ----------
+  const reporte = await rpc("dt", "set_match_club_lineup", { matchId: PARTIDO, clubId: HALCONES, lineup });
+  check(reporte.data?.report?.match_id === PARTIDO, "set_match_club_lineup: DT en partido propio", reporte);
+  const reporteAjeno = await rpc("dt", "set_match_club_lineup", { matchId: PARTIDO_AJENO, clubId: HALCONES, lineup });
+  check(reporteAjeno.data?.report === null, "set_match_club_lineup: partido en el que no juega -> null", reporteAjeno);
+  const reporteSuplantado = await rpc("dt", "set_match_club_lineup", { matchId: PARTIDO, clubId: "dummy-club-leones", lineup });
+  check(reporteSuplantado.data?.report === null, "set_match_club_lineup: no puede firmar por el rival", reporteSuplantado);
+  const asistentes = await rpc("presidente", "replace_match_attendees", { matchId: PARTIDO, clubId: HALCONES, labels: [P01, P03, "dummy-club-leones-p01", "nadie"] });
+  check(asistentes.data?.report?.match_id === PARTIDO && asistentes.data.added === 2, "replace_match_attendees: solo jugadores del club", asistentes);
+  check((await count(`SELECT count(*)::int AS n FROM match_attendees WHERE match_id = '${PARTIDO}' AND club_id = '${HALCONES}'`)) === 2
+    && (await count(`SELECT count(*)::int AS n FROM match_attendees WHERE match_id = '${PARTIDO}' AND club_id = 'dummy-club-leones'`)) > 0, "replace_match_attendees: no toca la lista del rival");
+  const asistentesPrensa = await rpc("prensa", "replace_match_attendees", { matchId: PARTIDO, clubId: HALCONES, labels: [] });
+  check(asistentesPrensa.data?.report === null, "replace_match_attendees: prensa -> null", asistentesPrensa);
+
+  // ---------- Finanzas ----------
+  const mov = await rpc("tesorero", "add_transaction", { id: "prueba-mov-1", clubId: HALCONES, type: "GASTO", description: "Balones", category: "Material", amount: 350.5, txnDate: "2026-10-01" });
+  check(mov.data?.transaction?.id === "prueba-mov-1" && mov.data.transaction.amount === 350.5, "add_transaction: tesorero", mov);
+  const movNegativo = await rpc("tesorero", "add_transaction", { id: "prueba-mov-2", clubId: HALCONES, type: "GASTO", description: "x", category: "x", amount: -1, txnDate: "2026-10-01" });
+  check(movNegativo.data?.transaction === null, "add_transaction: importe negativo -> null", movNegativo);
+  const movDt = await rpc("dt", "add_transaction", { id: "prueba-mov-3", clubId: HALCONES, type: "INGRESO", description: "x", category: "x", amount: 1, txnDate: "2026-10-01" });
+  check(movDt.data?.transaction === null, "add_transaction: DT no puede", movDt);
+  const movPrensa = await rpc("prensa", "delete_transaction", { id: "prueba-mov-1", clubId: HALCONES });
+  check(movPrensa.data?.deleted === null, "delete_transaction: prensa -> null", movPrensa);
+  const movBorrado = await rpc("presidente", "delete_transaction", { id: "prueba-mov-1", clubId: HALCONES });
+  check(movBorrado.data?.deleted === 1, "delete_transaction: presidente", movBorrado);
+
+  const meta = await rpc("tesorero", "save_financial_goal", { id: "prueba-meta-1", clubId: HALCONES, title: "Viaje", amount: 5000, quotaPerPlayer: 250 });
+  check(meta.data?.goal?.id === "prueba-meta-1", "save_financial_goal: tesorero", meta);
+  const meta2 = await rpc("presidente", "save_financial_goal", { id: "prueba-meta-1", clubId: HALCONES, title: "Viaje largo", amount: 6000, quotaPerPlayer: null });
+  check(meta2.data?.goal?.id === "prueba-meta-1" && (await count(`SELECT count(*)::int AS n FROM financial_goals WHERE id = 'prueba-meta-1' AND title = 'Viaje largo' AND quota_per_player IS NULL AND status = 'ACTIVE'`)) === 1, "save_financial_goal: upsert");
+  const metaNegativa = await rpc("tesorero", "save_financial_goal", { id: "prueba-meta-2", clubId: HALCONES, title: "x", amount: -5 });
+  check(metaNegativa.data?.goal === null, "save_financial_goal: importe negativo -> null", metaNegativa);
+  const metaDt = await rpc("dt", "save_financial_goal", { id: "prueba-meta-3", clubId: HALCONES, title: "x", amount: 5 });
+  check(metaDt.data?.goal === null, "save_financial_goal: DT -> null", metaDt);
+  const aporte = await rpc("tesorero", "set_goal_contribution", { goalId: META, playerId: P01, amount: 450 });
+  check(aporte.data?.contribution?.goal_id === META && aporte.data.contribution.player_id === P01 && aporte.data.contribution.amount === 450, "set_goal_contribution: tesorero (upsert)", aporte);
+  const aporteNuevo = await rpc("presidente", "set_goal_contribution", { goalId: META, playerId: "dummy-club-halcones-p16", amount: 0 });
+  check(aporteNuevo.data?.contribution?.amount === 0, "set_goal_contribution: importe 0 permitido", aporteNuevo);
+  const aporteNegativo = await rpc("tesorero", "set_goal_contribution", { goalId: META, playerId: P01, amount: -1 });
+  check(aporteNegativo.data?.contribution === null, "set_goal_contribution: negativo -> null", aporteNegativo);
+  const aporteAjeno = await rpc("dt", "set_goal_contribution", { goalId: META, playerId: P01, amount: 1 });
+  check(aporteAjeno.data?.contribution === null, "set_goal_contribution: DT -> null", aporteAjeno);
+  const aporteBahia = await rpc("presidente", "set_goal_contribution", { goalId: "dummy-club-bahia-meta-uniformes", playerId: "dummy-club-bahia-p01", amount: 1 });
+  check(aporteBahia.data?.contribution === null, "set_goal_contribution: meta de otro club (club tomado de la meta) -> null", aporteBahia);
+  const estado = await rpc("tesorero", "set_financial_goal_status", { id: "prueba-meta-1", clubId: HALCONES, status: "COMPLETED" });
+  check(estado.data?.goal?.id === "prueba-meta-1" && (await count(`SELECT count(*)::int AS n FROM financial_goals WHERE id = 'prueba-meta-1' AND status = 'COMPLETED'`)) === 1, "set_financial_goal_status", estado);
+  const estadoPrensa = await rpc("prensa", "set_financial_goal_status", { id: "prueba-meta-1", clubId: HALCONES, status: "ACTIVE" });
+  check(estadoPrensa.data?.goal === null, "set_financial_goal_status: prensa -> null", estadoPrensa);
+  await rpc("tesorero", "set_goal_contribution", { goalId: "prueba-meta-1", playerId: P01, amount: 10 });
+  const metaBorradaDt = await rpc("dt", "delete_financial_goal", { id: "prueba-meta-1", clubId: HALCONES });
+  check(metaBorradaDt.data?.deleted === null, "delete_financial_goal: DT -> null", metaBorradaDt);
+  const metaBorrada = await rpc("tesorero", "delete_financial_goal", { id: "prueba-meta-1", clubId: HALCONES });
+  check(metaBorrada.data?.deleted === 1 && (await count(`SELECT count(*)::int AS n FROM goal_contributions WHERE goal_id = 'prueba-meta-1'`)) === 0, "delete_financial_goal: borra meta y aportaciones", metaBorrada);
+
+  // ---------- Inventario ----------
+  const articulo = await rpc("tesorero", "save_inventory_item", { id: "prueba-inv-1", clubId: HALCONES, name: "Artículo de prueba", quantity: 20, condition: "BUENO" });
+  check(articulo.data?.item?.id === "prueba-inv-1" && articulo.data.item.quantity === 20, "save_inventory_item: tesorero", articulo);
+  const articuloDt = await rpc("dt", "save_inventory_item", { id: "prueba-inv-1", clubId: HALCONES, name: "Artículo de prueba", quantity: 18, condition: "BUENO" });
+  check(articuloDt.data?.item?.quantity === 18, "save_inventory_item: DT actualiza", articuloDt);
+  const articuloNegativo = await rpc("presidente", "save_inventory_item", { id: "prueba-inv-2", clubId: HALCONES, name: "x", quantity: -1, condition: "MALO" });
+  check(articuloNegativo.data?.item === null, "save_inventory_item: cantidad negativa -> null", articuloNegativo);
+  const articuloPrensa = await rpc("prensa", "save_inventory_item", { id: "prueba-inv-3", clubId: HALCONES, name: "x", quantity: 1, condition: "MALO" });
+  check(articuloPrensa.data?.item === null, "save_inventory_item: prensa -> null", articuloPrensa);
+  const articuloBorradoPrensa = await rpc("prensa", "delete_inventory_item", { id: "prueba-inv-1", clubId: HALCONES });
+  check(articuloBorradoPrensa.data?.deleted === null, "delete_inventory_item: prensa -> null", articuloBorradoPrensa);
+  const articuloBorrado = await rpc("dt", "delete_inventory_item", { id: "prueba-inv-1", clubId: HALCONES });
+  check(articuloBorrado.data?.deleted === 1, "delete_inventory_item: DT", articuloBorrado);
+
+  // ---------- Galería ----------
+  const foto = await rpc("dt", "save_gallery_photo", { albumId: "prueba-album-1", clubId: HALCONES, albumName: "Álbum de prueba", photoId: "prueba-foto-1", url: "https://a/f1.jpg", caption: "Primera", takenAt: "2026-10-01T12:00:00.000Z" });
+  check(foto.data?.photo?.id === "prueba-foto-1" && foto.data.album === 1, "save_gallery_photo: crea álbum y foto", foto);
+  const foto2 = await rpc("presidente", "save_gallery_photo", { albumId: "otro-id-ignorado", clubId: HALCONES, albumName: "Álbum de prueba", photoId: "prueba-foto-2", url: "https://a/f2.jpg", caption: "", takenAt: "2026-10-02T12:00:00.000Z" });
+  check(foto2.data?.photo?.id === "prueba-foto-2" && (await count(`SELECT count(*)::int AS n FROM gallery_photos WHERE album_id = 'prueba-album-1' AND sort_order = 1`)) === 1, "save_gallery_photo: reutiliza el álbum por nombre y ordena al final", foto2);
+  const fotoPrensa = await rpc("prensa", "save_gallery_photo", { albumId: "prueba-album-2", clubId: HALCONES, albumName: "No", photoId: "prueba-foto-3", url: "https://a/x.jpg", caption: "", takenAt: "2026-10-02T12:00:00.000Z" });
+  check(fotoPrensa.data?.photo === null && fotoPrensa.data.album === null, "save_gallery_photo: prensa -> null", fotoPrensa);
+  const fotoBahia = await rpc("presidente", "save_gallery_photo", { albumId: "prueba-album-3", clubId: BAHIA, albumName: "No", photoId: "prueba-foto-4", url: "https://a/x.jpg", caption: "", takenAt: "2026-10-02T12:00:00.000Z" });
+  check(fotoBahia.data?.photo === null && (await count(`SELECT count(*)::int AS n FROM albums WHERE id = 'prueba-album-3'`)) === 0, "save_gallery_photo: otro club -> null, sin álbum", fotoBahia);
+
+  const antes = (await db.query(`SELECT id, sort_order FROM gallery_photos WHERE id IN ('${FOTO1}', '${FOTO2}') ORDER BY id`)).rows;
+  const swap = await rpc("dt", "swap_gallery_photos", { clubId: HALCONES, firstId: FOTO1, secondId: FOTO2 });
+  const despues = (await db.query(`SELECT id, sort_order FROM gallery_photos WHERE id IN ('${FOTO1}', '${FOTO2}') ORDER BY id`)).rows;
+  check(swap.data?.swapped === 2 && antes[0].sort_order === despues[1].sort_order && antes[1].sort_order === despues[0].sort_order, "swap_gallery_photos: intercambia orden", { swap, antes, despues });
+  const swapPrensa = await rpc("prensa", "swap_gallery_photos", { clubId: HALCONES, firstId: FOTO1, secondId: FOTO2 });
+  check(swapPrensa.data?.swapped === null, "swap_gallery_photos: prensa -> null", swapPrensa);
+  const swapBahia = await rpc("presidente", "swap_gallery_photos", { clubId: HALCONES, firstId: "dummy-club-bahia-album-general-1", secondId: "dummy-club-bahia-album-general-2" });
+  check(swapBahia.data?.swapped === null, "swap_gallery_photos: fotos de otro club -> null", swapBahia);
+  const portada = await rpc("presidente", "promote_gallery_photo", { clubId: HALCONES, photoId: FOTO2 });
+  check(portada.data?.photo?.id === FOTO2 && (await count(`SELECT count(*)::int AS n FROM gallery_photos g WHERE g.id = '${FOTO2}' AND g.taken_at = (SELECT max(taken_at) FROM gallery_photos WHERE album_id = g.album_id)`)) === 1, "promote_gallery_photo: pasa a ser la más reciente", portada);
+  const portadaUsuario = await rpc("usuario", "promote_gallery_photo", { clubId: HALCONES, photoId: FOTO2 });
+  check(portadaUsuario.data?.photo === null, "promote_gallery_photo: sin rol -> null", portadaUsuario);
+  const fotoBorradaPrensa = await rpc("prensa", "delete_gallery_photo", { clubId: HALCONES, photoId: "prueba-foto-1" });
+  check(fotoBorradaPrensa.data?.deleted === null, "delete_gallery_photo: prensa -> null", fotoBorradaPrensa);
+  const fotoBorrada = await rpc("dt", "delete_gallery_photo", { clubId: HALCONES, photoId: "prueba-foto-1" });
+  check(fotoBorrada.data?.deleted === 1, "delete_gallery_photo: DT", fotoBorrada);
+  const albumBorradoBahia = await rpc("presidente", "delete_gallery_album", { clubId: BAHIA, albumName: ALBUM });
+  check(albumBorradoBahia.data?.deleted === null && (await count(`SELECT count(*)::int AS n FROM albums WHERE id = 'dummy-club-bahia-album-general'`)) === 1, "delete_gallery_album: otro club -> null", albumBorradoBahia);
+  const albumBorrado = await rpc("presidente", "delete_gallery_album", { clubId: HALCONES, albumName: "Álbum de prueba" });
+  check(albumBorrado.data?.deleted === 1 && (await count(`SELECT count(*)::int AS n FROM gallery_photos WHERE album_id = 'prueba-album-1'`)) === 0, "delete_gallery_album: borra álbum y fotos", albumBorrado);
+  const albumInexistente = await rpc("presidente", "delete_gallery_album", { clubId: HALCONES, albumName: "No existe" });
+  check(albumInexistente.data?.deleted === null, "delete_gallery_album: álbum inexistente -> null", albumInexistente);
+
+  // ---------- Disponibilidad ----------
+  const dispPrensa = await rpc("prensa", "clear_club_availability", { clubId: HALCONES });
+  check(dispPrensa.data?.cleared === null && (await count(`SELECT count(*)::int AS n FROM club_availability_windows WHERE club_id = '${HALCONES}'`)) > 0, "clear_club_availability: prensa no borra", dispPrensa);
+  const disp = await rpc("dt", "clear_club_availability", { clubId: HALCONES });
+  check(disp.data?.cleared > 0 && (await count(`SELECT count(*)::int AS n FROM club_availability_windows WHERE club_id = '${HALCONES}'`)) === 0, "clear_club_availability: DT vacía", disp);
+  const franjas = await rpc("dt", "insert_club_availability", { clubId: HALCONES, windows: [{ day: 2, start: "18:00", end: "20:00" }, { day: 9, start: "18:00", end: "20:00" }, { day: 3, start: "20:00", end: "18:00" }] });
+  check(franjas.data?.window?.club_id === HALCONES && (await count(`SELECT count(*)::int AS n FROM club_availability_windows WHERE club_id = '${HALCONES}'`)) === 1, "insert_club_availability: solo franjas válidas (día 1-7, inicio < fin)", franjas);
+  const franjasInvalidas = await rpc("dt", "insert_club_availability", { clubId: HALCONES, windows: [{ day: 0, start: "18:00", end: "20:00" }] });
+  check(franjasInvalidas.data?.window === null, "insert_club_availability: todas inválidas -> null", franjasInvalidas);
+  const franjasTesorero = await rpc("tesorero", "insert_club_availability", { clubId: HALCONES, windows: [{ day: 4, start: "18:00", end: "20:00" }] });
+  check(franjasTesorero.data?.window === null, "insert_club_availability: tesorero -> null", franjasTesorero);
+
+  // ---------- Portada y perfil ----------
+  const portadaDt = await rpc("dt", "save_club_portada", { id: HALCONES, name: "Halcones FC", description: "x", location: "Guaymas, Sonora" });
+  check(portadaDt.data?.club === null, "save_club_portada: DT -> null", portadaDt);
+  const portadaPrensa = await rpc("prensa", "save_club_portada", { id: HALCONES, name: "Halcones FC Demo", description: "Club de prueba", location: "Guaymas, Sonora" });
+  check(portadaPrensa.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND description = 'Club de prueba' AND locality_id IS NOT NULL`)) === 1, "save_club_portada: prensa, conserva la localidad si coincide", portadaPrensa);
+  const portadaOtra = await rpc("presidente", "save_club_portada", { id: HALCONES, name: "Halcones FC Demo", description: "Club de prueba", location: "Otra ciudad" });
+  check(portadaOtra.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND location = 'Otra ciudad' AND locality_id IS NULL`)) === 1, "save_club_portada: ubicación distinta desenlaza la localidad", portadaOtra);
+  const heroesDt = await rpc("dt", "clear_club_heroes", { id: HALCONES });
+  check(heroesDt.data?.cleared === null, "clear_club_heroes: DT -> null", heroesDt);
+  const heroes = await rpc("prensa", "clear_club_heroes", { id: HALCONES });
+  check(heroes.data?.cleared >= 1 && (await count(`SELECT count(*)::int AS n FROM club_hero_images WHERE club_id = '${HALCONES}'`)) === 0, "clear_club_heroes: prensa vacía", heroes);
+  const heroesNuevos = await rpc("prensa", "insert_club_heroes", { id: HALCONES, urls: ["https://a/h1.jpg", "", "https://a/h2.jpg"] });
+  check(heroesNuevos.data?.hero?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM club_hero_images WHERE club_id = '${HALCONES}' AND position = 2`)) === 1, "insert_club_heroes: conserva posiciones", heroesNuevos);
+  const heroesVacios = await rpc("presidente", "insert_club_heroes", { id: HALCONES, urls: [] });
+  check(heroesVacios.data?.hero === null, "insert_club_heroes: lista vacía -> null", heroesVacios);
+  const heroesBahia = await rpc("prensa", "insert_club_heroes", { id: BAHIA, urls: ["https://a/h.jpg"] });
+  check(heroesBahia.data?.hero === null, "insert_club_heroes: otro club -> null", heroesBahia);
+  const perfilPrensa = await rpc("prensa", "save_club_profile", { id: HALCONES, name: "Halcones FC Demo", logoUrl: "", presidentPhone: "6221234567" });
+  check(perfilPrensa.data?.club === null, "save_club_profile: prensa -> null (solo ADMIN)", perfilPrensa);
+  const perfil = await rpc("presidente", "save_club_profile", { id: HALCONES, name: "Halcones FC Demo", logoUrl: "", presidentPhone: "6221234567" });
+  check(perfil.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND logo_url IS NULL AND president_phone = '6221234567'`)) === 1, "save_club_profile: presidente, logo vacío -> null", perfil);
+  const perfilSuper = await rpc("admin", "save_club_profile", { id: BAHIA, name: "Deportivo Bahía Demo", logoUrl: "https://a/logo.png", presidentPhone: "6220000000" });
+  check(perfilSuper.data?.club?.id === BAHIA, "save_club_profile: superadmin en cualquier club", perfilSuper);
+}

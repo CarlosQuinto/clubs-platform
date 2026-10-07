@@ -29,7 +29,7 @@ import { emailKey } from "../../shared/paths";
 
 interface AuthContextValue {
   user: User | null;
-  /** true mientras Firebase resuelve la sesión inicial. */
+  /** true mientras se resuelve la sesión inicial. */
   loading: boolean;
   /** null mientras se consulta; true si platform_admins está vacía. */
   platformUnclaimed: boolean | null;
@@ -244,7 +244,7 @@ export function useAuth() {
   return ctx;
 }
 
-/** Traduce códigos de error de Firebase Auth a mensajes legibles. */
+/** Traduce los códigos de error de la sesión (auth/*, ver src/infrastructure/auth.ts) a mensajes legibles. */
 export function authErrorMessage(err: unknown): string {
   const code = (err as { code?: string })?.code || "";
   switch (code) {
@@ -262,6 +262,11 @@ export function authErrorMessage(err: unknown): string {
       return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
     case "auth/user-disabled":
       return "Esta cuenta está desactivada.";
+    case "auth/operation-not-allowed":
+      return "Necesitas una invitación para registrarte.";
+    case "auth/expired-action-code":
+    case "auth/invalid-action-code":
+      return "Este enlace venció o ya se usó. Pide uno nuevo desde iniciar sesión.";
     case "auth/network-request-failed":
       return "Sin conexión. Revisa tu internet e inténtalo de nuevo.";
     default:

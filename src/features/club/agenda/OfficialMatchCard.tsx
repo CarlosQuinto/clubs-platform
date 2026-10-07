@@ -17,7 +17,24 @@ import {
 import { Badge, C, RADIUS, SHADOWS, SecondaryButton } from "../../../shared/ui";
 import ConfirmModal from "../../../shared/ConfirmModal";
 import { formatFriendlyDate, formatFriendlyTime } from "../../../shared/helpers";
+import { matchPath } from "../../../shared/paths";
 import RoutineDisplay from "./RoutineDisplay";
+
+/** Enlaces fuera del club (torneo, ficha del partido): se confirma antes de salir. */
+const leaveLinkStyle = {
+  color: C.navy900,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.2rem",
+  width: "fit-content",
+  padding: 0,
+  border: "none",
+  background: "none",
+  cursor: "pointer",
+  font: "inherit",
+  fontWeight: 700,
+} as const;
 
 interface Props {
   ev: any;
@@ -81,7 +98,7 @@ export default function OfficialMatchCard({
   const showLineup = !isPast && isMatch && (canEdit || (!isOfficial && hasLineup));
 
   const navigate = useNavigate();
-  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveTo, setLeaveTo] = useState<{ href: string; label: string } | null>(null);
   const photos =
     ev.photoUrls && ev.photoUrls.length > 0
       ? ev.photoUrls
@@ -220,23 +237,21 @@ export default function OfficialMatchCard({
               {ev.tournamentName && (
                 <button
                   type="button"
-                  onClick={() => setLeaveOpen(true)}
-                  style={{
-                    color: C.navy900,
-                    textDecoration: "none",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.2rem",
-                    width: "fit-content",
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    font: "inherit",
-                    fontWeight: 700,
-                  }}
+                  onClick={() =>
+                    setLeaveTo({ href: `/torneos/${ev.tournamentId}`, label: `la página del torneo ${ev.tournamentName}` })
+                  }
+                  style={leaveLinkStyle}
                 >
                   {ev.tournamentName} <ExternalLink size={10} />
+                </button>
+              )}
+              {ev.matchId && (
+                <button
+                  type="button"
+                  onClick={() => setLeaveTo({ href: matchPath(ev.matchId), label: "la ficha del partido" })}
+                  style={leaveLinkStyle}
+                >
+                  Ficha del partido <ExternalLink size={10} />
                 </button>
               )}
               <span>
@@ -473,16 +488,17 @@ export default function OfficialMatchCard({
         ))}
       {createPortal(
         <ConfirmModal
-          open={leaveOpen}
+          open={leaveTo !== null}
           title="Salir del club"
-          message={`Estás por salir de la página del club para ir a la página del torneo ${ev.tournamentName}. ¿Deseas continuar?`}
+          message={`Estás por salir de la página del club para ir a ${leaveTo?.label ?? ""}. ¿Deseas continuar?`}
           confirmLabel="Continuar"
           cancelLabel="Cancelar"
           onConfirm={() => {
-            setLeaveOpen(false);
-            navigate(`/torneos/${ev.tournamentId}`);
+            const href = leaveTo?.href;
+            setLeaveTo(null);
+            if (href) navigate(href);
           }}
-          onCancel={() => setLeaveOpen(false)}
+          onCancel={() => setLeaveTo(null)}
         />,
         document.body,
       )}

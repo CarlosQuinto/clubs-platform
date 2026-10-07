@@ -151,9 +151,10 @@ export function PrivacyPage() {
       </p>
       <h2>Dónde se guardan</h2>
       <p>
-        El sitio y su base de datos están hospedados en Firebase, un servicio
-        de Google. Eso incluye los mensajes de contacto, las solicitudes de
-        equipo y las cuentas de administración.
+        El sitio y su base de datos se alojan en un servidor propio
+        administrado por la liga. Eso incluye los mensajes de contacto, las
+        solicitudes de equipo y las cuentas de administración. Los correos de
+        aviso se envían a través de Gmail.
       </p>
       <h2>Consentimiento</h2>
       <p>

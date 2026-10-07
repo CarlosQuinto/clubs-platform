@@ -3,27 +3,24 @@ node_modules
 # Compilación de producción
 dist/
 dist-ssr/
-functions/lib/
-functions/node_modules/
+api/dist/
+api/node_modules/
 
-# Compilación de producción
-dist/
-dist-ssr/
-
-# Caché de Firebase
-.firebase/
-dataconnect-debug.log
-dataconnect/.dataconnect/
-pglite-debug.log
-firebase-debug.log
-firebase-debug.*.log
-
-# Variables de entorno locales (usa .env.example como plantilla)
+# Variables de entorno locales (usa .env.example y docker/.env.example como plantillas)
 .env
 .env.local
 .env.*.local
-functions/.env
+docker/.env
+
+# Datos de los contenedores si se montan como carpetas
+docker/volumes/db/data/
+docker/volumes/storage/
 
 .agents/
-serviceAccountKey.json
+pglite-debug.log
 exports/
+# Credencial del antiguo proyecto de Firebase: nunca al repo (rota la clave y bórralo cuando cierres el proyecto)
+serviceAccountKey.json
+
+# SQL de datos dummy (se regenera con npm run demo:sql; depende de la fecha)
+scripts/demo/*.sql

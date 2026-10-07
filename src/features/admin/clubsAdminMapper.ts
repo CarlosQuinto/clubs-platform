@@ -6,6 +6,7 @@ import {
   isNeighborhood,
   isPublicSlug,
   isRegisterEmail,
+  titleCase,
 } from "../../shared/textLimits";
 import type { ClubSummary } from "../../shared/types";
 
@@ -32,7 +33,8 @@ function tidy(value: string) {
 }
 
 export function validateNewClub(draft: NewClubDraft, localityName: string): string | NewClubPayload {
-  const name = tidy(draft.name);
+  // Title Case, como lo guarda create_club (initcap)
+  const name = titleCase(tidy(draft.name));
   const slug = draft.slug.replace(/^-+|-+$/g, "");
   const location = tidy(draft.location);
   const email = draft.adminEmail.trim().toLowerCase();

@@ -65,7 +65,7 @@ export default function RegisterTeamView() {
                 onChange={(event) => form.onCaptainEmail(event.target.value)}
                 placeholder="Correo electrónico"
                 required
-                maxLength={320}
+                maxLength={100}
                 autoComplete="email"
               />
             </Field>

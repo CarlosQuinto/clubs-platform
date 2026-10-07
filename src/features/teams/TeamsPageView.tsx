@@ -4,7 +4,7 @@ import {
   ChevronRight,
   ListFilter,
   Loader2,
-  Phone,
+  MessageCircle,
   PlusCircle,
   Search,
   SearchX,
@@ -34,7 +34,7 @@ export default function TeamsPageView() {
           </span>
           <div className="teams-head__copy">
             <h1>Equipos</h1>
-            <p>Conoce a los clubes de la liga</p>
+            <p>Conoce a los clubes</p>
           </div>
           {isSuperAdmin ? (
             <button
@@ -192,9 +192,11 @@ function Directory({
                   <a
                     className="teams-card__phone"
                     href={club.phoneHref}
-                    aria-label={`Llamar al presidente: ${club.phoneLabel}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Escribir por WhatsApp al presidente: ${club.phoneLabel}`}
                   >
-                    <Phone size={11} />
+                    <MessageCircle size={11} />
                     {club.phoneLabel}
                   </a>
                 ) : null}

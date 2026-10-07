@@ -48,8 +48,8 @@ type MemberRow = {
 };
 
 /**
- * Filas de club_members de la sesión. Si el servidor aún no tiene `MySpaces`
- * (Hosting publicado antes que Data Connect), recurre a `MyMemberships`.
+ * Filas de club_members de la sesión. Si `mySpaces` falla (p. ej. base desactualizada),
+ * recurre a `myMemberships`, que también filtra por la sesión en el servidor.
  */
 async function myMemberRows(): Promise<MemberRow[]> {
   const fresh = { fetchPolicy: QueryFetchPolicy.SERVER_ONLY };

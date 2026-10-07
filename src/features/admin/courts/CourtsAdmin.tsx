@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CourtHoldOutside,
+  type MatchOutside,
   loadCourts,
   removeCourt,
   removeManualHold,
@@ -24,6 +26,7 @@ import {
   HOLD_REJECTED,
   upsertHold,
 } from "../../../domains/courts/courtCommands";
+import { invalidatePlatformChrome } from "../../shell/usePlatformChrome";
 import { toCourtsAdmin } from "./courtsAdminMapper";
 import { useAdminQuery } from "../useAdminQuery";
 import { useModalLock } from "../../../shared/useModalLock";
@@ -42,7 +45,8 @@ import {
 } from "../../../domains/courts/courts";
 import { platformStoragePath } from "../../../shared/paths";
 import { saveMatchSchedule } from "../../../domains/matches/matchCommands";
-import { sendCourtBookingNotice } from "../../../infrastructure/functions/callables";
+import { notifyMatchScheduled, sendCourtBookingNotice } from "../../../infrastructure/functions/callables";
+import { rpcErrorHint } from "../../../infrastructure/dataconnect";
 import {
   courtLocation,
   courtName,
@@ -129,6 +133,46 @@ function holdText(name: string, note: string) {
 }
 
 const BOOKING_MAIL_FAIL = "El cambio quedó guardado, pero el correo no se envió.";
+const HOURS_SAVE_FAIL = "No se pudo guardar el horario de canchas.";
+const HOURS_MAIL_FAIL = "El horario quedó guardado, pero algún aviso de cancelación no se envió.";
+
+/** Nombre de quien rentó: la nota se guarda como «Nombre · Nota». */
+function holdGuestName(note: string) {
+  return note.split(" · ")[0] || "Sin nombre";
+}
+
+type HourConflicts = { holds: CourtHoldOutside[]; matches: MatchOutside[] };
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Texto del aviso según haya rentas, partidos o ambos fuera del horario nuevo. */
+function hourConflictsMessage({ holds, matches }: HourConflicts) {
+  const what = [
+    holds.length ? plural(holds.length, "renta", "rentas") : "",
+    matches.length ? plural(matches.length, "partido programado", "partidos programados") : "",
+  ]
+    .filter(Boolean)
+    .join(" y ");
+  const effects = [
+    holds.length ? (holds.length === 1 ? "la renta se eliminará" : "las rentas se eliminarán") : "",
+    matches.length
+      ? matches.length === 1
+        ? "el partido quedará por programar"
+        : "los partidos quedarán por programar"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" y ");
+  const notice = [
+    holds.length ? "a quien rentó" : "",
+    matches.length ? "a los presidentes de los clubes" : "",
+  ]
+    .filter(Boolean)
+    .join(" y ");
+  return `Hay ${what} fuera del horario nuevo. Si continúas, ${effects}; se avisará por correo ${notice}.`;
+}
 const COURT_TAKEN = "Esa cancha no está disponible en esa fecha y hora.";
 const HOLD_TAKEN = "No se pudo guardar. Puede que ese horario ya no esté libre; revisa la rejilla.";
 
@@ -144,7 +188,7 @@ function bookingPriceLabel(hourlyRate: number, minutes: number) {
   return `$${text}`;
 }
 
-function bookingSlot(court: Court | undefined, start: number, end: number) {
+function bookingSlot(court: Pick<Court, "name" | "hourlyRate"> | undefined, start: number, end: number) {
   const minutes = Math.max(0, end - start);
   return {
     courtName: court?.name || "Cancha",
@@ -225,6 +269,9 @@ export default function CourtsAdmin() {
     setWindows(view.windows);
   }, [view]);
   const [configBusy, setConfigBusy] = useState(false);
+  const [configError, setConfigError] = useState("");
+  /** Rentas y partidos que quedarían fuera del horario nuevo; abre la confirmación. */
+  const [hourConflicts, setHourConflicts] = useState<HourConflicts | null>(null);
   const [gridDate, setGridDate] = useState(today);
   const [courtModal, setCourtModal] = useState<null | "add" | Court>(null);
   const [draftName, setDraftName] = useState("");
@@ -241,11 +288,12 @@ export default function CourtsAdmin() {
   const savingCourt = useRef(false);
   const photoTicket = useRef(0);
 
-  const saveConfig = async () => {
+  const saveConfig = async (force = false) => {
     const clean = readWindows(windows);
     setConfigBusy(true);
+    setConfigError("");
     try {
-      await saveCourtModule(
+      const result = await saveCourtModule(
         enabled,
         slot,
         clean.map((window) => ({
@@ -253,12 +301,42 @@ export default function CourtsAdmin() {
           startTime: window.start,
           endTime: window.end,
         })),
+        force,
       );
+      if (!result.saved) {
+        setHourConflicts({ holds: result.conflicts, matches: result.matchConflicts });
+        return;
+      }
+      setHourConflicts(null);
       setWindows(clean);
+      // El header y el footer leen el interruptor de una caché en memoria
+      invalidatePlatformChrome();
+      let mailFailed = false;
+      for (const hold of result.removed) {
+        if (!hold.guestEmail) continue;
+        const ok = await mailBooking({
+          to: hold.guestEmail,
+          kind: "cancelled",
+          date: hold.holdDate,
+          note: hold.note,
+          slots: [
+            bookingSlot(
+              { name: hold.courtName, hourlyRate: hold.hourlyRate },
+              toMinutes(hold.startTime) ?? 0,
+              toMinutes(hold.endTime) ?? 0,
+            ),
+          ],
+        });
+        if (!ok) mailFailed = true;
+      }
+      if (mailFailed) setConfigError(HOURS_MAIL_FAIL);
+      // Los clubes reciben «partido por reprogramar»; si falla el correo, el partido ya quedó sin fecha
+      for (const match of result.unscheduledMatches) notifyMatchScheduled(match.matchId, "courts");
       screen.reload();
     } catch (err) {
+      // El detalle técnico se queda en la consola; la pantalla dice qué puede hacer la persona
       console.error(err);
-      alert("No se pudo guardar el horario de canchas.");
+      setConfigError(`${HOURS_SAVE_FAIL} ${rpcErrorHint(err)}`);
     } finally {
       setConfigBusy(false);
     }
@@ -435,8 +513,51 @@ export default function CourtsAdmin() {
             <Save size={15} />
             {configBusy ? "Guardando…" : "Guardar horario"}
           </PrimaryButton>
+          {configError ? (
+            <p role="alert" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: C.red }}>
+              {configError}
+            </p>
+          ) : null}
         </div>
       </SectionCard>
+      <ConfirmModal
+        open={hourConflicts !== null}
+        title="Apartados fuera del nuevo horario"
+        message={hourConflicts ? hourConflictsMessage(hourConflicts) : ""}
+        confirmLabel="Continuar"
+        cancelLabel="Volver"
+        danger
+        busy={configBusy}
+        onConfirm={() => void saveConfig(true)}
+        onCancel={() => setHourConflicts(null)}
+      >
+        {hourConflicts?.holds.length ? (
+          <div style={{ fontSize: "0.82rem", color: C.gray600, lineHeight: 1.5 }}>
+            <strong style={{ color: C.navy900 }}>Rentas</strong>
+            <ul style={{ margin: "0.2rem 0 0.6rem", paddingLeft: "1.1rem" }}>
+              {hourConflicts.holds.map((hold) => (
+                <li key={hold.id}>
+                  {formatFriendlyDate(hold.holdDate)} · {hold.courtName} · {formatFriendlyTime(hold.startTime)} a{" "}
+                  {formatFriendlyTime(hold.endTime)} · {holdGuestName(hold.note)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {hourConflicts?.matches.length ? (
+          <div style={{ fontSize: "0.82rem", color: C.gray600, lineHeight: 1.5 }}>
+            <strong style={{ color: C.navy900 }}>Partidos programados</strong>
+            <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.1rem" }}>
+              {hourConflicts.matches.map((match) => (
+                <li key={match.matchId}>
+                  {formatFriendlyDate(match.holdDate)} · {match.courtName} · {formatFriendlyTime(match.startTime)} a{" "}
+                  {formatFriendlyTime(match.endTime)} · {match.homeClub} vs {match.awayClub} · {match.tournamentName}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </ConfirmModal>
 
       <SectionCard className="book-panel">
         <DayGrid
@@ -955,6 +1076,7 @@ function DayGrid({
         matchId: matchHold.matchId,
         date: matchDate,
         time: fromMinutes(matchStart),
+        startDate: matchHold.matchStartDate || "",
         venue: matchCourt.name,
         courtId: matchCourt.id,
         durationMinutes: matchDuration,
@@ -1174,7 +1296,7 @@ function DayGrid({
             <FormInput
               type="email"
               value={guestEmail}
-              maxLength={320}
+              maxLength={100}
               disabled={busy}
               aria-invalid={bookTip?.field === "email"}
               onChange={(e) => setGuestEmail(emailText(e.target.value))}
@@ -1294,6 +1416,7 @@ function DayGrid({
             <FormInput
               type="date"
               value={matchDate}
+              min={matchHold?.matchStartDate || undefined}
               disabled={matchHold !== null && matchHold.date < todayIso()}
               onChange={(e) => {
                 const value = e.target.value;
@@ -1609,7 +1732,7 @@ function HoldEditor({
         <FormInput
           type="email"
           value={email}
-          maxLength={320}
+          maxLength={100}
           disabled={locked}
           aria-invalid={Boolean(tipFor("email"))}
           onChange={(e) => onEmail(e.target.value)}

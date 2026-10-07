@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, Goal, ListOrdered, Medal, Pencil, SearchX, Trophy } from "lucide-react";
+import { ArrowLeft, CalendarDays, Goal, ListOrdered, Lock, Medal, Pencil, SearchX, Trophy, Unlock } from "lucide-react";
 import PlatformLayout from "../shell/PlatformLayout";
+import ConfirmModal from "../../shared/ConfirmModal";
+import { closeTournament, dataConnect, reopenTournament } from "../../infrastructure/dataconnect";
 import AdSlot from "../shell/AdSlot";
 import SectionHead from "../shell/SectionHead";
 import { Ranking, TeamsEmpty } from "../teams/StandingsRanking";
@@ -16,11 +19,56 @@ import type { PodiumSlotView } from "./tournamentViewState";
 /** Clase de cada escalón del podio, en el orden en que se pinta: subcampeón, campeón, tercero. */
 const PODIUM_TONE = ["is-second", "is-first", "is-third"] as const;
 
+function closeMessage(pending: number) {
+  const lines = [
+    "El torneo pasará a Finalizado y se creará el podio con la tabla actual. No se podrán capturar marcadores ni cambiar el calendario hasta reabrirlo.",
+  ];
+  if (pending > 0) {
+    lines.push(
+      `¿Seguro? Aún hay ${pending} partido${pending === 1 ? "" : "s"} pendiente${pending === 1 ? "" : "s"}: se desprogramarán y se liberarán sus canchas.`,
+    );
+  }
+  return lines.join("\n\n");
+}
+
 export default function TournamentScreenView() {
   const { id = "" } = useParams();
   const { isSuperAdmin } = useAuth();
   const { openEdit } = useTournamentEdit();
   const { loading, missing, error, view, onRefresh } = useTournamentScreen(id);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const runAction = async (action: () => Promise<boolean>, failure: string) => {
+    setActionBusy(true);
+    setActionError("");
+    try {
+      if (!(await action())) throw new Error(failure);
+      setCloseOpen(false);
+      setReopenOpen(false);
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      setActionError(failure);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+  const runClose = () =>
+    runAction(async () => Boolean((await closeTournament(dataConnect, { id })).data.tournament), "No se pudo cerrar el torneo.");
+  const runReopen = () =>
+    runAction(
+      async () => Boolean((await reopenTournament(dataConnect, { id })).data.tournament),
+      "No se pudo reabrir el torneo. Si su temporada ya está cerrada, no se puede.",
+    );
+  const cancelAction = () => {
+    if (actionBusy) return;
+    setCloseOpen(false);
+    setReopenOpen(false);
+    setActionError("");
+  };
 
   if (missing) {
     return (
@@ -80,14 +128,25 @@ export default function TournamentScreenView() {
             {view.subtitle ? <p>{view.subtitle}</p> : null}
           </div>
           {isSuperAdmin ? (
-            <button
-              type="button"
-              className="home-btn home-btn--outline teams-head__cta"
-              onClick={() => openEdit(id)}
-            >
-              <Pencil size={16} />
-              Editar torneo
-            </button>
+            <div className="teams-head__cta" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              {view.phase !== "finished" ? (
+                <>
+                  <button type="button" className="home-btn home-btn--outline" onClick={() => openEdit(id)}>
+                    <Pencil size={16} />
+                    Editar torneo
+                  </button>
+                  <button type="button" className="home-btn home-btn--outline" onClick={() => setCloseOpen(true)}>
+                    <Lock size={16} />
+                    Cerrar torneo
+                  </button>
+                </>
+              ) : view.seasonActive ? (
+                <button type="button" className="home-btn home-btn--outline" onClick={() => setReopenOpen(true)}>
+                  <Unlock size={16} />
+                  Reabrir torneo
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </header>
         <div className="tour-detail__meta">
@@ -95,6 +154,12 @@ export default function TournamentScreenView() {
             <span className="home-status__dot" aria-hidden />
             {status.label}
           </span>
+          {view.phase === "upcoming" && view.startLabel ? (
+            <span className="tour-detail__prize">
+              <CalendarDays size={15} aria-hidden />
+              Inicia: <strong>{view.startLabel}</strong>
+            </span>
+          ) : null}
           {view.prize ? (
             <span className="tour-detail__prize">
               <Medal size={15} aria-hidden />
@@ -134,8 +199,31 @@ export default function TournamentScreenView() {
             title="Calendario"
             subtitle={rounds ? `${rounds} ${rounds === 1 ? "jornada" : "jornadas"}` : "Partidos del torneo"}
           />
-          <TournamentCalendarPanel rounds={view.rounds} admin={isSuperAdmin} onSaved={onRefresh} />
+          <TournamentCalendarPanel rounds={view.rounds} admin={isSuperAdmin && view.phase !== "finished"} onSaved={onRefresh} />
         </section>
+        <ConfirmModal
+          open={closeOpen}
+          title={`Cerrar ${view.title}`}
+          message={closeMessage(view.pendingMatches)}
+          confirmLabel="Cerrar torneo"
+          cancelLabel="Volver"
+          danger={view.pendingMatches > 0}
+          busy={actionBusy}
+          confirmHint={actionError || undefined}
+          onConfirm={() => void runClose()}
+          onCancel={cancelAction}
+        />
+        <ConfirmModal
+          open={reopenOpen}
+          title={`Reabrir ${view.title}`}
+          message="El torneo vuelve a estar en curso: se quita el podio y se podrán capturar marcadores y programar partidos otra vez."
+          confirmLabel="Reabrir torneo"
+          cancelLabel="Volver"
+          busy={actionBusy}
+          confirmHint={actionError || undefined}
+          onConfirm={() => void runReopen()}
+          onCancel={cancelAction}
+        />
       </div>
     </PlatformLayout>
   );

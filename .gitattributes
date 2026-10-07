@@ -1,0 +1,7 @@
+# Los contenedores (Linux) ejecutan estos archivos: siempre con saltos de línea LF, también en Windows.
+*.sh text eol=lf
+*.sql text eol=lf
+*.template text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

@@ -1,6 +1,7 @@
 import { type ClubScreenData, type MemberRole } from "../../infrastructure/dataconnect";
 import type { Category, Match, MatchSide, Season, TimeWindow, Tournament } from "../../shared/types";
 import type { Role } from "../../domains/auth/roles";
+import { matchMvp, startedSeasons } from "../../domains/competition/stats";
 
 export interface ClubInfo {
   id: string;
@@ -19,7 +20,7 @@ export interface ClubInfo {
   createdAt?: any;
 }
 
-/** Fila de una pestaÃ±a del club (jugadores, agenda, finanzasâ€¦) con la forma que pintan sus componentes. */
+/** Fila de una pestaña del club (jugadores, agenda, finanzas…) con la forma que pintan sus componentes. */
 export interface ClubRecord {
   id: string;
   [key: string]: any;
@@ -91,7 +92,8 @@ function podiumOf(rows: { place: number; club: { id: string } }[]) {
 
 export function toClubScreen(data: ClubScreenData, userId: string | null): ClubScreenModel {
   const club = data.clubs[0];
-  const seasons: Season[] = data.seasons.map((season) => ({
+  // Las temporadas futuras no se ofrecen en los filtros de la página
+  const seasons: Season[] = startedSeasons(data.seasons).map((season) => ({
     id: season.id,
     name: season.name,
     active: season.active,
@@ -122,7 +124,9 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
   const matches: Match[] = data.matches.map((match) => {
     const sides: Record<string, MatchSide> = {};
     for (const report of match.matchClubReports_on_match) {
-      sideBucket(sides, report.club.id).lineup = report.lineup;
+      const side = sideBucket(sides, report.club.id);
+      side.lineup = report.lineup;
+      side.mvp = report.mvp?.id || "";
     }
     for (const row of match.matchAttendees_on_match) {
       const side = sideBucket(sides, row.club.id);
@@ -146,6 +150,17 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
       if (!playerId) continue;
       if (card.color === "RED") side.redCards = [...(side.redCards || []), playerId];
       else side.yellowCards = [...(side.yellowCards || []), playerId];
+    }
+    // Sin MVP nombrado por el club, el de más goles y asistencias (misma regla que la ficha del partido)
+    const mvpGoals = match.matchGoals_on_match.map((goal) => ({
+      clubId: goal.club.id,
+      scorerId: goal.scorer?.id || "",
+      assistId: goal.assist?.id || "",
+      isOwnGoal: goal.isOwnGoal,
+    }));
+    for (const clubId of [match.homeClub.id, match.awayClub.id]) {
+      const side = sideBucket(sides, clubId);
+      if (!side.mvp) side.mvp = matchMvp(mvpGoals, clubId);
     }
     return {
       id: match.id,

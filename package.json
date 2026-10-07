@@ -7,11 +7,22 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check:firestore": "node scripts/checkFirestore.mjs"
+    "check:firebase": "node scripts/checkFirebase.mjs",
+    "api:build": "npm --prefix api run build",
+    "demo:sql": "node scripts/demo/generarDemo.mjs",
+    "docker:env": "node scripts/docker/generarEnv.mjs",
+    "docker:up": "docker compose --project-directory docker up -d",
+    "docker:down": "docker compose --project-directory docker down",
+    "docker:logs": "docker compose --project-directory docker logs -f",
+    "docker:smoke": "node scripts/docker/smoke.mjs",
+    "docker:web": "docker compose --project-directory docker --profile web up -d --build web",
+    "db:migrate": "docker compose --project-directory docker run --rm migrate",
+    "db:reset": "docker compose --project-directory docker down -v && npm run demo:sql && docker compose --project-directory docker up -d",
+    "db:check": "node scripts/db/check.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "browser-image-compression": "^2.0.2",
-    "firebase": "^12.17.1",
     "lucide-react": "^0.453.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -19,6 +30,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^4.3.1",

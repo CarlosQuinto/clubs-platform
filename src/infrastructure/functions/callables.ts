@@ -1,5 +1,38 @@
-import { httpsCallable } from "firebase/functions";
-import { functions } from "../firebase";
+import { env } from "../env";
+import { requestPasswordReset as authRequestPasswordReset, sessionAccessToken } from "../auth";
+
+/**
+ * Llamadas a la API de correo e invitaciones (api/, antes Cloud Functions).
+ * Cada endpoint es POST ${VITE_API_URL}/<nombre> con la sesión en Authorization: Bearer.
+ * Los errores llegan como { code, message } y se lanzan con code "functions/<code>",
+ * igual que los HttpsError de antes (la interfaz hace err.code.includes("permission-denied"), etc.).
+ */
+async function callFn<Result>(name: string, body: unknown): Promise<Result> {
+  const token = await sessionAccessToken();
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiUrl}/${name}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch (err) {
+    throw Object.assign(new Error("Sin conexión con el servidor."), {
+      code: "functions/unavailable",
+      cause: err,
+    });
+  }
+  const json = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+  if (!res.ok) {
+    throw Object.assign(new Error(json.message || "Ocurrió un error. Inténtalo de nuevo."), {
+      code: `functions/${json.code || "internal"}`,
+    });
+  }
+  return json as Result;
+}
 
 export type InviteKind = "signup" | "accept";
 
@@ -18,16 +51,11 @@ export async function sendClubInvite(params: {
   token: string;
   hold?: boolean;
 }) {
-  const fn = httpsCallable<typeof params, SendInviteResult>(functions, "sendClubInvite");
-  return (await fn(params)).data;
+  return callFn<SendInviteResult>("sendClubInvite", params);
 }
 
 export async function sendPlatformAdminInvite(email: string) {
-  const fn = httpsCallable<{ email: string; mailOnly: boolean }, SendInviteResult>(
-    functions,
-    "sendPlatformAdminInvite",
-  );
-  return (await fn({ email, mailOnly: true })).data;
+  return callFn<SendInviteResult>("sendPlatformAdminInvite", { email, mailOnly: true });
 }
 
 export type ReviewTeamResult = {
@@ -53,8 +81,7 @@ export async function reviewTeamApplication(params: {
   token?: string;
   emailKey?: string;
 }) {
-  const fn = httpsCallable<typeof params, ReviewTeamResult>(functions, "reviewTeamApplication");
-  return (await fn(params)).data;
+  return callFn<ReviewTeamResult>("reviewTeamApplication", params);
 }
 
 export type CourtBookingNotice = {
@@ -72,33 +99,40 @@ export type CourtBookingNotice = {
 };
 
 export async function sendCourtBookingNotice(input: CourtBookingNotice) {
-  const fn = httpsCallable<CourtBookingNotice, { mailed: boolean }>(
-    functions,
-    "sendCourtBookingNotice",
-  );
-  return (await fn(input)).data.mailed === true;
+  const result = await callFn<{ mailed: boolean }>("sendCourtBookingNotice", input);
+  return result.mailed === true;
 }
 
+/** Restablecer contraseña: lo envía GoTrue (plantilla api/templates/recovery.html). */
 export async function requestPasswordReset(email: string) {
-  const fn = httpsCallable<{ email: string }, { ok: boolean }>(functions, "requestPasswordReset");
-  await fn({ email });
+  try {
+    await authRequestPasswordReset(email);
+  } catch (err) {
+    const code = (err as { code?: string }).code || "";
+    if (code === "auth/too-many-requests") {
+      throw Object.assign(new Error("Demasiados intentos."), { code: "functions/resource-exhausted" });
+    }
+    if (code === "auth/invalid-email") {
+      throw Object.assign(new Error("El correo no es válido."), { code: "functions/invalid-argument" });
+    }
+    throw Object.assign(new Error("No se pudo enviar el correo."), { code: "functions/unavailable" });
+  }
 }
 
-/** Correo a los Presidentes de ambos clubes. Si falla, el partido ya quedó guardado. */
-export function notifyMatchScheduled(matchId: string) {
-  const fn = httpsCallable<{ matchId: string }, { mailed: boolean }>(
-    functions,
-    "sendMatchScheduleNotice",
+/**
+ * Correo a los Presidentes de ambos clubes. Si falla, el partido ya quedó guardado. Con `reason` el partido
+ * acaba de quedar sin fecha (p. ej. "courts": cambió el horario de canchas) y se avisa que se reprogramará.
+ */
+export function notifyMatchScheduled(matchId: string, reason?: "courts") {
+  void callFn<{ mailed: boolean }>("sendMatchScheduleNotice", reason ? { matchId, reason } : { matchId }).catch(
+    (err: unknown) => console.error(err),
   );
-  void fn({ matchId }).catch((err: unknown) => console.error(err));
 }
 
 /** Correo a cada club recién inscrito para que cargue su disponibilidad. */
 export function notifyTournamentEnrollment(tournamentId: string, clubIds: string[]) {
   if (!clubIds.length) return;
-  const fn = httpsCallable<{ tournamentId: string; clubIds: string[] }, { notified: number }>(
-    functions,
-    "sendTournamentEnrollmentNotice",
+  void callFn<{ notified: number }>("sendTournamentEnrollmentNotice", { tournamentId, clubIds }).catch(
+    (err: unknown) => console.error(err),
   );
-  void fn({ tournamentId, clubIds }).catch((err: unknown) => console.error(err));
 }

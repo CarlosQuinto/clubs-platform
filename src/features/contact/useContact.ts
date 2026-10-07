@@ -6,7 +6,7 @@ import {
   submitInquiry,
 } from "../../infrastructure/dataconnect";
 import { cellPhone, contactMessage, emailText, personName } from "../../shared/textLimits";
-import { CONTACT_TOPICS, toContactWhatsapp, validateContact } from "./contactMapper";
+import { CONTACT_TOPICS, contactTopics, toContactCourtsEnabled, toContactWhatsapp, validateContact } from "./contactMapper";
 import type { ContactFormView } from "./contactViewState";
 
 const EMPTY: ContactFormView = {
@@ -21,6 +21,7 @@ const EMPTY: ContactFormView = {
   error: null,
   topics: CONTACT_TOPICS,
   whatsapp: null,
+  courtsEnabled: true,
 };
 
 export function useContact() {
@@ -34,7 +35,14 @@ export function useContact() {
     void contactPage(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
       .then((result) => {
         if (ticket !== request.current) return;
-        setForm((current) => ({ ...current, whatsapp: toContactWhatsapp(result.data) }));
+        const courtsEnabled = toContactCourtsEnabled(result.data);
+        setForm((current) => ({
+          ...current,
+          whatsapp: toContactWhatsapp(result.data),
+          courtsEnabled,
+          topics: contactTopics(courtsEnabled),
+          topic: contactTopics(courtsEnabled).some((item) => item.value === current.topic) ? current.topic : "",
+        }));
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -68,6 +76,8 @@ export function useContact() {
           setForm((current) => ({
             ...EMPTY,
             whatsapp: current.whatsapp,
+            courtsEnabled: current.courtsEnabled,
+            topics: current.topics,
             error: "Los datos no pasaron la revisión. Vuelve a llenar el formulario.",
           }));
           return;
@@ -75,6 +85,8 @@ export function useContact() {
         setForm((current) => ({
           ...EMPTY,
           whatsapp: current.whatsapp,
+          courtsEnabled: current.courtsEnabled,
+          topics: current.topics,
           sent: true,
         }));
       })
@@ -98,7 +110,7 @@ export function useContact() {
     onPhone: (value: string) => setField("phone", cellPhone(value)),
     onEmail: (value: string) => setField("email", emailText(value)),
     onTopic: (value: string) =>
-      setField("topic", CONTACT_TOPICS.some((item) => item.value === value) ? value : ""),
+      setField("topic", form.topics.some((item) => item.value === value) ? value : ""),
     onMessage: (value: string) => setField("message", contactMessage(value)),
     onConsent: (value: boolean) =>
       setForm((current) => ({ ...current, consent: value, error: null })),

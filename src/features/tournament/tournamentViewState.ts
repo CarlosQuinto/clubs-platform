@@ -84,6 +84,12 @@ export interface TournamentScreenView {
   prize: string;
   durationMinutes: number;
   startDate: string;
+  /** Fecha de inicio formateada (la del torneo o la de su temporada); "" si no hay. */
+  startLabel: string;
+  /** La temporada sigue activa: un torneo finalizado se puede reabrir. */
+  seasonActive: boolean;
+  /** Partidos sin jugar; al cerrar el torneo se desprograman. */
+  pendingMatches: number;
   showPodium: boolean;
   podium: PodiumSlotView[];
   standings: TournamentStandingView[];

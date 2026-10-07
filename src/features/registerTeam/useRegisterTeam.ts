@@ -5,7 +5,7 @@ import {
   registerTeamPage,
   submitTeamApplication,
 } from "../../infrastructure/dataconnect";
-import { cellPhone, emailText, personName, teamLabel } from "../../shared/textLimits";
+import { cellPhone, clubName, emailText, personName } from "../../shared/textLimits";
 import { toRegisterTeamClubs, validateRegisterTeam } from "./registerTeamMapper";
 import type { RegisterTeamFormView } from "./registerTeamViewState";
 
@@ -101,7 +101,7 @@ export function useRegisterTeam() {
     onCaptainName: (value: string) => setField("captainName", personName(value)),
     onCaptainEmail: (value: string) => setField("captainEmail", emailText(value)),
     onCaptainPhone: (value: string) => setField("captainPhone", cellPhone(value)),
-    onTeamName: (value: string) => setField("teamName", teamLabel(value)),
+    onTeamName: (value: string) => setField("teamName", clubName(value)),
     onConsent: (value: boolean) =>
       setForm((current) => ({ ...current, consent: value, error: null, sent: false })),
     onSubmit,

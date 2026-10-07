@@ -1,5 +1,7 @@
 /** Inventario de publicidad. El cobro vive fuera de la app. */
 
+import { isStoredImageUrl } from "../../infrastructure/storage/uploadImage";
+
 export const AD_PLACEMENTS = [
   { id: "home", label: "Inicio, franja al final de la portada" },
   { id: "tournament", label: "Ficha de torneo" },
@@ -138,8 +140,8 @@ export function safeAdImageUrl(value: string) {
 /** URL de una imagen subida por este inventario, en platform/ads/. */
 export function isPlatformAdImageUrl(url: string) {
   try {
+    if (!isStoredImageUrl(url)) return false;
     const parsed = new URL(url);
-    if (!parsed.hostname.includes("firebasestorage.googleapis.com")) return false;
     return decodeURIComponent(parsed.pathname).includes("/platform/ads/");
   } catch {
     return false;

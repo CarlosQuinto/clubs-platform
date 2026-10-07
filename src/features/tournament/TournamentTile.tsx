@@ -121,7 +121,7 @@ export default function TournamentTile({
       <ConfirmModal
         open={confirmOpen}
         title={`Eliminar ${card.name}`}
-        message={`Se eliminará ${card.name}. Esta acción no se puede deshacer.`}
+        message={`Se eliminará ${card.name} con sus partidos programados; las canchas apartadas para ellos quedarán libres. Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         danger
         busy={busy}

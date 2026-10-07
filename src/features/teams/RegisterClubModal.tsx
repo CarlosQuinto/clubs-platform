@@ -265,7 +265,7 @@ export default function RegisterClubModal({
                   type="email"
                   value={adminEmail}
                   disabled={busy}
-                  maxLength={320}
+                  maxLength={100}
                   placeholder="presidente@club.com"
                   onChange={(event) => edit(() => setAdminEmail(emailText(event.target.value)))}
                 />

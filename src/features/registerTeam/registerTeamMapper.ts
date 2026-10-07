@@ -1,5 +1,6 @@
+import { whatsappUrl } from "../../domains/platform/social";
 import { type RegisterTeamPageData } from "../../infrastructure/dataconnect";
-import { isCellPhone, isPersonName, isRegisterEmail, isTeamLabel } from "../../shared/textLimits";
+import { isCellPhone, isClubName, isPersonName, isRegisterEmail, titleCase } from "../../shared/textLimits";
 import { clubInitials } from "../teams/teamsMapper";
 import type { ClubCardView } from "../teams/teamsViewState";
 
@@ -29,7 +30,7 @@ export function toRegisterTeamClubs(data: RegisterTeamPageData): ClubCardView[] 
       locality,
       logoUrl: club.logoUrl?.trim() || null,
       phoneLabel: phone ? `Presidente: ${phone}` : null,
-      phoneHref: phone ? `tel:${phone.replace(/\s+/g, "")}` : null,
+      phoneHref: phone ? whatsappUrl(phone) : null,
     };
   });
 }
@@ -38,11 +39,12 @@ export function validateRegisterTeam(draft: RegisterTeamDraft): string | Registe
   const captainName = draft.captainName.trim();
   const captainEmail = draft.captainEmail.trim().toLowerCase();
   const captainPhone = draft.captainPhone.trim();
-  const teamName = draft.teamName.trim();
+  // Misma regla y Title Case que el alta de club: así la solicitud se aprueba sin cambios
+  const teamName = titleCase(draft.teamName.trim());
   if (!isPersonName(captainName)) return "Escribe el nombre completo.";
   if (!isCellPhone(captainPhone)) return "El teléfono no es válido.";
   if (!isRegisterEmail(captainEmail)) return "El correo no es válido.";
-  if (!isTeamLabel(teamName)) return "Escribe el nombre del equipo.";
+  if (!isClubName(teamName)) return "Escribe el nombre del equipo.";
   if (!draft.consent) return "Debes aceptar los términos y la política de privacidad.";
   return { captainName, captainEmail, captainPhone, teamName };
 }

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, Phone, Shield } from "lucide-react";
+import { ChevronRight, MessageCircle, Shield } from "lucide-react";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
+import { whatsappUrl } from "../../domains/platform/social";
 import type { ClubSummary } from "../../shared/types";
 import { C, RADIUS, SecondaryButton } from "../../shared/ui";
 
@@ -80,10 +81,13 @@ function DirectoryCard({
       {phone ? (
         <a
           className="club-dir-card__phone"
-          href={`tel:${phone.replace(/\s+/g, "")}`}
+          href={whatsappUrl(phone)}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Escribir por WhatsApp al presidente: ${phone}`}
           tabIndex={clone ? -1 : undefined}
         >
-          <Phone size={13} />
+          <MessageCircle size={13} />
           Presidente: {phone}
         </a>
       ) : null}

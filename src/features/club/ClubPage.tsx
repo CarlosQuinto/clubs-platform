@@ -6,6 +6,7 @@ import AvailabilityPanel from "./AvailabilityPanel";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { normalizeSlug } from "../../shared/paths";
+import { cellPhone, clubName } from "../../shared/textLimits";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { C, RADIUS, SHADOWS, FormInput, PrimaryButton, SecondaryButton, SectionCard } from "../../shared/ui";
 import Home from "./home/Home";
@@ -485,7 +486,8 @@ function ClubShell() {
                   type="text"
                   required
                   value={editClubName}
-                  onChange={(e) => setEditClubName(e.target.value)}
+                  maxLength={30}
+                  onChange={(e) => setEditClubName(clubName(e.target.value))}
                   placeholder={`Ej. ${DEFAULT_CLUB_NAME}`}
                   style={{
                     width: "100%",
@@ -513,9 +515,9 @@ function ClubShell() {
                 <FormInput
                   type="tel"
                   value={editClubPhone}
-                  onChange={(e) => setEditClubPhone(e.target.value)}
-                  placeholder="Ej. 622 123 4567"
-                  maxLength={29}
+                  onChange={(e) => setEditClubPhone(cellPhone(e.target.value))}
+                  placeholder="Ej. 6221234567"
+                  maxLength={16}
                   style={{
                     width: "100%",
                     fontSize: "1rem",
@@ -616,7 +618,7 @@ function ClubShell() {
                         fontWeight: "500",
                       }}
                     >
-                      Recomendado: PNG o JPG (Max. 2MB)
+                      JPG, PNG o WEBP de hasta 5 MB
                     </span>
                   </div>
                 </div>

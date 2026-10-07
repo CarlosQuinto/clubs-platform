@@ -30,6 +30,15 @@ export function toContactWhatsapp(data: ContactPageData): string | null {
   return phone || null;
 }
 
+export function toContactCourtsEnabled(data: ContactPageData): boolean {
+  return data.platformSettings?.courtsEnabled === true;
+}
+
+/** Temas del formulario; «Renta de canchas» solo cuando el módulo de canchas está activo. */
+export function contactTopics(courtsEnabled: boolean): ContactTopicView[] {
+  return courtsEnabled ? CONTACT_TOPICS : CONTACT_TOPICS.filter((topic) => topic.value !== "Renta de canchas");
+}
+
 export function validateContact(draft: ContactDraft): string | ContactPayload {
   const name = draft.name.trim();
   const email = draft.email.trim().toLowerCase();

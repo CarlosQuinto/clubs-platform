@@ -1,0 +1,32 @@
+# Nunca entra en una imagen: secretos y credenciales
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+docker/.env
+
+# Dependencias y compilados (se instalan/compilan dentro de la imagen)
+node_modules
+dist
+dist-ssr
+api/node_modules
+api/dist
+functions/node_modules
+functions/lib
+
+# Datos locales y volúmenes
+exports
+docker/volumes/db/data
+docker/volumes/storage
+scripts/demo/*.sql
+
+# Herramientas y basura
+.git
+.github
+.firebase
+.cursor
+.claude
+.agents
+*.log
+*.zip
+stitch_clubs_platform_soccer_landing

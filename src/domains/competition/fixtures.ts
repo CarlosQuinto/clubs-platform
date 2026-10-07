@@ -16,6 +16,17 @@ export function expectedMatchCount(clubCount: number, legs: number) {
   return (clubCount * (clubCount - 1) * legs) / 2;
 }
 
+/** Jornadas y partidos por jornada del round-robin; con equipos impares uno descansa en cada jornada. */
+export function fixtureShape(clubCount: number, legs: number) {
+  if (clubCount < 2) return { rounds: 0, perRound: 0, bye: false };
+  const bye = clubCount % 2 === 1;
+  const slots = bye ? clubCount + 1 : clubCount;
+  return { rounds: (slots - 1) * legs, perRound: Math.floor(clubCount / 2), bye };
+}
+
+/** Partido conservado al pasar a 1 partido cuya jornada no es la de ida que le toca. */
+export type RelabelFixture = { match: Match; round: string };
+
 /** Round-robin (método del círculo). `legs` 1 = solo ida, 2 = ida y vuelta. */
 export function generateRoundRobin(
   clubIds: string[],
@@ -110,6 +121,7 @@ function diffSingleLeg(tournament: Tournament, matches: Match[]) {
   const plan = generateRoundRobin(tournament.clubIds, 1);
   const toCreate: PlannedFixture[] = [];
   const toDelete: Match[] = [];
+  const toRelabel: RelabelFixture[] = [];
   const grouped = new Map<string, Match[]>();
 
   for (const m of matches) {
@@ -129,16 +141,21 @@ function diffSingleLeg(tournament: Tournament, matches: Match[]) {
       const a = tournament.clubIds[i];
       const b = tournament.clubIds[j];
       const group = [...(grouped.get(unorderedKey(a, b)) || [])].sort(keepOrder);
+      const fixture = firstLegFixtureForPair(plan, a, b);
       if (group.length === 0) {
-        const fixture = firstLegFixtureForPair(plan, a, b);
         if (fixture) toCreate.push(fixture);
         continue;
       }
       toDelete.push(...group.slice(1));
+      // El que se queda puede venir de la vuelta: se renumera a su jornada de ida (si no se jugó)
+      const kept = group[0];
+      if (fixture && !isPlayed(kept) && (kept.round || "").trim() !== fixture.round) {
+        toRelabel.push({ match: kept, round: fixture.round });
+      }
     }
   }
 
-  return { plan, toCreate, toDelete };
+  return { plan, toCreate, toDelete, toRelabel };
 }
 
 function diffDoubleLeg(tournament: Tournament, matches: Match[]) {
@@ -165,7 +182,7 @@ function diffDoubleLeg(tournament: Tournament, matches: Match[]) {
     return !isPlayed(m);
   });
 
-  return { plan, toCreate, toDelete };
+  return { plan, toCreate, toDelete, toRelabel: [] as RelabelFixture[] };
 }
 
 export function diffFixtures(tournament: Tournament, matches: Match[]) {
@@ -175,6 +192,7 @@ export function diffFixtures(tournament: Tournament, matches: Match[]) {
       plan: [] as PlannedFixture[],
       toCreate: [] as PlannedFixture[],
       toDelete: ofTournament.filter((m) => !isPlayed(m)),
+      toRelabel: [] as RelabelFixture[],
     };
   }
   if (tournamentLegs(tournament) === 1) {

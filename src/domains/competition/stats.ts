@@ -7,6 +7,16 @@ import type {
   StatsScope,
   Tournament,
 } from "../../shared/types";
+import { isoDate } from "../../shared/helpers";
+
+/**
+ * Temporadas que ya empezaron (sin fecha cuentan como iniciadas): los filtros públicos no ofrecen las
+ * futuras. Si ninguna empezó se devuelven todas para no dejar el selector vacío.
+ */
+export function startedSeasons<T extends { startDate?: string | null }>(seasons: T[], today = isoDate()): T[] {
+  const started = seasons.filter((season) => !season.startDate || season.startDate <= today);
+  return started.length ? started : seasons;
+}
 
 /** Temporada activa o, si no hay, la que empezó más tarde. */
 export function defaultSeasonId(seasons: Season[]): string | undefined {
@@ -234,6 +244,38 @@ export function computeTopScorers(matches: Match[]): ScorerRow[] {
   return [...map.values()].sort(
     (a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name),
   );
+}
+
+export interface MvpGoal {
+  clubId: string;
+  scorerId: string;
+  assistId?: string;
+  isOwnGoal?: boolean;
+}
+
+/**
+ * Jugador del partido por un club cuando nadie lo nombró (match_club_reports.mvp_id vacío):
+ * el de más goles, luego más asistencias y, a igualdad, el primero en aparecer. "" si no hay datos.
+ */
+export function matchMvp(goals: MvpGoal[], clubId: string): string {
+  const tally = new Map<string, { goals: number; assists: number; order: number }>();
+  const row = (id: string) => {
+    let entry = tally.get(id);
+    if (!entry) {
+      entry = { goals: 0, assists: 0, order: tally.size };
+      tally.set(id, entry);
+    }
+    return entry;
+  };
+  for (const goal of goals) {
+    if (goal.clubId !== clubId || goal.isOwnGoal) continue;
+    if (goal.scorerId) row(goal.scorerId).goals += 1;
+    if (goal.assistId) row(goal.assistId).assists += 1;
+  }
+  const best = [...tally.entries()].sort(
+    (a, b) => b[1].goals - a[1].goals || b[1].assists - a[1].assists || a[1].order - b[1].order,
+  )[0];
+  return best ? best[0] : "";
 }
 
 export const podiumFromStandings = (rows: StandingRow[]) => {
