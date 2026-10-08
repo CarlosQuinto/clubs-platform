@@ -7,8 +7,11 @@ import {
   FormInput,
   PrimaryButton,
   SecondaryButton,
+  FormError,
   C
 } from "../../../shared/ui";
+import { isoDate } from "../../../shared/helpers";
+import { eventText } from "../../../shared/textLimits";
 
 import RoutineBuilder from "./RoutineBuilder";
 
@@ -29,6 +32,11 @@ interface EventFormProps {
   setEventLocation: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  /** Motivo por el que no se pudo agendar (vacío si no hay). */
+  error: string;
+  saving: boolean;
+  /** Fecha guardada del evento que se edita: puede quedarse aunque ya haya pasado. */
+  originalDate: string | null;
 }
 
 export default function EventForm({
@@ -48,8 +56,13 @@ export default function EventForm({
   setEventLocation,
   onSubmit,
   onCancel,
+  error,
+  saving,
+  originalDate,
 }: EventFormProps) {
   if (!perms.canEditAgenda) return null;
+  const today = isoDate();
+  const minDate = originalDate && originalDate < today ? originalDate : today;
 
   return (
     <SectionCard
@@ -104,7 +117,8 @@ export default function EventForm({
           <FormInput
             required
             value={eventTitle}
-            onChange={(e) => setEventTitle(e.target.value)}
+            maxLength={30}
+            onChange={(e) => setEventTitle(eventText(e.target.value))}
             placeholder={
               eventType === "Partido"
                 ? "Ej. Deportivo Vecinos FC"
@@ -131,6 +145,7 @@ export default function EventForm({
             <FormInput
               type="date"
               required
+              min={minDate}
               value={eventDate}
               onChange={(e) => setEventDate(e.target.value)}
             />
@@ -164,14 +179,16 @@ export default function EventForm({
           </label>
           <FormInput
             value={eventLocation}
-            onChange={(e) => setEventLocation(e.target.value)}
+            maxLength={30}
+            onChange={(e) => setEventLocation(eventText(e.target.value))}
             placeholder="Ej. Cancha 1, Unidad Deportiva"
           />
         </div>
 
+        <FormError>{error}</FormError>
         <div style={{ display: "flex", gap: "0.4rem" }}>
-          <PrimaryButton type="submit" style={{ flex: 1, padding: "0.55rem" }}>
-            {editingEventId ? "Guardar Cambios" : "Agendar Evento"}
+          <PrimaryButton type="submit" disabled={saving} style={{ flex: 1, padding: "0.55rem" }}>
+            {saving ? "Guardando…" : editingEventId ? "Guardar Cambios" : "Agendar Evento"}
           </PrimaryButton>
           {editingEventId && (
             <SecondaryButton

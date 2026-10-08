@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { PlusCircle, TrendingUp, TrendingDown } from "lucide-react";
 import {
   C,
@@ -8,8 +8,11 @@ import {
   FormSelect,
   PrimaryButton,
   RADIUS,
+  FormError,
 } from "../../../shared/ui";
 import { CATEGORIAS_INGRESO, CATEGORIAS_GASTO } from "../../../domains/finances/constants";
+import { isoDate } from "../../../shared/helpers";
+import { financeText, isFinanceText, isMoneyText, moneyText } from "../../../shared/textLimits";
 
 interface TransactionFormProps {
   onSubmit: (data: {
@@ -26,16 +29,29 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"ingreso" | "gasto">("ingreso");
   const [category, setCategory] = useState("Cuotas");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => isoDate());
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || isNaN(parseFloat(amount))) return;
-
+    if (savingRef.current) return;
+    if (!isMoneyText(amount) || !(parseFloat(amount) > 0)) {
+      setError("Escribe el monto del movimiento.");
+      return;
+    }
+    if (!isFinanceText(description)) {
+      setError("El concepto lleva de 3 a 30 letras, números o comas.");
+      return;
+    }
+    setError("");
+    savingRef.current = true;
+    setSaving(true);
     try {
       await onSubmit({
         type,
-        description,
+        description: description.trim(),
         category,
         amount: parseFloat(amount),
         date,
@@ -44,7 +60,10 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
       setAmount("");
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar.");
+      setError("No se pudo guardar. Revisa los datos e inténtalo de nuevo.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -127,12 +146,11 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
               $
             </span>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               required
-              min="0.01"
-              step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(moneyText(e.target.value))}
               placeholder="0.00"
               style={{
                 fontSize: "1.45rem",
@@ -188,17 +206,20 @@ export function TransactionForm({ onSubmit }: TransactionFormProps) {
           type="text"
           required
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          maxLength={30}
+          onChange={(e) => setDescription(financeText(e.target.value))}
           placeholder="¿De qué fue este movimiento?"
           style={{ width: "100%", backgroundColor: C.gray50 }}
         />
 
+        <FormError>{error}</FormError>
         <PrimaryButton
           type="submit"
+          disabled={saving}
           variant={type === "ingreso" ? "green" : "red"}
           style={{ padding: "0.55rem", fontSize: "0.75rem" }}
         >
-          {type === "ingreso" ? "Ingresar Dinero" : "Registrar Gasto"}
+          {saving ? "Guardando…" : type === "ingreso" ? "Ingresar Dinero" : "Registrar Gasto"}
         </PrimaryButton>
       </form>
     </SectionCard>

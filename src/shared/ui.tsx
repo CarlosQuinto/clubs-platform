@@ -224,6 +224,14 @@ export const FormTextarea: React.FC<
   />
 );
 
+/** Motivo por el que un campo no es válido, debajo del campo. Sin texto no ocupa nada. */
+export const FormError: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
+  children ? (
+    <p role="alert" style={{ margin: 0, color: C.red, fontSize: "0.72rem", fontWeight: 700 }}>
+      {children}
+    </p>
+  ) : null;
+
 export const PrimaryButton: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: "navy" | "green" | "red";

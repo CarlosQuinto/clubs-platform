@@ -27,6 +27,8 @@ export async function run({ db, rpc, check }) {
     return;
   }
   const count = async (sql) => (await db.query(sql)).rows[0].n;
+  // Fechas relativas a hoy: los eventos no admiten fechas pasadas
+  const enDias = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
   // ---------- Sesión ----------
   const anon = await rpc("anon", "save_player", { id: "x", clubId: HALCONES, name: "x", shirtNumber: "1", position: "Portero" });
@@ -59,13 +61,13 @@ export async function run({ db, rpc, check }) {
   // ---------- Agenda: eventos ----------
   const evento = await rpc("dt", "save_club_event", {
     id: "prueba-ev-1", clubId: HALCONES, eventType: "PARTIDO", matchType: "AMISTOSO", title: "Amistoso de prueba",
-    eventDate: "2026-11-01", eventTime: "18:00", detail: { location: "Campo Prueba", routine: [] },
+    eventDate: enDias(25), eventTime: "18:00", detail: { location: "Campo Prueba", routine: [] },
   });
   check(evento.data?.event?.id === "prueba-ev-1" && evento.data.event.title === "Amistoso de prueba", "save_club_event: DT crea", evento);
   check((await count(`SELECT count(*)::int AS n FROM club_events WHERE id = 'prueba-ev-1' AND location = 'Campo Prueba' AND match_type = 'AMISTOSO'`)) === 1, "save_club_event: detail.location persistido");
-  const entreno = await rpc("presidente", "save_club_event", { id: "prueba-ev-1", clubId: HALCONES, eventType: "ENTRENAMIENTO", matchType: null, title: "Ahora entreno", eventDate: "2026-11-02", eventTime: "19:00", detail: { location: "Por definir", routine: [{ id: "1" }] } });
+  const entreno = await rpc("presidente", "save_club_event", { id: "prueba-ev-1", clubId: HALCONES, eventType: "ENTRENAMIENTO", matchType: null, title: "Ahora entreno", eventDate: enDias(26), eventTime: "19:00", detail: { location: "Por definir", routine: [{ id: "1" }] } });
   check(entreno.data?.event?.title === "Ahora entreno", "save_club_event: upsert", entreno);
-  const eventoTesorero = await rpc("tesorero", "save_club_event", { id: "prueba-ev-2", clubId: HALCONES, eventType: "PARTIDO", title: "No", eventDate: "2026-11-01", eventTime: "18:00" });
+  const eventoTesorero = await rpc("tesorero", "save_club_event", { id: "prueba-ev-2", clubId: HALCONES, eventType: "PARTIDO", title: "No", eventDate: enDias(25), eventTime: "18:00" });
   check(eventoTesorero.data?.event === null, "save_club_event: tesorero no puede", eventoTesorero);
 
   const marcador = await rpc("dt", "set_club_event_score", { id: EVENTO, clubId: HALCONES, scoreOurs: 3, scoreTheirs: 1, penaltiesOurs: null, penaltiesTheirs: null });
@@ -137,7 +139,7 @@ export async function run({ db, rpc, check }) {
   check(asistentesPrensa.data?.report === null, "replace_match_attendees: prensa -> null", asistentesPrensa);
 
   // ---------- Finanzas ----------
-  const mov = await rpc("tesorero", "add_transaction", { id: "prueba-mov-1", clubId: HALCONES, type: "GASTO", description: "Balones", category: "Material", amount: 350.5, txnDate: "2026-10-01" });
+  const mov = await rpc("tesorero", "add_transaction", { id: "prueba-mov-1", clubId: HALCONES, type: "GASTO", description: "Balones", category: "Equipo/Balones", amount: 350.5, txnDate: "2026-10-01" });
   check(mov.data?.transaction?.id === "prueba-mov-1" && mov.data.transaction.amount === 350.5, "add_transaction: tesorero", mov);
   const movNegativo = await rpc("tesorero", "add_transaction", { id: "prueba-mov-2", clubId: HALCONES, type: "GASTO", description: "x", category: "x", amount: -1, txnDate: "2026-10-01" });
   check(movNegativo.data?.transaction === null, "add_transaction: importe negativo -> null", movNegativo);
@@ -258,4 +260,107 @@ export async function run({ db, rpc, check }) {
   check(perfil.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND logo_url IS NULL AND president_phone = '6221234567'`)) === 1, "save_club_profile: presidente, logo vacío -> null", perfil);
   const perfilSuper = await rpc("admin", "save_club_profile", { id: BAHIA, name: "Deportivo Bahía Demo", logoUrl: "https://a/logo.png", presidentPhone: "6220000000" });
   check(perfilSuper.data?.club?.id === BAHIA, "save_club_profile: superadmin en cualquier club", perfilSuper);
+
+  // ---------- Validaciones de texto (las mismas reglas que textLimits.ts) ----------
+  const jugadorBase = { id: "prueba-val-p", clubId: HALCONES, name: "  ana   maría lópez ", shirtNumber: "7", position: "Medio", isCoach: false, active: true, detail: { variant: "Extremo", birthDate: "2000-05-01" } };
+  const jugadorOk = await rpc("dt", "save_player", jugadorBase);
+  check(jugadorOk.data?.player?.name === "Ana María López", "save_player: normaliza espacios y pone Title Case", jugadorOk);
+  for (const [motivo, cambio] of [
+    ["etiqueta HTML en el nombre", { name: "<script>alert(1)</script>" }],
+    ["comillas y ;-- en el nombre", { name: "Ana'; DROP TABLE players;--" }],
+    ["nombre de 51 letras", { name: "a".repeat(51) }],
+    ["dorsal 0", { shirtNumber: "0" }],
+    ["dorsal 100", { shirtNumber: "100" }],
+    ["dorsal no numérico", { shirtNumber: "abc" }],
+    ["posición fuera de la lista", { position: "Libero" }],
+    ["variante con números", { detail: { variant: "Extremo 2" } }],
+    ["nacimiento futuro", { detail: { birthDate: enDias(5) } }],
+    ["nacimiento antes de 1940", { detail: { birthDate: "1939-12-31" } }],
+  ]) {
+    const r = await rpc("dt", "save_player", { ...jugadorBase, id: "prueba-val-p2", ...cambio });
+    check(r.data?.player === null, `save_player: ${motivo} -> null`, r);
+  }
+  const jugadorOtroClub = await rpc("admin", "save_player", { ...jugadorBase, clubId: BAHIA, name: "Robado" });
+  check(jugadorOtroClub.data?.player === null && (await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-val-p' AND club_id = '${HALCONES}'`)) === 1, "save_player: el id de otro club no se pisa", jugadorOtroClub);
+
+  const eventoBase = { id: "prueba-val-ev", clubId: HALCONES, eventType: "PARTIDO", matchType: "AMISTOSO", title: "Vs  Leones FC", eventDate: enDias(3), eventTime: "18:00", detail: { location: "Campo Norte", routine: [] } };
+  const eventoOk = await rpc("dt", "save_club_event", eventoBase);
+  check(eventoOk.data?.event?.title === "Vs Leones FC", "save_club_event: normaliza espacios", eventoOk);
+  for (const [motivo, cambio] of [
+    ["fecha pasada", { eventDate: enDias(-3) }],
+    ["título con comillas", { title: 'Vs "Leones"' }],
+    ["título de 31", { title: "a".repeat(31) }],
+    ["lugar con <>", { detail: { location: "<b>Campo</b>" } }],
+    ["hora inválida", { eventTime: "25:00" }],
+  ]) {
+    const r = await rpc("dt", "save_club_event", { ...eventoBase, id: "prueba-val-ev2", ...cambio });
+    check(r.data?.event === null, `save_club_event: ${motivo} -> null`, r);
+  }
+  await db.query(`UPDATE club_events SET event_date = CURRENT_DATE - 10 WHERE id = 'prueba-val-ev'`);
+  const pasada = (await db.query(`SELECT to_char(event_date, 'YYYY-MM-DD') AS d FROM club_events WHERE id = 'prueba-val-ev'`)).rows[0].d;
+  const eventoPasado = await rpc("dt", "save_club_event", { ...eventoBase, eventDate: pasada, title: "Vs Leones" });
+  check(eventoPasado.data?.event?.title === "Vs Leones", "save_club_event: editar un evento pasado sin cambiar la fecha sí se permite", eventoPasado);
+  const eventoOtroClub = await rpc("admin", "save_club_event", { ...eventoBase, clubId: BAHIA, title: "Pisado" });
+  check(eventoOtroClub.data?.event === null && (await count(`SELECT count(*)::int AS n FROM club_events WHERE id = 'prueba-val-ev' AND title = 'Vs Leones'`)) === 1, "save_club_event: el id de otro club no se pisa", eventoOtroClub);
+
+  const movBase = { id: "prueba-val-mov", clubId: HALCONES, type: "INGRESO", description: "Cuota de  marzo, abril", category: "Cuotas", amount: 100, txnDate: "2026-10-01" };
+  const movOk = await rpc("tesorero", "add_transaction", movBase);
+  check(movOk.data?.transaction?.id === "prueba-val-mov" && (await count(`SELECT count(*)::int AS n FROM transactions WHERE id = 'prueba-val-mov' AND description = 'Cuota de marzo, abril'`)) === 1, "add_transaction: normaliza el concepto", movOk);
+  for (const [motivo, cambio] of [
+    ["concepto con punto", { description: "Cuota." }],
+    ["dos comas seguidas", { description: "Cuota,,marzo" }],
+    ["categoría de gasto en un ingreso", { category: "Canchas" }],
+    ["categoría inventada", { category: "Material" }],
+  ]) {
+    const r = await rpc("tesorero", "add_transaction", { ...movBase, id: "prueba-val-mov2", ...cambio });
+    check(r.data?.transaction === null, `add_transaction: ${motivo} -> null`, r);
+  }
+
+  const metaOk = await rpc("tesorero", "save_financial_goal", { id: "prueba-val-meta", clubId: HALCONES, title: "Uniformes 2027, torneo", amount: 5000, quotaPerPlayer: 200 });
+  check(metaOk.data?.goal?.id === "prueba-val-meta", "save_financial_goal: título válido", metaOk);
+  for (const [motivo, cambio] of [
+    ["dos comas seguidas", { title: "Viaje,,torneo" }],
+    ["signo de pesos", { title: "Meta $500" }],
+    ["cuota negativa", { quotaPerPlayer: -5 }],
+  ]) {
+    const r = await rpc("tesorero", "save_financial_goal", { id: "prueba-val-meta2", clubId: HALCONES, title: "Viaje", amount: 100, quotaPerPlayer: null, ...cambio });
+    check(r.data?.goal === null, `save_financial_goal: ${motivo} -> null`, r);
+  }
+
+  const invOk = await rpc("tesorero", "save_inventory_item", { id: "prueba-val-inv", clubId: HALCONES, name: "Balones  número 5", quantity: 3, condition: "BUENO" });
+  check(invOk.data?.item?.name === "Balones número 5", "save_inventory_item: normaliza espacios", invOk);
+  for (const [motivo, name] of [["nombre de 21", "a".repeat(21)], ["nombre con guion", "Conos-chicos"], ["nombre con <>", "<i>Conos</i>"]]) {
+    const r = await rpc("tesorero", "save_inventory_item", { id: "prueba-val-inv2", clubId: HALCONES, name, quantity: 1, condition: "BUENO" });
+    check(r.data?.item === null, `save_inventory_item: ${motivo} -> null`, r);
+  }
+  await db.query(`INSERT INTO inventory_items (id, club_id, name, quantity, condition) VALUES ('prueba-val-inv-viejo', '${HALCONES}', 'Petos (talla M) — viejos', 4, 'BUENO')`);
+  const invViejo = await rpc("dt", "save_inventory_item", { id: "prueba-val-inv-viejo", clubId: HALCONES, name: "Petos (talla M) — viejos", quantity: 6, condition: "BUENO" });
+  check(invViejo.data?.item?.quantity === 6, "save_inventory_item: un artículo de antes de la regla cambia de cantidad", invViejo);
+  const invOtroClub = await rpc("admin", "save_inventory_item", { id: "prueba-val-inv", clubId: BAHIA, name: "Robado", quantity: 1, condition: "BUENO" });
+  check(invOtroClub.data?.item === null && (await count(`SELECT count(*)::int AS n FROM inventory_items WHERE id = 'prueba-val-inv' AND club_id = '${HALCONES}' AND name = 'Balones número 5'`)) === 1, "save_inventory_item: el id de otro club no se pisa", invOtroClub);
+
+  const fotoBase = { albumId: "prueba-val-album", clubId: HALCONES, albumName: "  entrenamiento   matutino 2026 ", photoId: "prueba-val-foto", url: "https://a/v.jpg", caption: "", takenAt: "2026-10-02T12:00:00.000Z" };
+  const fotoOk = await rpc("dt", "save_gallery_photo", fotoBase);
+  check(fotoOk.data?.photo?.id === "prueba-val-foto" && (await count(`SELECT count(*)::int AS n FROM albums WHERE club_id = '${HALCONES}' AND name = 'Entrenamiento matutino 2026'`)) === 1, "save_gallery_photo: álbum nuevo normalizado con mayúscula inicial", fotoOk);
+  for (const [motivo, albumName] of [["nombre con punto", "Fiesta."], ["nombre de 31", "a".repeat(31)], ["nombre nuevo con emoji", "📷 Fotos"]]) {
+    const r = await rpc("dt", "save_gallery_photo", { ...fotoBase, albumId: "prueba-val-album2", photoId: "prueba-val-foto2", albumName });
+    check(r.data?.photo === null, `save_gallery_photo: ${motivo} -> null`, r);
+  }
+  const fotoVieja = await rpc("dt", "save_gallery_photo", { ...fotoBase, albumId: "x", photoId: "prueba-val-foto3", albumName: ALBUM });
+  check(fotoVieja.data?.photo?.id === "prueba-val-foto3", "save_gallery_photo: un álbum que ya existe acepta fotos aunque su nombre sea antiguo", fotoVieja);
+
+  const portadaBase = { id: HALCONES, name: "halcones FC", description: "Desde 1998, el orgullo del barrio!", location: "guaymas, Sonora" };
+  const portadaOk = await rpc("prensa", "save_club_portada", portadaBase);
+  check(portadaOk.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND name = 'Halcones FC' AND location = 'Guaymas, Sonora'`)) === 1, "save_club_portada: mayúscula inicial en nombre y barrio", portadaOk);
+  for (const [motivo, cambio] of [
+    ["nombre con guion", { name: "Halcones-FC" }],
+    ["nombre de 31", { name: "a".repeat(31) }],
+    ["barrio con dos comas", { location: "Centro, Guaymas, Sonora" }],
+    ["barrio con punto", { location: "Col. Centro" }],
+    ["lema de 101", { description: "a".repeat(101) }],
+    ["lema con salto de línea", { description: "Hola\nmundo" }],
+  ]) {
+    const r = await rpc("prensa", "save_club_portada", { ...portadaBase, ...cambio });
+    check(r.data?.club === null, `save_club_portada: ${motivo} -> null`, r);
+  }
 }

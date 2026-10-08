@@ -4,6 +4,33 @@ import { requestClubRefresh } from "../useClubScreen";
 import { savedRow } from "../../../shared/saved";
 import { useClub } from "../../../domains/clubs/ClubContext";
 import { useAgendaData } from "./useAgendaData";
+import { isoDate } from "../../../shared/helpers";
+import { isEventText } from "../../../shared/textLimits";
+
+/** Motivo por el que no se puede agendar; vacío si todo cumple (las reglas de save_club_event). */
+export function eventFormError(
+  title: string,
+  location: string,
+  date: string,
+  time: string,
+  originalDate: string | null,
+) {
+  if (!isEventText(title)) return "El título lleva de 3 a 30 letras, números, guiones o puntos.";
+  if (location.trim() && !isEventText(location)) {
+    return "El lugar lleva de 3 a 30 letras, números, guiones o puntos.";
+  }
+  if (!date || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(time)) return "Elige la fecha y la hora.";
+  // Un evento que ya pasó se puede corregir mientras no se le cambie la fecha
+  if (date === originalDate) return "";
+  const today = isoDate();
+  if (date < today) return "La fecha no puede ser pasada.";
+  if (date === today) {
+    const now = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    if (time <= hhmm) return "La hora ya pasó: elige una más tarde.";
+  }
+  return "";
+}
 
 export function useAgenda({
   events,
@@ -20,11 +47,13 @@ export function useAgenda({
   );
   const [eventTitle, setEventTitle] = useState("");
   const [eventRoutine, setEventRoutine] = useState<any[]>([]);
-  const [eventDate, setEventDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [eventDate, setEventDate] = useState(() => isoDate());
   const [eventTime, setEventTime] = useState("20:00");
   const [eventLocation, setEventLocation] = useState("");
+  const [originalDate, setOriginalDate] = useState<string | null>(null);
+  const [eventError, setEventError] = useState("");
+  const [savingEvent, setSavingEvent] = useState(false);
+  const savingEventRef = useRef(false);
 
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(
     null,
@@ -89,34 +118,55 @@ export function useAgenda({
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingEventRef.current) return;
+    const problem = eventFormError(eventTitle, eventLocation, eventDate, eventTime, originalDate);
+    setEventError(problem);
+    if (problem) return;
+    savingEventRef.current = true;
+    setSavingEvent(true);
     try {
-    const saved = await saveClubEvent(dataConnect, {
-      id: editingEventId || crypto.randomUUID(),
-      clubId,
-      eventType: eventType === "Entrenamiento" ? "ENTRENAMIENTO" : "PARTIDO",
-      matchType: eventType === "Partido" ? "AMISTOSO" : null,
-      title: eventTitle,
-      eventDate,
-      eventTime,
-      detail: {
-        location: eventLocation || "Por definir",
-        routine: eventType === "Entrenamiento" ? eventRoutine : [],
-      },
-    });
-    savedRow(saved.data.event);
-    requestClubRefresh();
-    if (editingEventId) setEditingEventId(null);
+      const saved = await saveClubEvent(dataConnect, {
+        id: editingEventId || crypto.randomUUID(),
+        clubId,
+        eventType: eventType === "Entrenamiento" ? "ENTRENAMIENTO" : "PARTIDO",
+        matchType: eventType === "Partido" ? "AMISTOSO" : null,
+        title: eventTitle.trim(),
+        eventDate,
+        eventTime,
+        detail: {
+          location: eventLocation.trim() || "Por definir",
+          routine: eventType === "Entrenamiento" ? eventRoutine : [],
+        },
+      });
+      savedRow(saved.data.event);
+      requestClubRefresh();
+      if (editingEventId) setEditingEventId(null);
+      setOriginalDate(null);
+      setEventTitle("");
+      setEventLocation("");
+      setEventRoutine([]);
+    } catch (err) {
+      console.error(err);
+      setEventError("No se pudo guardar. Revisa los datos e inténtalo de nuevo.");
+    } finally {
+      savingEventRef.current = false;
+      setSavingEvent(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEventId(null);
+    setOriginalDate(null);
+    setEventError("");
     setEventTitle("");
     setEventLocation("");
     setEventRoutine([]);
-    } catch (err) {
-      console.error(err);
-      alert("No se pudo guardar.");
-    }
   };
 
   const handleStartEdit = (ev: any) => {
     setEditingEventId(ev.id);
+    setOriginalDate(ev.eventDate);
+    setEventError("");
     setEventTitle(ev.title);
     setEventType(ev.eventType);
     setEventDate(ev.eventDate);
@@ -235,6 +285,10 @@ export function useAgenda({
     visiblePast,
     refresh,
     handleSaveEvent,
+    handleCancelEdit,
+    eventError,
+    savingEvent,
+    originalDate,
     handleStartEdit,
     handleDelete,
     handleUpdateScore,

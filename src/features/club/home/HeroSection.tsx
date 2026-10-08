@@ -32,7 +32,26 @@ import {
   FormTextarea,
   PrimaryButton,
   SecondaryButton,
+  FormError,
 } from "../../../shared/ui";
+import {
+  capitalizeFirst,
+  coverClubName,
+  coverMotto,
+  coverPlace,
+  isCoverClubName,
+  isCoverMotto,
+  isCoverPlace,
+} from "../../../shared/textLimits";
+
+/** Avisos de la portada; vacío si el campo cumple la regla (la misma que save_club_portada). */
+function portadaTips(name: string, location: string, motto: string) {
+  return {
+    name: isCoverClubName(name) ? "" : "De 3 a 30 letras, números o puntos.",
+    location: isCoverPlace(location) ? "" : "De 3 a 30 letras o números y una coma como mucho.",
+    motto: isCoverMotto(motto) ? "" : "Escribe el lema, hasta 100 caracteres.",
+  };
+}
 
 interface HeroSectionProps {
   clubInfo: any;
@@ -51,6 +70,8 @@ export default function HeroSection({
   const [isEditingClubInfo, setIsEditingClubInfo] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [showTips, setShowTips] = useState(false);
   const [editClubName, setEditClubName] = useState(clubInfo.name || "");
   const [editClubDesc, setEditClubDesc] = useState(clubInfo.description || "");
 
@@ -185,20 +206,27 @@ export default function HeroSection({
 
   const handleSaveClubInfo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
     setSaveError("");
+    const tips = portadaTips(editClubName, editLocation, editClubDesc);
+    if (tips.name || tips.location || tips.motto) {
+      setShowTips(true);
+      return;
+    }
 
     const validImages = editHeroImages
       .map((url) => url.trim())
       .filter((url) => url !== "");
     const images = validImages.length > 0 ? validImages : [DEFAULT_HERO_IMAGE];
 
+    savingRef.current = true;
     setSaving(true);
     try {
       const result = await saveClubPortada(dataConnect, {
         id: clubInfo.id,
-        name: editClubName.trim().slice(0, 160),
+        name: capitalizeFirst(editClubName.trim()),
         description: editClubDesc.trim(),
-        location: editLocation.trim().slice(0, 160),
+        location: capitalizeFirst(editLocation.trim()),
       });
       if (result.data.club == null) {
         setSaveError("No se pudo guardar la portada.");
@@ -237,9 +265,12 @@ export default function HeroSection({
       console.error(error);
       setSaveError("No se pudo guardar la portada.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
+
+  const tips = showTips ? portadaTips(editClubName, editLocation, editClubDesc) : { name: "", location: "", motto: "" };
 
   return (
     <div
@@ -264,6 +295,7 @@ export default function HeroSection({
             );
             setNewlyUploadedImages([]);
             setIsEditingClubInfo(true);
+            setShowTips(false);
           }}
           style={{
             position: "absolute",
@@ -359,10 +391,13 @@ export default function HeroSection({
                   type="text"
                   required
                   value={editClubName}
-                  onChange={(e) => setEditClubName(e.target.value)}
+                  maxLength={30}
+                  aria-invalid={tips.name ? true : undefined}
+                  onChange={(e) => setEditClubName(coverClubName(e.target.value))}
                   placeholder={`Ej. ${DEFAULT_CLUB_NAME}`}
                   style={{ width: "100%" }}
                 />
+                <FormError>{tips.name}</FormError>
               </div>
 
               <div>
@@ -383,10 +418,13 @@ export default function HeroSection({
                   type="text"
                   required
                   value={editLocation}
-                  onChange={(e) => setEditLocation(e.target.value)}
-                  placeholder="Ej. Col. Centro, CETIS 4"
+                  maxLength={30}
+                  aria-invalid={tips.location ? true : undefined}
+                  onChange={(e) => setEditLocation(coverPlace(e.target.value))}
+                  placeholder="Ej. Centro, CETIS 4"
                   style={{ width: "100%" }}
                 />
+                <FormError>{tips.location}</FormError>
               </div>
             </div>
 
@@ -407,11 +445,17 @@ export default function HeroSection({
                 <FormTextarea
                   required
                   value={editClubDesc}
-                  onChange={(e) => setEditClubDesc(e.target.value)}
+                  maxLength={100}
+                  aria-invalid={tips.motto ? true : undefined}
+                  onChange={(e) => setEditClubDesc(coverMotto(e.target.value))}
                   placeholder="Descripción breve que motive al equipo..."
                   rows={2}
                   style={{ width: "100%" }}
                 />
+                <span style={{ display: "block", textAlign: "right", fontSize: "0.65rem", color: C.gray400 }}>
+                  {editClubDesc.length}/100
+                </span>
+                <FormError>{tips.motto}</FormError>
               </div>
 
             <hr

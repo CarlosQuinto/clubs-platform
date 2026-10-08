@@ -20,7 +20,8 @@ import { useModalLock } from "../../../shared/useModalLock";
 import { C, RADIUS, SHADOWS, SectionCard, FormInput } from "../../../shared/ui";
 import { CompareModal } from "../ClubComponents";
 
-import PlayerForm from "./PlayerForm";
+import PlayerForm, { playerFormError } from "./PlayerForm";
+import { titleCase } from "../../../shared/textLimits";
 import PlayerRow from "./PlayerRow";
 import PlayerModal from "./PlayerModal";
 import { usePlayerStats } from "./usePlayerStats";
@@ -418,6 +419,9 @@ export default function Players({ players, events, perms, goals }: any) {
   const [playerBirthDate, setPlayerBirthDate] = useState("");
   const [playerImageUrl, setPlayerImageUrl] = useState("");
   const [playerActive, setPlayerActive] = useState(true);
+  const [playerError, setPlayerError] = useState("");
+  const [savingPlayer, setSavingPlayer] = useState(false);
+  const savingPlayerRef = useRef(false);
 
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [showCompareModal, setShowCompareModal] = useState(false);
@@ -431,15 +435,19 @@ export default function Players({ players, events, perms, goals }: any) {
   const isPressOnly =
     !canEditAll && (perms?.canEditPortada || perms?.canEditPrensa);
 
+  /** true si se guardó: el formulario solo limpia fotos huérfanas cuando el fichaje quedó guardado. */
   const handleSavePlayer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerName) return;
+    if (savingPlayerRef.current) return false;
+    const problem = playerFormError(playerName, playerNumber, playerVariant, playerBirthDate);
+    setPlayerError(problem);
+    if (problem) return false;
 
     const payload = {
       id: editingPlayerId || crypto.randomUUID(),
       clubId,
-      name: playerName,
-      shirtNumber: playerNumber || "S/N",
+      name: titleCase(playerName),
+      shirtNumber: playerNumber,
       position: playerPosition,
       isCoach: false,
       active: playerActive,
@@ -449,18 +457,26 @@ export default function Players({ players, events, perms, goals }: any) {
         imageUrl: playerImageUrl.trim(),
       },
     };
+    savingPlayerRef.current = true;
+    setSavingPlayer(true);
     try {
       const saved = await savePlayer(dataConnect, payload);
       savedRow(saved.data.player);
       requestClubRefresh();
       handleCancelEdit();
+      return true;
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar.");
+      setPlayerError("No se pudo guardar. Revisa los datos e inténtalo de nuevo.");
+      return false;
+    } finally {
+      savingPlayerRef.current = false;
+      setSavingPlayer(false);
     }
   };
 
   const handleCancelEdit = () => {
+    setPlayerError("");
     setEditingPlayerId(null);
     setPlayerName("");
     setPlayerNumber("");
@@ -839,6 +855,8 @@ export default function Players({ players, events, perms, goals }: any) {
           setPlayerActive={setPlayerActive}
           onSubmit={handleSavePlayer}
           onCancel={handleCancelEdit}
+          error={playerError}
+          saving={savingPlayer}
         />
       )}
 

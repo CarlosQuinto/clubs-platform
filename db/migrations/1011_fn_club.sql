@@ -35,17 +35,47 @@ RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
   SELECT coalesce(bool_and(p ? k AND jsonb_typeof(p -> k) <> 'null'), true) FROM unnest(p_keys) AS k
 $$;
 
+-- Texto de formulario como lo deja el cliente: sin espacios al borde ni dobles. Las reglas de cada
+-- campo repiten las de src/shared/textLimits.ts para que editar el HTML no sirva de nada.
+CREATE OR REPLACE FUNCTION public.api_clean_text(p_value text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT btrim(regexp_replace(coalesce(p_value, ''), ' {2,}', ' ', 'g'))
+$$;
+
+-- Primera letra en mayúscula, el resto tal cual (capitalizeFirst en el cliente)
+CREATE OR REPLACE FUNCTION public.api_capitalize_first(p_value text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT upper(left(p_value, 1)) || substr(p_value, 2)
+$$;
+
 -- ---------- Agenda: eventos del club ----------
 
 -- Crea o actualiza un evento (ADMIN o DT). location y routine llegan dentro de detail.
+-- Título y lugar: letras, números, guiones y puntos, 3 a 30 (eventText en el cliente).
+-- La fecha no puede ser pasada (un día de margen por la zona horaria), salvo al editar sin cambiarla.
 CREATE OR REPLACE FUNCTION public.save_club_event(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
+  v_title text := api_clean_text(p ->> 'title');
+  v_location text := api_clean_text(p -> 'detail' ->> 'location');
+  v_time text := p ->> 'eventTime';
+  v_date date;
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'clubId', 'eventType', 'title', 'eventDate', 'eventTime']) THEN
+  IF NOT api_required(p, ARRAY['id', 'clubId', 'eventType', 'title', 'eventDate', 'eventTime'])
+     OR char_length(v_title) NOT BETWEEN 3 AND 30
+     OR v_title !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ.-]+( [A-Za-z0-9À-ÖØ-öø-ÿ.-]+)*$'
+     OR (v_location <> '' AND (char_length(v_location) NOT BETWEEN 3 AND 30
+       OR v_location !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ.-]+( [A-Za-z0-9À-ÖØ-öø-ÿ.-]+)*$'))
+     OR v_time !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+     OR p ->> 'eventDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN
+    RETURN jsonb_build_object('event', NULL);
+  END IF;
+  v_date := (p ->> 'eventDate')::date;
+  IF v_date < CURRENT_DATE - 1
+     AND NOT EXISTS (SELECT 1 FROM club_events WHERE id = p ->> 'id' AND club_id = v_club AND event_date = v_date) THEN
     RETURN jsonb_build_object('event', NULL);
   END IF;
   INSERT INTO club_events (
@@ -53,8 +83,8 @@ BEGIN
     event_date, event_time, location, routine, created_at
   )
   SELECT
-    p ->> 'id', v_club, (p ->> 'eventType')::event_type, NULLIF(p ->> 'matchType', '')::friendly_match_type, p ->> 'title',
-    (p ->> 'eventDate')::date, p ->> 'eventTime', COALESCE(p -> 'detail' ->> 'location', ''), p -> 'detail' -> 'routine', CURRENT_TIMESTAMP
+    p ->> 'id', v_club, (p ->> 'eventType')::event_type, NULLIF(p ->> 'matchType', '')::friendly_match_type, v_title,
+    v_date, v_time, v_location, p -> 'detail' -> 'routine', CURRENT_TIMESTAMP
   WHERE has_club_role(v_club, ARRAY['ADMIN', 'DT'])
   ON CONFLICT (id) DO UPDATE SET
     event_type = EXCLUDED.event_type,
@@ -64,6 +94,7 @@ BEGIN
     event_time = EXCLUDED.event_time,
     location = EXCLUDED.location,
     routine = EXCLUDED.routine
+  WHERE club_events.club_id = EXCLUDED.club_id
   RETURNING jsonb_build_object('id', id, 'title', title) INTO v_row;
   RETURN jsonb_build_object('event', v_row);
 END
@@ -343,23 +374,38 @@ CALL api_expose('replace_match_attendees', 'USER');
 -- ---------- Plantilla ----------
 
 -- Crea o actualiza un jugador (ADMIN o DT). variant, birthDate e imageUrl llegan dentro de detail.
+-- Nombre: solo letras, 3 a 50, en Title Case. Dorsal 1-99. Variante: letras, hasta 30.
+-- Nacimiento: opcional, desde 1940 y nunca futuro (un día de margen por la zona horaria).
 CREATE OR REPLACE FUNCTION public.save_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
+  v_name text := api_clean_text(p ->> 'name');
+  v_variant text := api_clean_text(p -> 'detail' ->> 'variant');
+  v_birth text := coalesce(p -> 'detail' ->> 'birthDate', '');
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'clubId', 'name', 'shirtNumber', 'position']) THEN
+  IF NOT api_required(p, ARRAY['id', 'clubId', 'name', 'shirtNumber', 'position'])
+     OR char_length(v_name) NOT BETWEEN 3 AND 50
+     OR v_name !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'
+     OR coalesce(p ->> 'shirtNumber', '') !~ '^[1-9][0-9]?$'
+     OR p ->> 'position' NOT IN ('Portero', 'Defensa', 'Medio', 'Delantero')
+     OR (v_variant <> '' AND (char_length(v_variant) > 30 OR v_variant !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'))
+     OR (v_birth <> '' AND v_birth !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  -- El cast va aparte: dentro del mismo IF el planificador podría evaluarlo antes que el formato
+  IF v_birth <> '' AND v_birth::date NOT BETWEEN DATE '1940-01-01' AND CURRENT_DATE + 1 THEN
     RETURN jsonb_build_object('player', NULL);
   END IF;
   INSERT INTO players (
     id, club_id, name, shirt_number, position, variant,
     birth_date, image_url, is_coach, active, created_at
   )
-  SELECT p ->> 'id', v_club, p ->> 'name', p ->> 'shirtNumber', p ->> 'position',
-    COALESCE(p -> 'detail' ->> 'variant', ''),
-    NULLIF(p -> 'detail' ->> 'birthDate', '')::date,
+  SELECT p ->> 'id', v_club, initcap(v_name), p ->> 'shirtNumber', p ->> 'position',
+    v_variant,
+    NULLIF(v_birth, '')::date,
     COALESCE(p -> 'detail' ->> 'imageUrl', ''),
     COALESCE((p ->> 'isCoach')::boolean, false), COALESCE((p ->> 'active')::boolean, true), CURRENT_TIMESTAMP
   WHERE has_club_role(v_club, ARRAY['ADMIN', 'DT'])
@@ -372,6 +418,7 @@ BEGIN
     image_url = EXCLUDED.image_url,
     is_coach = EXCLUDED.is_coach,
     active = EXCLUDED.active
+  WHERE players.club_id = EXCLUDED.club_id
   RETURNING jsonb_build_object('id', id, 'name', name) INTO v_row;
   RETURN jsonb_build_object('player', v_row);
 END
@@ -398,20 +445,31 @@ CALL api_expose('delete_player', 'USER');
 
 -- ---------- Finanzas ----------
 
--- Registra un movimiento manual (ADMIN o TESORERO); el importe no puede ser negativo
+-- Registra un movimiento manual (ADMIN o TESORERO); el importe no puede ser negativo.
+-- Concepto: letras, números y comas sueltas, 3 a 30 (financeText). Categoría: la lista del tipo
+-- (CATEGORIAS_INGRESO / CATEGORIAS_GASTO en domains/finances/constants.ts).
 CREATE OR REPLACE FUNCTION public.add_transaction(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
   v_amount numeric := (p ->> 'amount')::numeric;
+  v_description text := api_clean_text(p ->> 'description');
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'clubId', 'type', 'description', 'category', 'amount', 'txnDate']) THEN
+  IF NOT api_required(p, ARRAY['id', 'clubId', 'type', 'description', 'category', 'amount', 'txnDate'])
+     OR char_length(v_description) NOT BETWEEN 3 AND 30
+     OR v_description !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ][A-Za-z0-9À-ÖØ-öø-ÿ,]*( [A-Za-z0-9À-ÖØ-öø-ÿ,]+)*$'
+     OR v_description ~ ',,'
+     OR v_amount > 99999999.99
+     OR NOT (
+       (p ->> 'type' = 'INGRESO' AND p ->> 'category' IN ('Cuotas', 'Ventas', 'Patrocinio', 'Otro'))
+       OR (p ->> 'type' = 'GASTO' AND p ->> 'category' IN ('Equipo/Balones', 'Canchas', 'Arbitraje', 'Bebidas/Comida', 'Botiquín', 'Otro'))
+     ) THEN
     RETURN jsonb_build_object('transaction', NULL);
   END IF;
   INSERT INTO transactions (id, club_id, type, description, category, amount, txn_date, source, created_at)
-  SELECT p ->> 'id', v_club, (p ->> 'type')::transaction_type, p ->> 'description', p ->> 'category',
+  SELECT p ->> 'id', v_club, (p ->> 'type')::transaction_type, v_description, p ->> 'category',
     v_amount, (p ->> 'txnDate')::date, 'MANUAL'::transaction_source, CURRENT_TIMESTAMP
   WHERE v_amount >= 0
     AND has_club_role(v_club, ARRAY['ADMIN', 'TESORERO'])
@@ -439,26 +497,35 @@ END
 $$;
 CALL api_expose('delete_transaction', 'USER');
 
--- Crea o actualiza una meta (ADMIN o TESORERO); el importe no puede ser negativo
+-- Crea o actualiza una meta (ADMIN o TESORERO); importe y cuota no pueden ser negativos.
+-- Título: letras, números y comas sueltas, 3 a 30 (financeText en el cliente).
 CREATE OR REPLACE FUNCTION public.save_financial_goal(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
   v_amount numeric := (p ->> 'amount')::numeric;
+  v_quota numeric := (p ->> 'quotaPerPlayer')::numeric;
+  v_title text := api_clean_text(p ->> 'title');
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'clubId', 'title', 'amount']) THEN
+  IF NOT api_required(p, ARRAY['id', 'clubId', 'title', 'amount'])
+     OR char_length(v_title) NOT BETWEEN 3 AND 30
+     OR v_title !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ][A-Za-z0-9À-ÖØ-öø-ÿ,]*( [A-Za-z0-9À-ÖØ-öø-ÿ,]+)*$'
+     OR v_title ~ ',,'
+     OR v_amount > 99999999.99
+     OR v_quota < 0 OR v_quota > 99999999.99 THEN
     RETURN jsonb_build_object('goal', NULL);
   END IF;
   INSERT INTO financial_goals (id, club_id, title, amount, quota_per_player, status, created_at)
-  SELECT p ->> 'id', v_club, p ->> 'title', v_amount, (p ->> 'quotaPerPlayer')::numeric, 'ACTIVE'::goal_status, CURRENT_TIMESTAMP
+  SELECT p ->> 'id', v_club, v_title, v_amount, v_quota, 'ACTIVE'::goal_status, CURRENT_TIMESTAMP
   WHERE v_amount >= 0
     AND has_club_role(v_club, ARRAY['ADMIN', 'TESORERO'])
   ON CONFLICT (id) DO UPDATE SET
     title = EXCLUDED.title,
     amount = EXCLUDED.amount,
     quota_per_player = EXCLUDED.quota_per_player
+  WHERE financial_goals.club_id = EXCLUDED.club_id
   RETURNING jsonb_build_object('id', id) INTO v_row;
   RETURN jsonb_build_object('goal', v_row);
 END
@@ -531,26 +598,38 @@ CALL api_expose('set_goal_contribution', 'USER');
 
 -- ---------- Inventario ----------
 
--- Crea o actualiza un artículo (ADMIN, DT o TESORERO); la cantidad no puede ser negativa
+-- Crea o actualiza un artículo (ADMIN, DT o TESORERO); la cantidad no puede ser negativa.
+-- Nombre: letras y números con un espacio entre palabras, 2 a 20 (inventoryItemName en el cliente).
+-- Un nombre que ya está en el inventario del club se acepta tal cual (cambiar cantidad o estado de un
+-- artículo de antes de la regla).
 CREATE OR REPLACE FUNCTION public.save_inventory_item(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
   v_qty integer := (p ->> 'quantity')::int;
+  v_name text := api_clean_text(p ->> 'name');
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'clubId', 'name', 'quantity', 'condition']) THEN
+  IF EXISTS (SELECT 1 FROM inventory_items WHERE club_id = v_club AND name = p ->> 'name') THEN
+    v_name := p ->> 'name';
+  ELSIF char_length(v_name) NOT BETWEEN 2 AND 20
+     OR v_name !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ]+( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$' THEN
+    RETURN jsonb_build_object('item', NULL);
+  END IF;
+  IF NOT api_required(p, ARRAY['id', 'clubId', 'name', 'quantity', 'condition'])
+     OR v_qty > 99999 THEN
     RETURN jsonb_build_object('item', NULL);
   END IF;
   INSERT INTO inventory_items (id, club_id, name, quantity, condition, created_at)
-  SELECT p ->> 'id', v_club, p ->> 'name', v_qty, (p ->> 'condition')::inventory_condition, CURRENT_TIMESTAMP
+  SELECT p ->> 'id', v_club, v_name, v_qty, (p ->> 'condition')::inventory_condition, CURRENT_TIMESTAMP
   WHERE v_qty >= 0
     AND has_club_role(v_club, ARRAY['ADMIN', 'DT', 'TESORERO'])
   ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     quantity = EXCLUDED.quantity,
     condition = EXCLUDED.condition
+  WHERE inventory_items.club_id = EXCLUDED.club_id
   RETURNING jsonb_build_object('id', id, 'name', name, 'quantity', quantity) INTO v_row;
   RETURN jsonb_build_object('item', v_row);
 END
@@ -578,6 +657,9 @@ CALL api_expose('delete_inventory_item', 'USER');
 -- ---------- Galería ----------
 
 -- Añade una foto a un álbum, creándolo si no existe (ADMIN o DT). La foto va al final del álbum.
+-- Un álbum nuevo se llama con letras y números (un espacio entre palabras), 3 a 30 y mayúscula
+-- inicial (albumName en el cliente); a uno que ya existe se le siguen añadiendo fotos aunque su
+-- nombre sea de antes de la regla («📸 Galería General»).
 CREATE OR REPLACE FUNCTION public.save_gallery_photo(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -587,6 +669,13 @@ DECLARE
   v_album integer := 0;
   v_row jsonb;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM albums WHERE club_id = v_club AND name = v_album_name) THEN
+    v_album_name := api_capitalize_first(api_clean_text(v_album_name));
+    IF char_length(v_album_name) NOT BETWEEN 3 AND 30
+       OR v_album_name !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ]+( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$' THEN
+      RETURN jsonb_build_object('album', NULL, 'photo', NULL);
+    END IF;
+  END IF;
   IF api_required(p, ARRAY['albumId', 'clubId', 'albumName', 'photoId', 'url', 'caption', 'takenAt'])
      AND has_club_role(v_club, ARRAY['ADMIN', 'DT']) THEN
     -- album
@@ -766,20 +855,31 @@ CALL api_expose('insert_club_availability', 'USER');
 
 -- Nombre, descripción y ubicación de la portada (ADMIN o PRENSA). Si la ubicación deja de coincidir
 -- con la localidad enlazada, se desenlaza.
+-- Reglas de coverClubName, coverPlace y coverMotto en textLimits.ts: nombre con letras, números y
+-- puntos (3 a 30); barrio con letras, números y una coma como mucho (3 a 30); lema libre de 1 a 100
+-- sin caracteres de control. Nombre y barrio se guardan con mayúscula inicial.
 CREATE OR REPLACE FUNCTION public.save_club_portada(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_id text := p ->> 'id';
-  v_location text := p ->> 'location';
+  v_name text := api_capitalize_first(api_clean_text(p ->> 'name'));
+  v_location text := api_capitalize_first(api_clean_text(p ->> 'location'));
+  v_description text := api_clean_text(p ->> 'description');
   v_row jsonb;
 BEGIN
-  IF NOT api_required(p, ARRAY['id', 'name', 'description', 'location']) THEN
+  IF NOT api_required(p, ARRAY['id', 'name', 'description', 'location'])
+     OR char_length(v_name) NOT BETWEEN 3 AND 30
+     OR v_name !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ.]+( [A-Za-z0-9À-ÖØ-öø-ÿ.]+)*$'
+     OR char_length(v_location) NOT BETWEEN 3 AND 30
+     OR v_location !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ]+( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*(, ?[A-Za-z0-9À-ÖØ-öø-ÿ]+( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*)?$'
+     OR char_length(v_description) NOT BETWEEN 1 AND 100
+     OR v_description ~ '[[:cntrl:]]' THEN
     RETURN jsonb_build_object('club', NULL);
   END IF;
   UPDATE clubs
-  SET name = p ->> 'name',
-      description = p ->> 'description',
+  SET name = v_name,
+      description = v_description,
       location = v_location,
       locality_id = CASE
         WHEN locality_id IS NOT NULL

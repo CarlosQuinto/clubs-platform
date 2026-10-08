@@ -9,11 +9,35 @@ import {
   RADIUS,
   SHADOWS,
   C,
+  FormError,
 } from "../../../shared/ui";
+import { isoDate } from "../../../shared/helpers";
+import {
+  isPlayerFullName,
+  isPlayerVariant,
+  isShirtNumber,
+  playerFullName,
+  playerVariant as playerVariantText,
+  shirtNumber,
+} from "../../../shared/textLimits";
 
 // 👇 IMPORTACIONES DE STORAGE Y COMPRESIÓN 👇
 import { useClub } from "../../../domains/clubs/ClubContext";
 import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
+
+/** Fecha de nacimiento más antigua que se acepta (la misma que save_player). */
+export const BIRTH_MIN = "1940-01-01";
+
+/** Motivo por el que no se puede fichar; vacío si todo cumple (las reglas de save_player). */
+export function playerFormError(name: string, number: string, variant: string, birthDate: string) {
+  if (!isPlayerFullName(name)) return "El nombre lleva de 3 a 50 letras, sin números ni símbolos.";
+  if (!isShirtNumber(number)) return "El dorsal va del 1 al 99.";
+  if (!isPlayerVariant(variant)) return "La variante lleva solo letras, hasta 30.";
+  if (birthDate && (birthDate < BIRTH_MIN || birthDate > isoDate())) {
+    return "La fecha de nacimiento va de 1940 a hoy.";
+  }
+  return "";
+}
 
 // ── COMPONENTE SWITCH (SLIDER) PERSONALIZADO ──
 const ToggleSwitch = ({
@@ -69,8 +93,12 @@ interface PlayerFormProps {
   setPlayerImageUrl: (val: string) => void;
   playerActive: boolean;
   setPlayerActive: (val: boolean) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  /** Resuelve true si el fichaje quedó guardado. */
+  onSubmit: (e: React.FormEvent) => Promise<boolean>;
   onCancel: () => void;
+  /** Motivo por el que no se pudo guardar (vacío si no hay). */
+  error: string;
+  saving: boolean;
 }
 
 export default function PlayerForm({
@@ -92,6 +120,8 @@ export default function PlayerForm({
   setPlayerActive,
   onSubmit,
   onCancel,
+  error,
+  saving,
 }: PlayerFormProps) {
   const title = editingPlayerId
     ? isPressOnly
@@ -176,9 +206,9 @@ export default function PlayerForm({
       }
     };
 
+    // Las fotos solo se limpian si el fichaje se guardó: si no, el formulario sigue con ellas
+    if (!(await onSubmit(e))) return;
     cleanUpTask();
-
-    onSubmit(e);
     setNewlyUploadedPhotos([]);
   };
 
@@ -193,18 +223,21 @@ export default function PlayerForm({
           required
           disabled={isPressOnly}
           value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
+          maxLength={50}
+          onChange={(e) => setPlayerName(playerFullName(e.target.value))}
           placeholder="Nombre completo"
         />
 
         <div className="player-form-grid player-form-grid--meta">
           <FormInput
-            type="number"
+            type="text"
+            inputMode="numeric"
             required
             disabled={isPressOnly}
             value={playerNumber}
-            onChange={(e) => setPlayerNumber(e.target.value)}
-            placeholder="Dorsal"
+            maxLength={2}
+            onChange={(e) => setPlayerNumber(shirtNumber(e.target.value))}
+            placeholder="Dorsal (1-99)"
           />
           <FormSelect
             disabled={isPressOnly}
@@ -223,12 +256,15 @@ export default function PlayerForm({
           <FormInput
             disabled={isPressOnly}
             value={playerVariant}
-            onChange={(e) => setPlayerVariant(e.target.value)}
+            maxLength={30}
+            onChange={(e) => setPlayerVariant(playerVariantText(e.target.value))}
             placeholder="Variante, ej. Extremo"
           />
           <FormInput
             type="date"
             disabled={isPressOnly}
+            min={BIRTH_MIN}
+            max={isoDate()}
             value={playerBirthDate}
             onChange={(e) => setPlayerBirthDate(e.target.value)}
             placeholder="Nacimiento"
@@ -374,6 +410,7 @@ export default function PlayerForm({
           )}
         </div>
 
+        <FormError>{error}</FormError>
         {/* BOTONES DE ACCIÓN */}
         <div style={{ display: "flex", gap: "0.4rem" }}>
           <PrimaryButton
@@ -383,11 +420,13 @@ export default function PlayerForm({
               opacity: isUploading ? 0.7 : 1,
               padding: "0.55rem",
             }}
-            disabled={isUploading}
+            disabled={isUploading || saving}
           >
             {isUploading
               ? "Cargando..."
-              : editingPlayerId
+              : saving
+                ? "Guardando…"
+                : editingPlayerId
                 ? "Guardar Cambios"
                 : "Confirmar Fichaje"}
           </PrimaryButton>

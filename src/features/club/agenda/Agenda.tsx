@@ -14,7 +14,6 @@ export default function Agenda(props: any) {
   const {
     clubId,
     editingEventId,
-    setEditingEventId,
     eventType,
     setEventType,
     eventTitle,
@@ -54,6 +53,10 @@ export default function Agenda(props: any) {
     visiblePast,
     refresh,
     handleSaveEvent,
+    handleCancelEdit,
+    eventError,
+    savingEvent,
+    originalDate,
     handleStartEdit,
     handleDelete,
     handleUpdateScore,
@@ -125,12 +128,10 @@ export default function Agenda(props: any) {
         eventLocation={eventLocation}
         setEventLocation={setEventLocation}
         onSubmit={handleSaveEvent}
-        onCancel={() => {
-          setEditingEventId(null);
-          setEventTitle("");
-          setEventLocation("");
-          setEventRoutine([]);
-        }}
+        onCancel={handleCancelEdit}
+        error={eventError}
+        saving={savingEvent}
+        originalDate={originalDate}
       />
 
       {/* ── 3. PRÓXIMOS COMPROMISOS ── */}

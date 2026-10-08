@@ -20,12 +20,13 @@ import {
 import { formatCurrency } from "../../../domains/finances/helpers";
 import { Player } from "../../../domains/finances/types";
 import { Goal } from "./useFinancesData";
+import { GoalForm } from "./GoalForm";
 
 interface GoalsListProps {
   goals: Goal[];
   players: Player[];
   canEdit: boolean;
-  onAddGoal: () => void;
+  onAddGoal: (title: string, amount: number, quotaPerPlayer: number) => Promise<void>;
   onCompleteGoal: (id: string) => void;
   onDeleteGoal: (id: string) => void;
   onUpdateContribution: (
@@ -48,6 +49,7 @@ export function GoalsList({
   onUpdateContribution,
 }: GoalsListProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [creating, setCreating] = useState(false);
 
   const toggle = (id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -58,9 +60,12 @@ export function GoalsList({
       title="Metas y Campañas"
       icon={<Target size={16} color={C.navy600} />}
     >
-      {canEdit && (
+      {canEdit && creating && (
+        <GoalForm activePlayers={players.length} onSave={onAddGoal} onClose={() => setCreating(false)} />
+      )}
+      {canEdit && !creating && (
         <PrimaryButton
-          onClick={onAddGoal}
+          onClick={() => setCreating(true)}
           style={{
             width: "100%",
             marginBottom: "1rem",

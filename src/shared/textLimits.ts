@@ -397,3 +397,132 @@ export function isWhatsapp(value: string) {
   const digits = value.replace(/\D/g, "");
   return !value.trim() || (digits.length >= 10 && digits.length <= 13);
 }
+
+// ---------- Página de club: las mismas reglas que las funciones de db/migrations/1011_fn_club.sql ----------
+
+const WORDS_RE = new RegExp(`^[${LATIN_LETTERS}0-9]+(?: [${LATIN_LETTERS}0-9]+)*$`);
+const LETTER_WORDS_RE = new RegExp(`^[${LATIN_LETTERS}]+(?: [${LATIN_LETTERS}]+)*$`);
+const EVENT_TEXT_RE = new RegExp(`^[${LATIN_LETTERS}0-9.\-]+(?: [${LATIN_LETTERS}0-9.\-]+)*$`);
+const COVER_NAME_RE = new RegExp(`^[${LATIN_LETTERS}0-9.]+(?: [${LATIN_LETTERS}0-9.]+)*$`);
+const COVER_PLACE_RE = new RegExp(
+  `^[${LATIN_LETTERS}0-9]+(?: [${LATIN_LETTERS}0-9]+)*(?:, ?[${LATIN_LETTERS}0-9]+(?: [${LATIN_LETTERS}0-9]+)*)?$`,
+);
+const COMMA_TEXT_RE = new RegExp(`^[${LATIN_LETTERS}0-9][${LATIN_LETTERS}0-9,]*(?: [${LATIN_LETTERS}0-9,]+)*$`);
+
+/** Primera letra en mayúscula y el resto tal cual, como api_capitalize_first en SQL. */
+export function capitalizeFirst(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function commaText(value: string, max: number) {
+  return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9, ]`, "g"), ""))
+    .replace(/,{2,}/g, ",")
+    .replace(/^,+/, "")
+    .slice(0, max);
+}
+
+function isCommaText(value: string, min: number, max: number) {
+  const clean = value.trim();
+  return clean.length >= min && clean.length <= max && COMMA_TEXT_RE.test(clean) && !clean.includes(",,");
+}
+
+/** Nombre de álbum: letras y números con un espacio entre palabras, de 3 a 30. */
+export function albumName(value: string) {
+  return spacedLabel(value, 30);
+}
+
+export function isAlbumName(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 30 && WORDS_RE.test(clean);
+}
+
+/** Nombre del club en la portada: letras, números y puntos, de 3 a 30. */
+export function coverClubName(value: string) {
+  return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9. ]`, "g"), "")).slice(0, 30);
+}
+
+export function isCoverClubName(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 30 && COVER_NAME_RE.test(clean);
+}
+
+/** Barrio o escuela: letras, números y una coma como mucho, de 3 a 30. */
+export function coverPlace(value: string) {
+  const clean = singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9, ]`, "g"), "")).replace(/^,+/, "");
+  const comma = clean.indexOf(",");
+  const once = comma < 0 ? clean : clean.slice(0, comma + 1) + clean.slice(comma + 1).replace(/,/g, "");
+  return once.slice(0, 30);
+}
+
+export function isCoverPlace(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 30 && COVER_PLACE_RE.test(clean);
+}
+
+/** Lema de la portada: cualquier carácter imprimible en una línea, hasta 100. */
+export function coverMotto(value: string) {
+  return singleSpaces(value.replace(/[\u0000-\u001f\u007f]/g, " ")).slice(0, 100);
+}
+
+export function isCoverMotto(value: string) {
+  const clean = value.trim();
+  return clean.length >= 1 && clean.length <= 100 && !clean.includes("  ") && !/[\u0000-\u001f\u007f]/.test(clean);
+}
+
+/** Título del evento (entrenamiento o rival) y lugar: letras, números, guiones y puntos, de 3 a 30. */
+export function eventText(value: string) {
+  return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9.\- ]`, "g"), "")).slice(0, 30);
+}
+
+export function isEventText(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 30 && EVENT_TEXT_RE.test(clean);
+}
+
+/** Nombre completo del jugador: solo letras, de 3 a 50. Se guarda en Title Case. */
+export function playerFullName(value: string) {
+  return personName(value, 50);
+}
+
+export function isPlayerFullName(value: string) {
+  const clean = value.trim();
+  return clean.length >= 3 && clean.length <= 50 && LETTER_WORDS_RE.test(clean);
+}
+
+/** Dorsal: del 1 al 99. */
+export function shirtNumber(value: string) {
+  return digitsOnly(value, 2).replace(/^0+/, "");
+}
+
+export function isShirtNumber(value: string) {
+  return /^[1-9][0-9]?$/.test(value);
+}
+
+/** Variante del jugador (Extremo, Lateral…): solo letras, opcional, hasta 30. */
+export function playerVariant(value: string) {
+  return personName(value, 30);
+}
+
+export function isPlayerVariant(value: string) {
+  const clean = value.trim();
+  return !clean || (clean.length <= 30 && LETTER_WORDS_RE.test(clean));
+}
+
+/** Título de una meta y concepto de un movimiento: letras, números y comas sueltas, de 3 a 30. */
+export function financeText(value: string) {
+  return commaText(value, 30);
+}
+
+export function isFinanceText(value: string) {
+  return isCommaText(value, 3, 30);
+}
+
+/** Nombre de un artículo del inventario: letras y números con un espacio entre palabras, de 2 a 20. */
+export function inventoryItemName(value: string) {
+  return spacedLabel(value, 20);
+}
+
+export function isInventoryItemName(value: string) {
+  const clean = value.trim();
+  return clean.length >= 2 && clean.length <= 20 && WORDS_RE.test(clean);
+}

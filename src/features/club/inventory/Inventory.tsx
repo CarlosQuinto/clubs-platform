@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Package,
@@ -37,7 +37,9 @@ import {
   FormSelect,
   PrimaryButton,
   SecondaryButton,
+  FormError,
 } from "../../../shared/ui";
+import { inventoryItemName, isInventoryItemName } from "../../../shared/textLimits";
 
 // ── SÚPER DICCIONARIO PARA ASIGNAR ÍCONOS AUTOMÁTICAMENTE ──
 const getIconForItem = (name: string, size = 20, color = C.navy600) => {
@@ -419,6 +421,9 @@ export default function Inventory({ inventory, perms }: any) {
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState(1);
   const [itemCondition, setItemCondition] = useState("Bueno");
+  const [itemError, setItemError] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
+  const addingItemRef = useRef(false);
 
   const [animatingId, setAnimatingId] = useState<string | null>(null);
 
@@ -446,7 +451,16 @@ export default function Inventory({ inventory, perms }: any) {
 
   const handleAddInventory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemName.trim() || itemQty < 1) return;
+    if (addingItemRef.current) return;
+    if (!isInventoryItemName(itemName)) {
+      setItemError("El nombre lleva de 2 a 20 letras o números, sin símbolos.");
+      return;
+    }
+    if (!Number.isInteger(itemQty) || itemQty < 1 || itemQty > 99999) {
+      setItemError("La cantidad va de 1 a 99999.");
+      return;
+    }
+    setItemError("");
 
     const existingItem = inventory.find(
       (i: any) =>
@@ -454,6 +468,8 @@ export default function Inventory({ inventory, perms }: any) {
         i.condition === itemCondition,
     );
 
+    addingItemRef.current = true;
+    setAddingItem(true);
     try {
       if (existingItem) {
         await persistInventory(
@@ -471,7 +487,10 @@ export default function Inventory({ inventory, perms }: any) {
       setItemCondition("Bueno");
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar.");
+      setItemError("No se pudo guardar. Revisa los datos e inténtalo de nuevo.");
+    } finally {
+      addingItemRef.current = false;
+      setAddingItem(false);
     }
   };
 
@@ -850,7 +869,11 @@ export default function Inventory({ inventory, perms }: any) {
             <FormInput
               required
               value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
+              maxLength={20}
+              onChange={(e) => {
+                setItemName(inventoryItemName(e.target.value));
+                setItemError("");
+              }}
               placeholder="Nombre del artículo (Ej. Balones)"
               style={{ width: "100%" }}
             />
@@ -860,6 +883,7 @@ export default function Inventory({ inventory, perms }: any) {
                 type="number"
                 required
                 min="1"
+                max="99999"
                 value={itemQty}
                 onChange={(e) => setItemQty(parseInt(e.target.value) || 0)}
                 placeholder="Cant."
@@ -877,8 +901,10 @@ export default function Inventory({ inventory, perms }: any) {
               </FormSelect>
             </div>
 
+            <FormError>{itemError}</FormError>
             <PrimaryButton
               type="submit"
+              disabled={addingItem}
               style={{
                 width: "100%",
                 padding: "0.5rem 0.75rem",
@@ -887,7 +913,7 @@ export default function Inventory({ inventory, perms }: any) {
                 gap: "0.3rem",
               }}
             >
-              <Plus size={14} /> Añadir al Inventario
+              <Plus size={14} /> {addingItem ? "Guardando…" : "Añadir al Inventario"}
             </PrimaryButton>
           </form>
         </SectionCard>

@@ -32,8 +32,10 @@ import {
   FormInput,
   PrimaryButton,
   SecondaryButton,
+  FormError,
 } from "../../../shared/ui";
 import { formatFriendlyDate } from "../../../shared/helpers";
+import { albumName as albumNameText, capitalizeFirst, isAlbumName } from "../../../shared/textLimits";
 import { useModalLock } from "../../../shared/useModalLock";
 
 interface GallerySectionProps {
@@ -72,6 +74,9 @@ export default function GallerySection({
   };
   // ── ESTADOS DEL ÁREA DE PREPARACIÓN PRINCIPAL ──
   const [albumName, setAlbumName] = useState("");
+  const [albumError, setAlbumError] = useState("");
+  const [savingAlbum, setSavingAlbum] = useState(false);
+  const savingAlbumRef = useRef(false);
   const [newUrl, setNewUrl] = useState("");
   const [newCaption, setNewCaption] = useState("");
   const [stagingPhotos, setStagingPhotos] = useState<
@@ -171,9 +176,21 @@ export default function GallerySection({
   };
 
   const handleSaveMainAlbum = async () => {
-    if (stagingPhotos.length === 0) return;
-    const finalAlbumName = albumName.trim() || "📸 Galería General";
-
+    if (stagingPhotos.length === 0 || savingAlbumRef.current) return;
+    const typed = albumName.trim();
+    const isExisting = typed !== "" && gallery.some((g) => g.albumName === typed);
+    if (typed && !isExisting && !isAlbumName(typed)) {
+      setAlbumError("El nombre lleva de 3 a 30 letras o números, sin símbolos.");
+      return;
+    }
+    // Sin nombre va a la galería general; la de antes conserva su nombre con emoji
+    const general = gallery.some((g) => g.albumName === "📸 Galería General")
+      ? "📸 Galería General"
+      : "Galería General";
+    const finalAlbumName = !typed ? general : isExisting ? typed : capitalizeFirst(typed);
+    savingAlbumRef.current = true;
+    setSavingAlbum(true);
+    setAlbumError("");
     const existingPhotos = gallery.filter(
       (g) => (g.albumName || "📸 Galería General") === finalAlbumName,
     );
@@ -185,14 +202,26 @@ export default function GallerySection({
       baseTime = oldestTime - 1000;
     }
 
-    for (let i = 0; i < stagingPhotos.length; i++) {
-      const p = stagingPhotos[i];
-      const d = new Date(baseTime - i * 1000);
-      await savePhoto(finalAlbumName, p.url, p.caption, d.toISOString());
+    let done = 0;
+    try {
+      for (let i = 0; i < stagingPhotos.length; i++) {
+        const p = stagingPhotos[i];
+        const d = new Date(baseTime - i * 1000);
+        await savePhoto(finalAlbumName, p.url, p.caption, d.toISOString());
+        done = i + 1;
+      }
+      setStagingPhotos([]);
+      setAlbumName("");
+    } catch (e) {
+      // Las que ya se guardaron salen de la preparación para no duplicarlas al reintentar
+      setStagingPhotos((prev) => prev.slice(done));
+      console.error("Error al guardar el álbum", e);
+      setAlbumError("No se pudo guardar el álbum. Revisa el nombre e inténtalo de nuevo.");
+    } finally {
+      requestClubRefresh();
+      savingAlbumRef.current = false;
+      setSavingAlbum(false);
     }
-    requestClubRefresh();
-    setStagingPhotos([]);
-    setAlbumName("");
   };
 
   // ==========================================
@@ -799,9 +828,17 @@ export default function GallerySection({
               type="text"
               list="album-names"
               value={albumName}
-              onChange={(e) => setAlbumName(e.target.value)}
+              maxLength={30}
+              aria-invalid={albumError ? true : undefined}
+              onChange={(e) => {
+                const v = e.target.value;
+                // Un álbum que ya existe se elige tal cual aunque su nombre sea de antes de la regla
+                setAlbumName(existingAlbumNames.includes(v) ? v : albumNameText(v));
+                setAlbumError("");
+              }}
               placeholder="Nombre del álbum (Ej. Convivio 2026)"
             />
+            <FormError>{albumError}</FormError>
 
             <div
               style={{
@@ -1017,7 +1054,9 @@ export default function GallerySection({
                   ))}
                 </div>
                 <PrimaryButton
+                  type="button"
                   onClick={handleSaveMainAlbum}
+                  disabled={savingAlbum}
                   style={{
                     width: "100%",
                     display: "flex",
@@ -1029,7 +1068,8 @@ export default function GallerySection({
                     fontSize: "0.75rem",
                   }}
                 >
-                  <UploadCloud size={14} /> Guardar Álbum ({stagingPhotos.length})
+                  <UploadCloud size={14} />{" "}
+                  {savingAlbum ? "Guardando…" : `Guardar Álbum (${stagingPhotos.length})`}
                 </PrimaryButton>
               </>
             )}

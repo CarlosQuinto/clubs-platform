@@ -34,34 +34,9 @@ export function useFinancesPage({
     updateGoalContribution,
   } = useFinancesData(transactions, players, date, goalsWithDate);
 
-  // ── CREACIÓN DE META CON CÁLCULO DE CUOTA ──
-  const handleAddGoal = () => {
-    const title = window.prompt(
-      "Nombre de la nueva meta:\n(Ej. Uniformes Nuevos, Arbitraje Liguilla)",
-    );
-    if (!title?.trim()) return;
-
-    const amountStr = window.prompt(
-      `¿Cuánto dinero se necesita en total para "${title}"?\n(Ej. 3000)`,
-    );
-    if (!amountStr) return;
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) return alert("Monto total inválido.");
-
-    // Cálculo sugerido
-    const suggestedQuota = Math.ceil(amount / activePlayers.length);
-    const quotaStr = window.prompt(
-      `Hay ${activePlayers.length} jugadores activos.\n¿De a cuánto nos tocaría a cada uno?\n\n(Sugerencia basada en el total: $${suggestedQuota})`,
-      suggestedQuota.toString(),
-    );
-    if (!quotaStr) return;
-    const quotaPerPlayer = parseFloat(quotaStr) || suggestedQuota;
-
-    void addGoal(title, amount, quotaPerPlayer).catch((err: unknown) => {
-      console.error(err);
-      alert("No se pudo guardar.");
-    });
-  };
+  // ── CREACIÓN DE META (el formulario valida y bloquea el doble clic; aquí solo se guarda) ──
+  const handleAddGoal = (title: string, amount: number, quotaPerPlayer: number) =>
+    addGoal(title, amount, quotaPerPlayer);
 
   // ── REGISTRO DE APORTACIÓN ──
   const handleUpdateContribution = (
