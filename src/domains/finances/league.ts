@@ -8,7 +8,7 @@ import type {
 
 /** Nombre de cada tipo de cobro; el mismo que league_kind_label en 1015_fn_finance.sql. */
 export const FEE_KIND_LABEL: Record<LeagueFeeKind, string> = {
-  CLUB_REGISTRATION: "Registro del club",
+  CLUB_REGISTRATION: "Registro del club en la plataforma",
   CLUB_PAGE: "Página del club",
   SEASON_ENROLLMENT: "Inscripción a la temporada",
   TOURNAMENT_ENROLLMENT: "Inscripción al torneo",
@@ -25,57 +25,52 @@ export const FEE_KIND_LABEL: Record<LeagueFeeKind, string> = {
   LATE_SIGNING: "Fichaje tardío",
   AD: "Publicidad",
   SPONSORSHIP: "Patrocinio",
-  OTHER: "Otro",
+  OTHER: "Otro cobro",
 };
 
-/** Cuándo se genera cada cobro, para la pantalla de tarifas. */
-export const FEE_KIND_HINT: Record<LeagueFeeKind, string> = {
-  CLUB_REGISTRATION: "Una vez por temporada: con «Generar cobros de temporada» o al inscribirse al primer torneo.",
-  CLUB_PAGE: "Mantener la página activa: por mes («Generar mensualidad») o por temporada.",
-  SEASON_ENROLLMENT: "Con «Generar cobros de temporada», a cada club activo.",
-  TOURNAMENT_ENROLLMENT: "Al inscribir un club a un torneo.",
-  DEPOSIT: "Al inscribir un club a un torneo. Si se devuelve, anótalo como devolución en Gastos.",
+/** Cuándo se registra cada cobro, para la pantalla de tarifas (1015_fn_finance.sql). */
+export const FEE_KIND_HINT: Partial<Record<LeagueFeeKind, string>> = {
   MATCH_REFEREE: "A cada club cuando el partido queda jugado (no en un W.O.).",
-  MATCH_COURT: "A cada club cuando el partido queda jugado (no en un W.O.).",
-  COURT_RENTAL: "Usa el costo por hora de cada cancha. Se cobra al apartar una cancha desde Canchas.",
+  MATCH_COURT: "Se cobra solo: el costo por hora de la cancha del partido × la duración del partido. No lleva precio.",
+  WALKOVER: "Al club que no se presentó (a los dos si faltaron ambos).",
   CARD_YELLOW: "Por cada amarilla, cuando el partido queda jugado.",
   CARD_RED: "Por cada roja, cuando el partido queda jugado.",
-  WALKOVER: "Al club que no se presentó (a los dos si faltaron ambos).",
-  PROTEST: "Cargo manual. El precio se propone al crearlo.",
-  RESCHEDULE: "Cargo manual. El precio se propone al crearlo.",
-  PLAYER_CARD: "Cargo manual. El precio se propone al crearlo.",
-  LATE_SIGNING: "Cargo manual. El precio se propone al crearlo.",
-  AD: "Usa el precio de cada anuncio (Publicidad).",
-  SPONSORSHIP: "Cargo manual al patrocinador, ligado a un torneo si quieres.",
-  OTHER: "Cargo manual.",
+  TOURNAMENT_ENROLLMENT: "Al inscribir un club a un torneo.",
+  CLUB_REGISTRATION: "Un solo pago por club, cuando se da de alta en la plataforma.",
+  COURT_RENTAL: "Se registra sola, ya pagada, cada vez que se aparta una cancha. Usa el costo por hora de la cancha.",
+  AD: "Se cobra sola al anunciante cuando un anuncio tiene precio (Publicidad).",
 };
 
 export const FEE_GROUPS: { title: string; kinds: LeagueFeeKind[] }[] = [
-  { title: "Partidos y canchas", kinds: ["MATCH_REFEREE", "MATCH_COURT", "COURT_RENTAL"] },
-  {
-    title: "Registro e inscripción",
-    kinds: ["CLUB_REGISTRATION", "CLUB_PAGE", "SEASON_ENROLLMENT", "TOURNAMENT_ENROLLMENT", "DEPOSIT"],
-  },
-  { title: "Multas", kinds: ["CARD_YELLOW", "CARD_RED", "WALKOVER", "PROTEST", "RESCHEDULE"] },
-  { title: "Jugadores", kinds: ["PLAYER_CARD", "LATE_SIGNING"] },
-  { title: "Publicidad y patrocinios", kinds: ["AD", "SPONSORSHIP"] },
-  { title: "Otros", kinds: ["OTHER"] },
+  { title: "Partidos", kinds: ["MATCH_REFEREE", "MATCH_COURT", "WALKOVER"] },
+  { title: "Tarjetas", kinds: ["CARD_YELLOW", "CARD_RED"] },
+  { title: "Registro e inscripción", kinds: ["CLUB_REGISTRATION", "TOURNAMENT_ENROLLMENT"] },
+  { title: "Canchas y publicidad", kinds: ["COURT_RENTAL", "AD"] },
 ];
 
 export const ALL_FEE_KINDS: LeagueFeeKind[] = FEE_GROUPS.flatMap((group) => group.kinds);
 
-/** Cobros cuyo monto sale del propio registro (cancha o anuncio): la tarifa solo los activa. */
-export const AMOUNT_FROM_SOURCE: LeagueFeeKind[] = ["COURT_RENTAL", "AD"];
+/** Cobros cuyo monto sale del propio registro (cancha o anuncio): se cobran solos y la tarifa solo los apaga. */
+export const AMOUNT_FROM_SOURCE: LeagueFeeKind[] = ["MATCH_COURT", "COURT_RENTAL", "AD"];
 
+/** Tipos que se ven en los filtros: los de las tarifas y «Otro cobro» (el único que se crea a mano). */
+export const CHARGE_KINDS: LeagueFeeKind[] = [...ALL_FEE_KINDS, "OTHER"];
+
+/** Tarifa sin guardar: así se comporta el SQL (league_fee_on). */
 export function defaultFee(kind: LeagueFeeKind): LeagueFee {
   return {
     kind,
-    enabled: false,
+    enabled: AMOUNT_FROM_SOURCE.includes(kind),
     amount: 0,
-    period: kind === "CLUB_PAGE" ? "SEASON" : "ONCE",
-    splitMode: "EACH",
+    period: "ONCE",
+    splitMode: kind === "MATCH_COURT" ? "HALF" : "EACH",
     includesRegistration: false,
   };
+}
+
+/** Una renta se paga al apartar: no se marca ni desmarca a mano. */
+export function isPaidOnBooking(charge: { kind: LeagueFeeKind; automatic?: boolean }) {
+  return charge.kind === "COURT_RENTAL" && charge.automatic !== false;
 }
 
 export const CHARGE_STATUS_LABEL: Record<LeagueChargeStatus, string> = {

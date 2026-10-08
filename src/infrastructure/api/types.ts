@@ -3566,6 +3566,8 @@ export interface AdminFinanceSummaryData {
   byKind?: { kind: LeagueFeeKind; generated: number; collected: number; pending: number }[];
   byCategory?: { category: LeagueExpenseCategory; amount: number }[];
   series?: { key: string; label: string; generated: number; collected: number; expenses: number; losses: number }[];
+  /** Cada registro del periodo (hasta 300, los más recientes primero). */
+  charges?: LeagueCharge[];
   debtors?: { club: { id: string; name: string }; pending: number; charges: number }[];
 }
 
@@ -3581,6 +3583,8 @@ export interface SaveLeagueFeeVariables {
 
 export interface SaveLeagueFeeData {
   fee?: { kind: LeagueFeeKind } | null;
+  /** Cobros registrados de lo que ya pasó en la temporada al guardar. */
+  created?: number | null;
 }
 
 export interface CreateLeagueChargeVariables {
@@ -3608,6 +3612,15 @@ export interface SetLeagueChargeStatusVariables {
 }
 
 export interface SetLeagueChargeStatusData {
+  charge?: { id: string; status: LeagueChargeStatus } | null;
+}
+
+export interface SetLeagueChargePaidVariables {
+  id: string;
+  paid: boolean;
+}
+
+export interface SetLeagueChargePaidData {
   charge?: { id: string; status: LeagueChargeStatus } | null;
 }
 
@@ -3654,23 +3667,6 @@ export interface DeleteLeagueExpenseVariables {
 
 export interface DeleteLeagueExpenseData {
   deleted?: number | null;
-}
-
-export interface GenerateSeasonChargesVariables {
-  seasonId: string;
-}
-
-export interface GenerateSeasonChargesData {
-  created?: number | null;
-}
-
-export interface GenerateMonthlyPageChargesVariables {
-  month: string;
-}
-
-export interface GenerateMonthlyPageChargesData {
-  created?: number | null;
-  configured?: boolean | null;
 }
 
 export interface ClubLeagueAccountVariables {

@@ -1,5 +1,4 @@
 import {
-  addLeaguePayment,
   adminFinanceSetup,
   adminFinanceSummary,
   adminLeagueCharges,
@@ -8,14 +7,11 @@ import {
   createLeagueCharge,
   dataConnect,
   deleteLeagueExpense,
-  deleteLeaguePayment,
-  generateMonthlyPageCharges,
-  generateSeasonCharges,
   QueryFetchPolicy,
   saveLeagueExpense,
   saveLeagueFee,
+  setLeagueChargePaid,
   setLeagueChargeStatus,
-  type AddLeaguePaymentVariables,
   type AdminFinanceSummaryVariables,
   type AdminLeagueChargesVariables,
   type CreateLeagueChargeVariables,
@@ -47,9 +43,17 @@ export async function loadClubLeagueAccount(clubId: string) {
   return (await clubLeagueAccount(dataConnect, { clubId }, fresh)).data.account;
 }
 
+/** Devuelve cuántos cobros de lo que ya pasó en la temporada se registraron al guardar. */
 export async function saveFee(vars: SaveLeagueFeeVariables) {
   const result = await saveLeagueFee(dataConnect, vars);
   savedRow(result.data.fee);
+  return result.data.created ?? 0;
+}
+
+/** «Cubierto / no cubierto». */
+export async function markChargePaid(id: string, paid: boolean) {
+  const result = await setLeagueChargePaid(dataConnect, { id, paid });
+  savedRow(result.data.charge);
 }
 
 export async function createCharge(vars: CreateLeagueChargeVariables) {
@@ -62,16 +66,6 @@ export async function changeChargeStatus(vars: SetLeagueChargeStatusVariables) {
   savedRow(result.data.charge);
 }
 
-export async function addPayment(vars: AddLeaguePaymentVariables) {
-  const result = await addLeaguePayment(dataConnect, vars);
-  savedRow(result.data.payment);
-}
-
-export async function removePayment(id: string) {
-  const result = await deleteLeaguePayment(dataConnect, { id });
-  savedRow(result.data.deleted);
-}
-
 export async function saveExpense(vars: SaveLeagueExpenseVariables) {
   const result = await saveLeagueExpense(dataConnect, vars);
   savedRow(result.data.expense);
@@ -82,16 +76,3 @@ export async function removeExpense(id: string) {
   savedRow(result.data.deleted);
 }
 
-/** Devuelve cuántos cargos nuevos se crearon (0 si ya existían). */
-export async function generateSeason(seasonId: string) {
-  const result = await generateSeasonCharges(dataConnect, { seasonId });
-  savedRow(result.data.created);
-  return result.data.created ?? 0;
-}
-
-/** month = 'YYYY-MM'. configured = false si la página no se cobra por mes en esa temporada. */
-export async function generateMonth(month: string) {
-  const result = await generateMonthlyPageCharges(dataConnect, { month });
-  savedRow(result.data.created);
-  return { created: result.data.created ?? 0, configured: result.data.configured === true };
-}

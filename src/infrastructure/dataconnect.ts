@@ -376,6 +376,8 @@ export const clubLeagueAccount = query<T.ClubLeagueAccountVariables, T.ClubLeagu
 export const saveLeagueFee = mutation<T.SaveLeagueFeeVariables, T.SaveLeagueFeeData>("save_league_fee");
 /** mutation CreateLeagueCharge (USER) */
 export const createLeagueCharge = mutation<T.CreateLeagueChargeVariables, T.CreateLeagueChargeData>("create_league_charge");
+/** mutation SetLeagueChargePaid (USER): «cubierto / no cubierto» (abona el saldo o borra los abonos) */
+export const setLeagueChargePaid = mutation<T.SetLeagueChargePaidVariables, T.SetLeagueChargePaidData>("set_league_charge_paid");
 /** mutation SetLeagueChargeStatus (USER): condonar, cancelar o reactivar */
 export const setLeagueChargeStatus = mutation<T.SetLeagueChargeStatusVariables, T.SetLeagueChargeStatusData>("set_league_charge_status");
 /** mutation AddLeaguePayment (USER) */
@@ -386,7 +388,3 @@ export const deleteLeaguePayment = mutation<T.DeleteLeaguePaymentVariables, T.De
 export const saveLeagueExpense = mutation<T.SaveLeagueExpenseVariables, T.SaveLeagueExpenseData>("save_league_expense");
 /** mutation DeleteLeagueExpense (USER) */
 export const deleteLeagueExpense = mutation<T.DeleteLeagueExpenseVariables, T.DeleteLeagueExpenseData>("delete_league_expense");
-/** mutation GenerateSeasonCharges (USER): inscripción, registro y página por temporada a todos los clubes activos */
-export const generateSeasonCharges = mutation<T.GenerateSeasonChargesVariables, T.GenerateSeasonChargesData>("generate_season_charges");
-/** mutation GenerateMonthlyPageCharges (USER): mensualidad de la página de un mes */
-export const generateMonthlyPageCharges = mutation<T.GenerateMonthlyPageChargesVariables, T.GenerateMonthlyPageChargesData>("generate_monthly_page_charges");

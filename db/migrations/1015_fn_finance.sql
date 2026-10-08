@@ -50,7 +50,7 @@ REVOKE ALL ON FUNCTION public.league_season_on(date) FROM PUBLIC, anon, authenti
 CREATE OR REPLACE FUNCTION public.league_kind_label(p_kind text)
 RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE p_kind
-    WHEN 'CLUB_REGISTRATION' THEN 'Registro del club'
+    WHEN 'CLUB_REGISTRATION' THEN 'Registro del club en la plataforma'
     WHEN 'CLUB_PAGE' THEN 'Página del club'
     WHEN 'SEASON_ENROLLMENT' THEN 'Inscripción a la temporada'
     WHEN 'TOURNAMENT_ENROLLMENT' THEN 'Inscripción al torneo'
@@ -89,17 +89,37 @@ RETURNS text LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
 $$;
 REVOKE ALL ON FUNCTION public.league_match_label(text) FROM PUBLIC, anon, authenticated;
 
--- El registro del club no se cobra aparte si una inscripción activa de la temporada ya lo incluye
+-- Precio del registro del club en la plataforma según la tarifa de la temporada en que se dio de alta
 CREATE OR REPLACE FUNCTION public.league_registration_fee(p_season text)
 RETURNS numeric LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
   SELECT f.amount FROM league_fees f
   WHERE f.season_id = p_season AND f.kind = 'CLUB_REGISTRATION' AND f.enabled AND f.amount > 0
-    AND NOT EXISTS (
-      SELECT 1 FROM league_fees i
-      WHERE i.season_id = p_season AND i.enabled AND i.includes_registration
-        AND i.kind IN ('SEASON_ENROLLMENT', 'TOURNAMENT_ENROLLMENT'))
 $$;
 REVOKE ALL ON FUNCTION public.league_registration_fee(text) FROM PUBLIC, anon, authenticated;
+
+-- ¿Se cobra este tipo en la temporada? Uso de cancha, renta y publicidad toman su precio del propio registro
+-- (cancha o anuncio) y se cobran solos salvo que la tarifa se haya apagado; los demás necesitan tarifa
+-- activa con precio.
+CREATE OR REPLACE FUNCTION public.league_fee_on(p_season text, p_kind text)
+RETURNS boolean LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
+  SELECT CASE
+    WHEN p_season IS NULL THEN false
+    WHEN p_kind IN ('MATCH_COURT', 'COURT_RENTAL', 'AD') THEN coalesce(
+      (SELECT f.enabled FROM league_fees f WHERE f.season_id = p_season AND f.kind = p_kind::league_fee_kind), true)
+    ELSE EXISTS (
+      SELECT 1 FROM league_fees f
+      WHERE f.season_id = p_season AND f.kind = p_kind::league_fee_kind AND f.enabled AND f.amount > 0)
+  END
+$$;
+REVOKE ALL ON FUNCTION public.league_fee_on(text, text) FROM PUBLIC, anon, authenticated;
+
+-- Tipos que la liga cobra (las tarifas y los cargos manuales solo aceptan estos). El enum conserva otros
+-- valores de la primera versión, que ya no se usan.
+CREATE OR REPLACE FUNCTION public.league_fee_kinds()
+RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
+  SELECT ARRAY['TOURNAMENT_ENROLLMENT', 'CLUB_REGISTRATION', 'MATCH_REFEREE', 'MATCH_COURT', 'WALKOVER',
+    'CARD_YELLOW', 'CARD_RED', 'COURT_RENTAL', 'AD']
+$$;
 
 -- Estado según lo abonado (no toca condonados ni cancelados)
 CREATE OR REPLACE FUNCTION public.league_charge_refresh(p_charge text)
@@ -156,7 +176,7 @@ BEGIN
   IF v_row.status = 'PENDIENTE' AND v_paid = 0 THEN
     UPDATE league_charges
     SET concept = left(p_concept, 160), payer_name = left(coalesce(p_payer, ''), 160),
-        payer_contact = left(coalesce(p_contact, ''), 160), charged_on = coalesce(p_charged_on, charged_on),
+        payer_contact = left(coalesce(p_contact, ''), 160),
         amount = CASE WHEN p_reprice THEN round(p_amount, 2) ELSE amount END, updated_at = now()
     WHERE id = v_row.id;
   END IF;
@@ -170,14 +190,21 @@ REVOKE ALL ON FUNCTION public.league_charge_put(text, text, text, text, text, nu
 
 -- Lo que un partido origina. e_amount es NULL si la tarifa no está activa: el hecho existe (no se cancela
 -- lo ya cobrado) pero no se crea un cargo nuevo. Las tarjetas se cobran cuando el partido está jugado.
+-- El uso de cancha cuesta lo que la cancha del partido por hora × la duración del partido (a medias si no
+-- se dice otra cosa en la tarifa); sin cancha o con costo 0 no hay cargo.
 CREATE OR REPLACE FUNCTION public.league_match_expected(p_match text)
 RETURNS TABLE (e_kind text, e_key text, e_club text, e_payer text, e_amount numeric, e_concept text,
   e_day date, e_season text, e_tournament text)
 LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
   WITH m AS (
     SELECT m.id, m.status, m.walkover, m.no_show, coalesce(m.match_date, CURRENT_DATE) AS day,
-      m.home_club_id, m.away_club_id, t.id AS tid, t.season_id AS sid, league_match_label(m.id) AS label
+      m.home_club_id, m.away_club_id, t.id AS tid, t.season_id AS sid, league_match_label(m.id) AS label,
+      CASE WHEN league_fee_on(t.season_id, 'MATCH_COURT') AND coalesce(co.hourly_rate, 0) > 0
+        THEN round(co.hourly_rate * t.duration_minutes / 60.0, 2) END AS court_cost,
+      coalesce((SELECT f.split_mode FROM league_fees f WHERE f.season_id = t.season_id AND f.kind = 'MATCH_COURT'),
+        'HALF') AS court_split
     FROM matches m JOIN tournaments t ON t.id = m.tournament_id
+    LEFT JOIN courts co ON co.id = m.court_id
     WHERE m.id = p_match
   ),
   sides AS (
@@ -193,21 +220,30 @@ LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
   cards AS (
     SELECT mc.club_id,
       CASE mc.color WHEN 'YELLOW' THEN 'CARD_YELLOW' ELSE 'CARD_RED' END AS kind,
-      coalesce(mc.player_id, nullif(mc.player_name, ''), 'sin-nombre') AS who,
+      -- El nombre se guarda en la tarjeta al capturarla; el id se pierde si se borra el jugador (SET NULL)
+      coalesce(nullif(mc.player_name, ''), mc.player_id, 'sin-nombre') AS who,
       coalesce(nullif(mc.player_name, ''), pl.name, 'Jugador') AS pname,
       row_number() OVER (
-        PARTITION BY mc.club_id, mc.color, coalesce(mc.player_id, nullif(mc.player_name, ''), 'sin-nombre')
+        PARTITION BY mc.club_id, mc.color, coalesce(nullif(mc.player_name, ''), mc.player_id, 'sin-nombre')
         ORDER BY mc.minute NULLS LAST, mc.id) AS n
     FROM match_cards mc LEFT JOIN players pl ON pl.id = mc.player_id
     WHERE mc.match_id = p_match
   )
-  SELECT k.kind, 'match:' || m.id, s.club, cl.name,
-    CASE WHEN f.split_mode = 'HALF' THEN round(f.amount / 2, 2) ELSE f.amount END,
-    league_kind_label(k.kind) || ' · ' || m.label, m.day, m.sid, m.tid
+  SELECT 'MATCH_REFEREE', 'match:' || m.id, s.club, cl.name,
+    CASE WHEN f.split_mode <> 'HALF' THEN f.amount WHEN s.side = 'HOME' THEN round(f.amount / 2, 2)
+      ELSE f.amount - round(f.amount / 2, 2) END,
+    league_kind_label('MATCH_REFEREE') || ' · ' || m.label, m.day, m.sid, m.tid
   FROM m CROSS JOIN sides s
-  CROSS JOIN (VALUES ('MATCH_REFEREE'), ('MATCH_COURT')) AS k (kind)
   JOIN clubs cl ON cl.id = s.club
-  LEFT JOIN fee f ON f.kind = k.kind
+  LEFT JOIN fee f ON f.kind = 'MATCH_REFEREE'
+  WHERE m.status = 'PLAYED' AND NOT m.walkover
+  UNION ALL
+  SELECT 'MATCH_COURT', 'match:' || m.id, s.club, cl.name,
+    CASE WHEN m.court_split = 'EACH' THEN m.court_cost WHEN s.side = 'HOME' THEN round(m.court_cost / 2, 2)
+      ELSE m.court_cost - round(m.court_cost / 2, 2) END,
+    league_kind_label('MATCH_COURT') || ' · ' || m.label, m.day, m.sid, m.tid
+  FROM m CROSS JOIN sides s
+  JOIN clubs cl ON cl.id = s.club
   WHERE m.status = 'PLAYED' AND NOT m.walkover
   UNION ALL
   SELECT 'WALKOVER', 'match:' || m.id, s.club, cl.name, f.amount,
@@ -232,9 +268,8 @@ DECLARE
   v_expected jsonb;
   r record;
 BEGIN
-  IF p_match IS NULL
-     OR (NOT EXISTS (SELECT 1 FROM league_fees WHERE enabled)
-         AND NOT EXISTS (SELECT 1 FROM league_charges WHERE match_id = p_match)) THEN
+  -- Sin early exit por tarifas: el uso de cancha se cobra aunque no haya ninguna tarifa guardada
+  IF p_match IS NULL THEN
     RETURN;
   END IF;
   SELECT coalesce(jsonb_agg(to_jsonb(e)), '[]'::jsonb) INTO v_expected FROM league_match_expected(p_match) e;
@@ -275,7 +310,7 @@ END
 $$;
 DROP TRIGGER IF EXISTS league_matches_sync ON matches;
 CREATE TRIGGER league_matches_sync
-  AFTER INSERT OR UPDATE OF status, walkover, no_show, match_date, home_club_id, away_club_id, round_label
+  AFTER INSERT OR UPDATE OF status, walkover, no_show, match_date, home_club_id, away_club_id, round_label, court_id
   ON matches FOR EACH ROW EXECUTE FUNCTION league_trg_matches();
 DROP TRIGGER IF EXISTS league_matches_delete ON matches;
 CREATE TRIGGER league_matches_delete BEFORE DELETE ON matches FOR EACH ROW EXECUTE FUNCTION league_trg_matches();
@@ -296,7 +331,7 @@ DROP TRIGGER IF EXISTS league_match_cards_sync ON match_cards;
 CREATE TRIGGER league_match_cards_sync
   AFTER INSERT OR UPDATE OR DELETE ON match_cards FOR EACH ROW EXECUTE FUNCTION league_trg_match_cards();
 
--- ---------- Inscripción a torneos: inscripción, fianza y registro del club ----------
+-- ---------- Inscripción a torneos ----------
 
 CREATE OR REPLACE FUNCTION public.league_sync_enrollment(p_tournament text, p_club text)
 RETURNS void LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
@@ -304,9 +339,8 @@ DECLARE
   v_enrolled boolean;
   v_season text;
   v_tname text;
-  v_sname text;
   v_cname text;
-  v_fee numeric;
+  v_day date;
   r record;
 BEGIN
   IF p_tournament IS NULL OR p_club IS NULL
@@ -314,9 +348,11 @@ BEGIN
          AND NOT EXISTS (SELECT 1 FROM league_charges WHERE source_key = 'tournament:' || p_tournament AND club_id = p_club)) THEN
     RETURN;
   END IF;
-  v_enrolled := EXISTS (SELECT 1 FROM tournament_clubs WHERE tournament_id = p_tournament AND club_id = p_club);
-  SELECT t.season_id, t.name, s.name INTO v_season, v_tname, v_sname
-  FROM tournaments t LEFT JOIN seasons s ON s.id = t.season_id WHERE t.id = p_tournament;
+  -- La fecha del cargo es la de la inscripción (también al registrar inscripciones que ya existían)
+  SELECT true, coalesce(created_at::date, CURRENT_DATE) INTO v_enrolled, v_day
+  FROM tournament_clubs WHERE tournament_id = p_tournament AND club_id = p_club;
+  v_enrolled := coalesce(v_enrolled, false);
+  SELECT t.season_id, t.name INTO v_season, v_tname FROM tournaments t WHERE t.id = p_tournament;
   SELECT name INTO v_cname FROM clubs WHERE id = p_club;
 
   IF NOT v_enrolled OR v_season IS NULL THEN
@@ -330,17 +366,11 @@ BEGIN
 
   FOR r IN
     SELECT f.kind::text AS kind, f.amount FROM league_fees f
-    WHERE f.season_id = v_season AND f.enabled AND f.amount > 0 AND f.kind IN ('TOURNAMENT_ENROLLMENT', 'DEPOSIT')
+    WHERE f.season_id = v_season AND f.enabled AND f.amount > 0 AND f.kind = 'TOURNAMENT_ENROLLMENT'
   LOOP
     PERFORM league_charge_put(r.kind, 'tournament:' || p_tournament, p_club, v_cname, '', r.amount,
-      league_kind_label(r.kind) || ' · ' || v_tname, CURRENT_DATE, v_season, p_tournament, NULL, false);
+      league_kind_label(r.kind) || ' · ' || v_tname, v_day, v_season, p_tournament, NULL, false);
   END LOOP;
-
-  v_fee := league_registration_fee(v_season);
-  IF v_fee IS NOT NULL THEN
-    PERFORM league_charge_put('CLUB_REGISTRATION', 'season:' || v_season, p_club, v_cname, '', v_fee,
-      league_kind_label('CLUB_REGISTRATION') || ' · ' || coalesce(v_sname, ''), CURRENT_DATE, v_season, NULL, NULL, false);
-  END IF;
 END
 $$;
 REVOKE ALL ON FUNCTION public.league_sync_enrollment(text, text) FROM PUBLIC, anon, authenticated;
@@ -360,20 +390,76 @@ DROP TRIGGER IF EXISTS league_tournament_clubs_sync ON tournament_clubs;
 CREATE TRIGGER league_tournament_clubs_sync
   AFTER INSERT OR DELETE ON tournament_clubs FOR EACH ROW EXECUTE FUNCTION league_trg_tournament_clubs();
 
+-- ---------- Registro del club en la plataforma: un solo pago ----------
+
+-- Se cobra una vez por club (source_key 'club:<id>'), al darse de alta, con la tarifa de la temporada de
+-- su fecha de alta. No depende de los torneos. Un club borrado (deleted_at) ya no genera el cobro.
+CREATE OR REPLACE FUNCTION public.league_sync_club_registration(p_club text)
+RETURNS void LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  c record;
+  v_season text;
+  v_fee numeric;
+BEGIN
+  IF p_club IS NULL THEN
+    RETURN;
+  END IF;
+  SELECT id, name, created_at::date AS day INTO c FROM clubs WHERE id = p_club AND deleted_at IS NULL;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+  v_season := league_season_on(c.day);
+  v_fee := league_registration_fee(v_season);
+  IF v_fee IS NULL THEN
+    RETURN;
+  END IF;
+  PERFORM league_charge_put('CLUB_REGISTRATION', 'club:' || c.id, c.id, c.name, '', v_fee,
+    'Registro del club en la plataforma', c.day, v_season, NULL, NULL, false);
+END
+$$;
+REVOKE ALL ON FUNCTION public.league_sync_club_registration(text) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.league_trg_clubs_insert()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM league_sync_club_registration(NEW.id);
+  RETURN NULL;
+END
+$$;
+DROP TRIGGER IF EXISTS league_clubs_insert ON clubs;
+CREATE TRIGGER league_clubs_insert AFTER INSERT ON clubs FOR EACH ROW EXECUTE FUNCTION league_trg_clubs_insert();
+
 -- ---------- Renta de canchas (reservas manuales) ----------
 
-CREATE OR REPLACE FUNCTION public.league_sync_hold(p_hold text)
+-- Id del abono automático de una renta. md5 para que quepa en varchar(128) aunque el id de la renta mida 128.
+CREATE OR REPLACE FUNCTION public.league_hold_payment_id(p_hold text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT 'auto-hold:' || md5(p_hold)
+$$;
+
+-- Cada renta manual es un cobro ya pagado: el cargo lleva un abono automático por lo que falte de pagar.
+-- El precio se fija al apartar con el costo por hora de la cancha; solo se vuelve a calcular si cambian la
+-- cancha, la fecha o el horario de la renta (p_reprice), nunca al resincronizar. Si la renta se cancela o
+-- cambia de club, el cargo anterior y su abono se anulan. Si la tarifa de renta está apagada no se crean
+-- cobros nuevos (los existentes se quedan).
+DROP FUNCTION IF EXISTS public.league_sync_hold(text);
+CREATE OR REPLACE FUNCTION public.league_sync_hold(p_hold text, p_reprice boolean)
 RETURNS void LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   h record;
+  v_exists boolean;
+  v_club text;
   v_season text;
   v_minutes int;
-  v_amount numeric;
+  v_amount numeric := 0;
   v_payer text;
+  v_concept text;
+  v_charge league_charges;
+  v_other numeric;
+  v_key text := 'hold:' || p_hold;
+  v_pay text := league_hold_payment_id(p_hold);
 BEGIN
-  IF p_hold IS NULL
-     OR (NOT EXISTS (SELECT 1 FROM league_fees WHERE enabled AND kind = 'COURT_RENTAL')
-         AND NOT EXISTS (SELECT 1 FROM league_charges WHERE source_key = 'hold:' || p_hold)) THEN
+  IF p_hold IS NULL THEN
     RETURN;
   END IF;
   SELECT ch.*, co.name AS court_name, co.hourly_rate, cl.name AS club_name INTO h
@@ -381,47 +467,92 @@ BEGIN
   JOIN courts co ON co.id = ch.court_id
   LEFT JOIN clubs cl ON cl.id = ch.club_id
   WHERE ch.id = p_hold AND ch.source = 'MANUAL';
+  v_exists := FOUND;
 
-  IF NOT FOUND THEN
-    UPDATE league_charges c
-    SET status = 'CANCELADO', auto_cancelled = true, updated_at = now()
-    WHERE c.source_key = 'hold:' || p_hold AND c.kind = 'COURT_RENTAL' AND c.status = 'PENDIENTE'
-      AND NOT EXISTS (SELECT 1 FROM league_payments lp WHERE lp.charge_id = c.id);
-    RETURN;
+  IF v_exists THEN
+    v_club := h.club_id;
+    v_season := league_season_on(h.hold_date);
+    v_minutes := (split_part(h.end_time, ':', 1)::int * 60 + split_part(h.end_time, ':', 2)::int)
+      - (split_part(h.start_time, ':', 1)::int * 60 + split_part(h.start_time, ':', 2)::int);
+    IF league_fee_on(v_season, 'COURT_RENTAL') THEN
+      v_amount := round(coalesce(h.hourly_rate, 0) * v_minutes / 60.0, 2);
+    END IF;
   END IF;
 
-  -- Cambió el club: el cargo del anterior queda cancelado si no tenía abonos
+  -- Renta cancelada o con otro club: se quita el abono automático y el cargo queda anulado
+  DELETE FROM league_payments lp
+  USING league_charges c
+  WHERE lp.id = v_pay AND lp.charge_id = c.id
+    AND (NOT v_exists OR c.club_id IS DISTINCT FROM v_club);
   UPDATE league_charges c
   SET status = 'CANCELADO', auto_cancelled = true, updated_at = now()
-  WHERE c.source_key = 'hold:' || p_hold AND c.kind = 'COURT_RENTAL' AND c.status = 'PENDIENTE'
-    AND c.club_id IS DISTINCT FROM h.club_id
+  WHERE c.source_key = v_key AND c.kind = 'COURT_RENTAL' AND c.status NOT IN ('CANCELADO', 'CONDONADO')
+    AND (NOT v_exists OR c.club_id IS DISTINCT FROM v_club)
     AND NOT EXISTS (SELECT 1 FROM league_payments lp WHERE lp.charge_id = c.id);
 
-  v_season := league_season_on(h.hold_date);
-  IF v_season IS NULL OR NOT EXISTS (
-    SELECT 1 FROM league_fees WHERE season_id = v_season AND kind = 'COURT_RENTAL' AND enabled) THEN
+  IF NOT v_exists OR v_amount <= 0 THEN
     RETURN;
   END IF;
-  v_minutes := (split_part(h.end_time, ':', 1)::int * 60 + split_part(h.end_time, ':', 2)::int)
-    - (split_part(h.start_time, ':', 1)::int * 60 + split_part(h.start_time, ':', 2)::int);
-  v_amount := round(coalesce(h.hourly_rate, 0) * v_minutes / 60.0, 2);
+
   v_payer := coalesce(h.club_name, nullif(split_part(h.note, ' · ', 1), ''), 'Externo');
-  PERFORM league_charge_put('COURT_RENTAL', 'hold:' || p_hold, h.club_id, v_payer,
-    CASE WHEN h.club_id IS NULL THEN h.guest_email ELSE '' END, v_amount,
-    league_kind_label('COURT_RENTAL') || ' · ' || h.court_name || ' · ' || to_char(h.hold_date, 'DD/MM/YYYY')
-      || ' ' || h.start_time || '–' || h.end_time,
-    h.hold_date, v_season, NULL, NULL, true);
+  v_concept := league_kind_label('COURT_RENTAL') || ' · ' || h.court_name || ' · ' || to_char(h.hold_date, 'DD/MM/YYYY')
+    || ' ' || h.start_time || '–' || h.end_time;
+  SELECT * INTO v_charge FROM league_charges
+  WHERE kind = 'COURT_RENTAL' AND source_key = v_key AND coalesce(club_id, '') = coalesce(v_club, '')
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    INSERT INTO league_charges (id, kind, club_id, payer_name, payer_contact, concept, amount, charged_on,
+      season_id, source_key)
+    VALUES (gen_random_uuid()::text, 'COURT_RENTAL', v_club, left(v_payer, 160),
+      CASE WHEN v_club IS NULL THEN left(h.guest_email, 160) ELSE '' END, left(v_concept, 160), v_amount,
+      least(h.hold_date, CURRENT_DATE), v_season, v_key)
+    RETURNING * INTO v_charge;
+  ELSIF (v_charge.status = 'CANCELADO' AND NOT v_charge.auto_cancelled) OR v_charge.status = 'CONDONADO' THEN
+    -- El administrador la canceló o la condonó a mano: no se toca
+    RETURN;
+  ELSE
+    UPDATE league_charges
+    SET amount = CASE WHEN p_reprice OR status = 'CANCELADO' THEN v_amount ELSE amount END,
+        concept = CASE WHEN p_reprice OR status = 'CANCELADO' THEN left(v_concept, 160) ELSE concept END,
+        payer_name = left(v_payer, 160),
+        payer_contact = CASE WHEN v_club IS NULL THEN left(h.guest_email, 160) ELSE '' END,
+        status = CASE WHEN status = 'CANCELADO' THEN 'PENDIENTE' ELSE status END,
+        auto_cancelled = false, updated_at = now()
+    WHERE id = v_charge.id
+    RETURNING * INTO v_charge;
+  END IF;
+
+  -- El abono automático cubre lo que falte después de otros abonos (cargos de la primera versión que se
+  -- pagaron a mano); el de la primera versión, con id 'auto-hold:' || id, se reemplaza por el nuevo.
+  DELETE FROM league_payments WHERE id = 'auto-hold:' || p_hold AND id <> v_pay;
+  SELECT coalesce(sum(amount), 0) INTO v_other FROM league_payments WHERE charge_id = v_charge.id AND id <> v_pay;
+  IF v_charge.amount > v_other THEN
+    INSERT INTO league_payments (id, charge_id, amount, paid_on, method, note)
+    VALUES (v_pay, v_charge.id, v_charge.amount - v_other, least(h.hold_date, CURRENT_DATE), 'OTRO', 'Pagada al apartar')
+    ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount, charge_id = EXCLUDED.charge_id;
+  ELSE
+    DELETE FROM league_payments WHERE id = v_pay;
+  END IF;
+  PERFORM league_charge_refresh(v_charge.id);
 END
 $$;
-REVOKE ALL ON FUNCTION public.league_sync_hold(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.league_sync_hold(text, boolean) FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.league_trg_court_holds()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    PERFORM league_sync_hold(OLD.id);
+    -- Una renta que ya pasó se jugó y se cobró: si se borra (p. ej. al borrar la cancha) queda en las finanzas
+    IF OLD.hold_date < CURRENT_DATE THEN
+      RETURN NULL;
+    END IF;
+    PERFORM league_sync_hold(OLD.id, false);
+  ELSIF TG_OP = 'INSERT' THEN
+    PERFORM league_sync_hold(NEW.id, true);
   ELSE
-    PERFORM league_sync_hold(NEW.id);
+    PERFORM league_sync_hold(NEW.id,
+      (OLD.court_id, OLD.hold_date, OLD.start_time, OLD.end_time) IS DISTINCT FROM
+      (NEW.court_id, NEW.hold_date, NEW.start_time, NEW.end_time));
   END IF;
   RETURN NULL;
 END
@@ -438,9 +569,7 @@ DECLARE
   a record;
   v_season text;
 BEGIN
-  IF p_ad IS NULL
-     OR (NOT EXISTS (SELECT 1 FROM league_fees WHERE enabled AND kind = 'AD')
-         AND NOT EXISTS (SELECT 1 FROM league_charges WHERE source_key = 'ad:' || p_ad)) THEN
+  IF p_ad IS NULL THEN
     RETURN;
   END IF;
   SELECT * INTO a FROM ads WHERE id = p_ad AND price > 0;
@@ -452,7 +581,8 @@ BEGIN
     RETURN;
   END IF;
   v_season := league_season_on(a.starts_on);
-  IF v_season IS NULL OR NOT EXISTS (SELECT 1 FROM league_fees WHERE season_id = v_season AND kind = 'AD' AND enabled) THEN
+  -- Un anuncio con precio se cobra solo, salvo que la tarifa de publicidad esté apagada
+  IF NOT league_fee_on(v_season, 'AD') THEN
     RETURN;
   END IF;
   PERFORM league_charge_put('AD', 'ad:' || p_ad, NULL, coalesce(nullif(a.advertiser_name, ''), a.brand),
@@ -479,6 +609,66 @@ DROP TRIGGER IF EXISTS league_ads_sync ON ads;
 CREATE TRIGGER league_ads_sync
   AFTER INSERT OR UPDATE OF price, advertiser_name, advertiser_contact, brand, starts_on, ends_on OR DELETE
   ON ads FOR EACH ROW EXECUTE FUNCTION league_trg_ads();
+
+-- ---------- Club borrado del todo ----------
+
+-- La app solo oculta clubes (deleted_at), pero un borrado real (p. ej. la limpieza de la demo) deja sus cobros
+-- sin club (ON DELETE SET NULL). Antes se les quita la clave automática: quedan como historial y no chocan en
+-- league_charges_source_idx con los cobros del rival del mismo partido, que también quedarían sin club.
+CREATE OR REPLACE FUNCTION public.league_trg_clubs_delete()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  UPDATE league_charges SET source_key = NULL, updated_at = now() WHERE club_id = OLD.id AND source_key IS NOT NULL;
+  RETURN OLD;
+END
+$$;
+DROP TRIGGER IF EXISTS league_clubs_delete ON clubs;
+CREATE TRIGGER league_clubs_delete BEFORE DELETE ON clubs FOR EACH ROW EXECUTE FUNCTION league_trg_clubs_delete();
+
+-- ---------- Lo que ya pasó ----------
+
+-- Registra los cobros que falten de una temporada: registro de los clubes dados de alta en ella, inscripciones
+-- y partidos de sus torneos, y rentas y anuncios cuya fecha cae en ella. No duplica (league_charge_put / source_key). Devuelve cuántos cargos
+-- activos hay de más al terminar.
+CREATE OR REPLACE FUNCTION public.league_backfill_season(p_season text)
+RETURNS int LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_before int;
+  r record;
+BEGIN
+  IF p_season IS NULL THEN
+    RETURN 0;
+  END IF;
+  SELECT count(*) INTO v_before FROM league_charges WHERE status <> 'CANCELADO';
+  FOR r IN
+    SELECT id FROM clubs WHERE deleted_at IS NULL AND league_season_on(created_at::date) = p_season ORDER BY created_at, id
+  LOOP
+    PERFORM league_sync_club_registration(r.id);
+  END LOOP;
+  FOR r IN
+    SELECT tc.tournament_id, tc.club_id FROM tournament_clubs tc
+    JOIN tournaments t ON t.id = tc.tournament_id
+    WHERE t.season_id = p_season
+    ORDER BY tc.created_at, tc.tournament_id, tc.club_id
+  LOOP
+    PERFORM league_sync_enrollment(r.tournament_id, r.club_id);
+  END LOOP;
+  FOR r IN
+    SELECT m.id FROM matches m JOIN tournaments t ON t.id = m.tournament_id
+    WHERE t.season_id = p_season AND (m.status = 'PLAYED' OR m.no_show IS NOT NULL)
+  LOOP
+    PERFORM league_sync_match(r.id);
+  END LOOP;
+  FOR r IN SELECT id FROM court_holds WHERE source = 'MANUAL' AND league_season_on(hold_date) = p_season LOOP
+    PERFORM league_sync_hold(r.id, false);
+  END LOOP;
+  FOR r IN SELECT id FROM ads WHERE price > 0 AND league_season_on(starts_on) = p_season LOOP
+    PERFORM league_sync_ad(r.id);
+  END LOOP;
+  RETURN (SELECT count(*) FROM league_charges WHERE status <> 'CANCELADO') - v_before;
+END
+$$;
+REVOKE ALL ON FUNCTION public.league_backfill_season(text) FROM PUBLIC, anon, authenticated;
 
 -- ---------- Lecturas (superadmin) ----------
 
@@ -769,6 +959,10 @@ BEGIN
       SELECT coalesce(jsonb_agg(jsonb_build_object('category', category, 'amount', total) ORDER BY total DESC, category), '[]'::jsonb)
       FROM (SELECT category, sum(amount) AS total FROM league_sum_expenses GROUP BY category) e),
     'series', v_series,
+    -- Cada registro del periodo (los más recientes primero), para verlo y marcarlo como pagado ahí mismo
+    'charges', (
+      SELECT coalesce(jsonb_agg(league_charge_json(c.id) ORDER BY c.charged_on DESC, c.id), '[]'::jsonb)
+      FROM (SELECT id, charged_on FROM league_sum_charges ORDER BY charged_on DESC, id LIMIT 300) c),
     'debtors', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', d.club_id, 'name', cl.name),
         'pending', d.pending, 'charges', d.n) ORDER BY d.pending DESC, cl.name), '[]'::jsonb)
@@ -785,30 +979,33 @@ CALL api_expose('admin_finance_summary', 'USER');
 
 -- ---------- Mutaciones (superadmin) ----------
 
--- Tarifa de un tipo de cobro en una temporada. Los campos que no aplican al tipo se normalizan.
+-- Tarifa de un tipo de cobro en una temporada. Los campos que no aplican al tipo se normalizan. Al guardar se
+-- registran los cobros de lo que ya pasó en esa temporada (created = cuántos).
 CREATE OR REPLACE FUNCTION public.save_league_fee(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_kind text := p ->> 'kind';
-  v_period text := coalesce(p ->> 'period', 'ONCE');
-  v_split text := coalesce(p ->> 'splitMode', 'EACH');
+  -- El uso de cancha se reparte a medias si no se dice otra cosa
+  v_split text := coalesce(p ->> 'splitMode', CASE WHEN p ->> 'kind' = 'MATCH_COURT' THEN 'HALF' ELSE 'EACH' END);
   v_saved text;
+  v_season text;
 BEGIN
   IF NOT is_platform_admin()
      OR NOT api_required(p, ARRAY['seasonId', 'kind', 'enabled', 'amount'])
-     OR NOT (v_kind = ANY (enum_range(NULL::league_fee_kind)::text[]))
+     OR NOT (v_kind = ANY (league_fee_kinds()))
      OR jsonb_typeof(p -> 'enabled') <> 'boolean'
      OR (p ? 'includesRegistration' AND jsonb_typeof(p -> 'includesRegistration') NOT IN ('boolean', 'null'))
      OR (p ->> 'amount') !~ '^[0-9]{1,8}(\.[0-9]{1,2})?$'
-     OR v_period NOT IN ('ONCE', 'MONTH', 'SEASON')
      OR v_split NOT IN ('EACH', 'HALF') THEN
-    RETURN jsonb_build_object('fee', NULL);
+    RETURN jsonb_build_object('fee', NULL, 'created', NULL);
   END IF;
   INSERT INTO league_fees (season_id, kind, enabled, amount, period, split_mode, includes_registration, updated_at)
-  SELECT s.id, v_kind::league_fee_kind, (p ->> 'enabled')::boolean, (p ->> 'amount')::numeric,
-    CASE WHEN v_kind = 'CLUB_PAGE' THEN CASE WHEN v_period = 'MONTH' THEN 'MONTH' ELSE 'SEASON' END ELSE 'ONCE' END,
+  SELECT s.id, v_kind::league_fee_kind, (p ->> 'enabled')::boolean,
+    -- Uso de cancha, renta y publicidad no llevan precio: sale de la cancha o del anuncio
+    CASE WHEN v_kind IN ('MATCH_COURT', 'COURT_RENTAL', 'AD') THEN 0 ELSE (p ->> 'amount')::numeric END,
+    'ONCE',
     CASE WHEN v_kind IN ('MATCH_REFEREE', 'MATCH_COURT') THEN v_split ELSE 'EACH' END,
-    v_kind IN ('SEASON_ENROLLMENT', 'TOURNAMENT_ENROLLMENT') AND coalesce((p ->> 'includesRegistration')::boolean, false),
+    false,
     now()
   FROM seasons s WHERE s.id = p ->> 'seasonId'
   ON CONFLICT (season_id, kind) DO UPDATE SET
@@ -818,13 +1015,17 @@ BEGIN
     split_mode = EXCLUDED.split_mode,
     includes_registration = EXCLUDED.includes_registration,
     updated_at = now()
-  RETURNING kind::text INTO v_saved;
-  RETURN jsonb_build_object('fee', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('kind', v_saved) END);
+  RETURNING kind::text, season_id INTO v_saved, v_season;
+  IF v_saved IS NULL THEN
+    RETURN jsonb_build_object('fee', NULL, 'created', NULL);
+  END IF;
+  RETURN jsonb_build_object('fee', jsonb_build_object('kind', v_saved), 'created', league_backfill_season(v_season));
 END
 $$;
 CALL api_expose('save_league_fee', 'USER');
 
--- Cargo manual a un club (clubId) o a un externo (payerName y, opcional, payerContact)
+-- Cargo manual («Otro cobro», kind = OTHER) a un club (clubId) o a un externo (payerName y, opcional,
+-- payerContact). Los demás tipos se registran solos.
 CREATE OR REPLACE FUNCTION public.create_league_charge(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -844,7 +1045,7 @@ BEGIN
   IF NOT is_platform_admin()
      OR NOT api_required(p, ARRAY['id', 'kind', 'concept', 'amount', 'chargedOn'])
      OR char_length(p ->> 'id') > 128
-     OR NOT (v_kind = ANY (enum_range(NULL::league_fee_kind)::text[]))
+     OR v_kind <> 'OTHER'
      OR char_length(v_concept) NOT BETWEEN 3 AND 30
      OR v_concept !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ][A-Za-z0-9À-ÖØ-öø-ÿ,]*( [A-Za-z0-9À-ÖØ-öø-ÿ,]+)*$'
      OR v_concept ~ ',,'
@@ -935,7 +1136,42 @@ END
 $$;
 CALL api_expose('set_league_charge_status', 'USER');
 
--- Abono a un cargo pendiente o parcial; no puede pasar del saldo
+-- «Cubierto / no cubierto»: paid = true abona el saldo con fecha de hoy y deja el cargo PAGADO; paid = false
+-- borra sus abonos y lo deja PENDIENTE. Las rentas se pagan al apartar y no se desmarcan.
+CREATE OR REPLACE FUNCTION public.set_league_charge_paid(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid text := require_uid();
+  v_charge record;
+BEGIN
+  IF NOT is_platform_admin() OR NOT api_required(p, ARRAY['id', 'paid']) OR jsonb_typeof(p -> 'paid') <> 'boolean' THEN
+    RETURN jsonb_build_object('charge', NULL);
+  END IF;
+  PERFORM 1 FROM league_charges WHERE id = p ->> 'id' FOR UPDATE;
+  SELECT c.id, c.kind::text AS kind, c.source_key, c.status::text AS status, c.amount, cp.paid INTO v_charge
+  FROM league_charges c JOIN league_charge_paid cp ON cp.id = c.id
+  WHERE c.id = p ->> 'id';
+  IF NOT FOUND OR v_charge.status NOT IN ('PENDIENTE', 'PARCIAL', 'PAGADO')
+     OR (v_charge.kind = 'COURT_RENTAL' AND v_charge.source_key IS NOT NULL) THEN
+    RETURN jsonb_build_object('charge', NULL);
+  END IF;
+  IF (p ->> 'paid')::boolean THEN
+    IF v_charge.amount > v_charge.paid THEN
+      INSERT INTO league_payments (id, charge_id, amount, paid_on, method, note, created_by)
+      VALUES (gen_random_uuid()::text, v_charge.id, v_charge.amount - v_charge.paid, CURRENT_DATE, 'OTRO',
+        'Marcado como pagado', v_uid);
+    END IF;
+  ELSE
+    DELETE FROM league_payments WHERE charge_id = v_charge.id;
+  END IF;
+  PERFORM league_charge_refresh(v_charge.id);
+  RETURN jsonb_build_object('charge',
+    (SELECT jsonb_build_object('id', id, 'status', to_jsonb(status)) FROM league_charges WHERE id = v_charge.id));
+END
+$$;
+CALL api_expose('set_league_charge_paid', 'USER');
+
+-- Abono a un cargo pendiente o parcial; no puede pasar del saldo (las rentas se pagan solas al apartar)
 CREATE OR REPLACE FUNCTION public.add_league_payment(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -949,6 +1185,7 @@ BEGIN
   IF NOT is_platform_admin()
      OR NOT api_required(p, ARRAY['id', 'chargeId', 'amount', 'paidOn', 'method'])
      OR char_length(p ->> 'id') > 128
+     OR (p ->> 'id') LIKE 'auto-hold:%'
      OR (p ->> 'method') NOT IN ('EFECTIVO', 'TRANSFERENCIA', 'OTRO')
      OR (p ->> 'amount') !~ '^[0-9]{1,8}(\.[0-9]{1,2})?$'
      OR league_date(p ->> 'paidOn') IS NULL
@@ -963,6 +1200,7 @@ BEGIN
   FROM league_charges c JOIN league_charge_paid cp ON cp.id = c.id
   WHERE c.id = p ->> 'chargeId';
   IF NOT FOUND OR v_charge.status NOT IN ('PENDIENTE', 'PARCIAL')
+     OR EXISTS (SELECT 1 FROM league_charges WHERE id = v_charge.id AND kind = 'COURT_RENTAL' AND source_key IS NOT NULL)
      OR v_amount <= 0 OR v_amount > v_charge.amount - v_charge.paid
      OR v_paid_on NOT BETWEEN DATE '2000-01-01' AND CURRENT_DATE + 1 THEN
     RETURN jsonb_build_object('payment', NULL, 'charge', NULL);
@@ -987,7 +1225,8 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_tem
 DECLARE
   v_charge text;
 BEGIN
-  IF NOT is_platform_admin() OR p ->> 'id' IS NULL THEN
+  -- El abono automático de una renta solo se va si se cancela la renta
+  IF NOT is_platform_admin() OR p ->> 'id' IS NULL OR p ->> 'id' LIKE 'auto-hold:%' THEN
     RETURN jsonb_build_object('deleted', NULL);
   END IF;
   DELETE FROM league_payments WHERE id = p ->> 'id' RETURNING charge_id INTO v_charge;
@@ -1075,75 +1314,9 @@ END
 $$;
 CALL api_expose('delete_league_expense', 'USER');
 
--- Cobros de temporada a todos los clubes activos: inscripción a la temporada, registro del club (si la
--- inscripción no lo incluye) y página del club si se cobra por temporada. Repetirlo no duplica.
-CREATE OR REPLACE FUNCTION public.generate_season_charges(p jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE
-  v_season record;
-  v_club record;
-  v_fee record;
-  v_registration numeric;
-  v_created int := 0;
-BEGIN
-  IF NOT is_platform_admin() THEN
-    RETURN jsonb_build_object('created', NULL);
-  END IF;
-  SELECT id, name INTO v_season FROM seasons WHERE id = p ->> 'seasonId';
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('created', NULL);
-  END IF;
-  v_registration := league_registration_fee(v_season.id);
-  FOR v_club IN SELECT id, name FROM clubs WHERE active AND deleted_at IS NULL ORDER BY name LOOP
-    FOR v_fee IN
-      SELECT f.kind::text AS kind, f.amount FROM league_fees f
-      WHERE f.season_id = v_season.id AND f.enabled AND f.amount > 0
-        AND (f.kind = 'SEASON_ENROLLMENT' OR (f.kind = 'CLUB_PAGE' AND f.period = 'SEASON'))
-      UNION ALL
-      SELECT 'CLUB_REGISTRATION', v_registration WHERE v_registration IS NOT NULL
-    LOOP
-      IF league_charge_put(v_fee.kind, 'season:' || v_season.id, v_club.id, v_club.name, '', v_fee.amount,
-           league_kind_label(v_fee.kind) || ' · ' || v_season.name, CURRENT_DATE, v_season.id, NULL, NULL, false) THEN
-        v_created := v_created + 1;
-      END IF;
-    END LOOP;
-  END LOOP;
-  RETURN jsonb_build_object('created', v_created);
-END
-$$;
-CALL api_expose('generate_season_charges', 'USER');
-
--- Mensualidad de la página del club (month = 'YYYY-MM') a todos los clubes activos, si la temporada de ese
--- mes cobra la página por mes. configured = false si no está activa así.
-CREATE OR REPLACE FUNCTION public.generate_monthly_page_charges(p jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE
-  v_day date;
-  v_season text;
-  v_amount numeric;
-  v_club record;
-  v_created int := 0;
-BEGIN
-  IF NOT is_platform_admin() OR coalesce(p ->> 'month', '') !~ '^(19|20)[0-9]{2}-(0[1-9]|1[0-2])$' THEN
-    RETURN jsonb_build_object('created', NULL, 'configured', NULL);
-  END IF;
-  v_day := ((p ->> 'month') || '-01')::date;
-  v_season := league_season_on(v_day);
-  SELECT amount INTO v_amount FROM league_fees
-  WHERE season_id = v_season AND kind = 'CLUB_PAGE' AND enabled AND period = 'MONTH' AND amount > 0;
-  IF v_amount IS NULL THEN
-    RETURN jsonb_build_object('created', 0, 'configured', false);
-  END IF;
-  FOR v_club IN SELECT id, name FROM clubs WHERE active AND deleted_at IS NULL ORDER BY name LOOP
-    IF league_charge_put('CLUB_PAGE', 'month:' || (p ->> 'month'), v_club.id, v_club.name, '', v_amount,
-         league_kind_label('CLUB_PAGE') || ' · ' || league_month_label(v_day), v_day, v_season, NULL, NULL, false) THEN
-      v_created := v_created + 1;
-    END IF;
-  END LOOP;
-  RETURN jsonb_build_object('created', v_created, 'configured', true);
-END
-$$;
-CALL api_expose('generate_monthly_page_charges', 'USER');
+-- Los cobros de temporada y la mensualidad de la página ya no existen: todo se registra solo
+DROP FUNCTION IF EXISTS public.generate_season_charges(jsonb);
+DROP FUNCTION IF EXISTS public.generate_monthly_page_charges(jsonb);
 
 -- ---------- Club: su cuenta con la liga (presidente o tesorero) ----------
 
@@ -1176,5 +1349,32 @@ BEGIN
 END
 $$;
 CALL api_expose('club_league_account', 'USER');
+
+-- Las multas por tarjeta de la primera versión usaban el id del jugador en su clave; ahora va el nombre
+-- guardado en la tarjeta. Se reescriben antes del backfill para que no se dupliquen (idempotente).
+UPDATE league_charges c
+SET source_key = 'match:' || c.match_id || ':' || x.who || ':' || split_part(c.source_key, ':', 4), updated_at = now()
+FROM (
+  SELECT DISTINCT match_id, player_id, player_name AS who FROM match_cards
+  WHERE player_id IS NOT NULL AND player_name <> ''
+) x
+WHERE c.kind IN ('CARD_YELLOW', 'CARD_RED') AND c.match_id = x.match_id
+  AND split_part(c.source_key, ':', 3) = x.player_id
+  AND NOT EXISTS (
+    SELECT 1 FROM league_charges d
+    WHERE d.kind = c.kind AND coalesce(d.club_id, '') = coalesce(c.club_id, '')
+      AND d.source_key = 'match:' || c.match_id || ':' || x.who || ':' || split_part(c.source_key, ':', 4));
+
+-- Registra lo que ya existía antes de estas reglas (rentas, uso de cancha y lo que tenga tarifa activa).
+-- Es idempotente: al volver a aplicar el archivo no duplica nada.
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN SELECT id FROM seasons ORDER BY start_date NULLS LAST, id LOOP
+    PERFORM league_backfill_season(r.id);
+  END LOOP;
+END
+$$;
 
 RESET ROLE;

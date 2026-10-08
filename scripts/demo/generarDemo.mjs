@@ -664,6 +664,9 @@ const OPEN_WINDOWS = [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ id: uuid(`open-wi
 
 const like = (column) => `${column} LIKE '${P}%'`;
 const cleanup = [
+  // Los cobros de la liga (1015_fn_finance.sql) que nacieron de los datos dummy: se borran antes que su origen
+  `-- Finanzas de la liga`,
+  `DELETE FROM league_charges WHERE ${like("club_id")} OR ${like("match_id")} OR ${like("tournament_id")} OR source_key LIKE 'hold:${P}%' OR source_key LIKE 'ad:${P}%';`,
   `-- Partidos y canchas`,
   `DELETE FROM court_holds WHERE ${like("id")} OR ${like("match_id")} OR ${like("court_id")};`,
   `UPDATE matches SET court_id = NULL WHERE ${like("court_id")} AND NOT ${like("id")};`,
@@ -691,6 +694,7 @@ const cleanup = [
   `DELETE FROM team_applications WHERE ${like("id")};`,
   `UPDATE team_applications SET club_id = NULL WHERE ${like("club_id")};`,
   `DELETE FROM players WHERE ${like("club_id")};`,
+  `DELETE FROM league_charges WHERE ${like("club_id")};`,
   `DELETE FROM clubs WHERE ${like("id")};`,
   `-- Plataforma`,
   `DELETE FROM ad_placements WHERE ${like("ad_id")};`,

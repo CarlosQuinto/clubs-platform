@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import type { AdminFinanceSetupData, LeagueFeeKind } from "../../../infrastructure/api/types";
+import type { AdminFinanceSetupData } from "../../../infrastructure/api/types";
 import { createCharge } from "../../../domains/finances/leagueCommands";
-import { ALL_FEE_KINDS, FEE_KIND_LABEL } from "../../../domains/finances/league";
 import { isoDate } from "../../../shared/helpers";
 import {
   financeText,
@@ -16,7 +15,7 @@ import {
 import { C, FormError, FormInput, FormSelect, PrimaryButton, RADIUS, SecondaryButton, SegmentedControl } from "../../../shared/ui";
 import Field from "../Field";
 
-/** Cargo manual: a un club o a un externo (patrocinador, quien renta), con el precio de la tarifa como sugerencia. */
+/** «Otro cobro»: un cargo suelto a un club o a un externo. Los demás cobros se registran solos. */
 export default function ChargeForm({
   setup,
   seasonId,
@@ -28,17 +27,12 @@ export default function ChargeForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const feeAmount = (kind: LeagueFeeKind) => {
-    const fee = setup.fees.find((f) => f.kind === kind);
-    return fee && fee.amount > 0 ? String(fee.amount) : "";
-  };
   const [debtor, setDebtor] = useState<"club" | "external">("club");
   const [clubId, setClubId] = useState(setup.clubs.find((c) => c.active)?.id ?? "");
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
-  const [kind, setKind] = useState<LeagueFeeKind>("PROTEST");
-  const [concept, setConcept] = useState(FEE_KIND_LABEL.PROTEST);
-  const [amount, setAmount] = useState(feeAmount("PROTEST"));
+  const [concept, setConcept] = useState("");
+  const [amount, setAmount] = useState("");
   const [chargedOn, setChargedOn] = useState(() => isoDate());
   const [dueDate, setDueDate] = useState("");
   const [tournamentId, setTournamentId] = useState("");
@@ -49,13 +43,6 @@ export default function ChargeForm({
     () => setup.tournaments.filter((t) => !seasonId || t.seasonId === seasonId),
     [setup.tournaments, seasonId],
   );
-
-  const pickKind = (next: LeagueFeeKind) => {
-    // El concepto y el monto siguen al tipo mientras no se hayan tocado a mano
-    if (concept === FEE_KIND_LABEL[kind]) setConcept(FEE_KIND_LABEL[next]);
-    if (amount === feeAmount(kind)) setAmount(feeAmount(next));
-    setKind(next);
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +60,7 @@ export default function ChargeForm({
     try {
       await createCharge({
         id: crypto.randomUUID(),
-        kind,
+        kind: "OTHER",
         clubId: debtor === "club" ? clubId : null,
         payerName: debtor === "external" ? name.trim() : null,
         payerContact: debtor === "external" ? contact.trim() : null,
@@ -129,17 +116,8 @@ export default function ChargeForm({
             </Field>
           </>
         )}
-        <Field label="Tipo de cobro">
-          <FormSelect value={kind} onChange={(e) => pickKind(e.target.value as LeagueFeeKind)}>
-            {ALL_FEE_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {FEE_KIND_LABEL[k]}
-              </option>
-            ))}
-          </FormSelect>
-        </Field>
         <Field label="Concepto" count={`${concept.length}/30`}>
-          <FormInput value={concept} maxLength={30} onChange={(e) => setConcept(financeText(e.target.value))} />
+          <FormInput value={concept} maxLength={30} placeholder="Ej. Balón extraviado" onChange={(e) => setConcept(financeText(e.target.value))} />
         </Field>
         <Field label="Monto">
           <FormInput inputMode="decimal" value={amount} placeholder="0.00" onChange={(e) => setAmount(moneyText(e.target.value))} />
@@ -164,7 +142,7 @@ export default function ChargeForm({
       <FormError>{error}</FormError>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <PrimaryButton type="submit" disabled={saving}>
-          {saving ? "Guardando…" : "Crear cargo"}
+          {saving ? "Guardando…" : "Registrar cobro"}
         </PrimaryButton>
         <SecondaryButton type="button" onClick={onClose} disabled={saving}>
           Cancelar

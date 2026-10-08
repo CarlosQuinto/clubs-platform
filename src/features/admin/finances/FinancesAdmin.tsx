@@ -36,7 +36,7 @@ export default function FinancesAdmin() {
         onChange={(value) => setSection(value as Section)}
         options={[
           { value: "summary", label: "Resumen", icon: <BarChart3 size={14} /> },
-          { value: "charges", label: "Cargos", icon: <Wallet size={14} /> },
+          { value: "charges", label: "Cobros", icon: <Wallet size={14} /> },
           { value: "expenses", label: "Gastos", icon: <Receipt size={14} /> },
           { value: "fees", label: "Tarifas", icon: <Settings2 size={14} /> },
         ]}

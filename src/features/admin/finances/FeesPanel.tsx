@@ -4,7 +4,6 @@ import type {
   AdminFinanceSetupData,
   LeagueFee,
   LeagueFeeKind,
-  LeagueFeePeriod,
   LeagueSplitMode,
 } from "../../../infrastructure/api/types";
 import { loadFinanceSetup, saveFee } from "../../../domains/finances/leagueCommands";
@@ -28,6 +27,7 @@ export default function FeesPanel({ setup, onSaved }: { setup: AdminFinanceSetup
 
   const reload = useCallback(() => {
     const current = ++ticket.current;
+    setFees(null);
     setError("");
     loadFinanceSetup(seasonId)
       .then((next) => {
@@ -47,8 +47,8 @@ export default function FeesPanel({ setup, onSaved }: { setup: AdminFinanceSetup
     <SectionCard title="Tarifas" icon={<Settings2 size={16} color={C.amber} />}>
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray500 }}>
-          Activa lo que la liga cobra en la temporada y pon su precio. Los cobros se generan desde que activas la tarifa;
-          desactivarla no borra lo ya cobrado.
+          Pon el precio de cada cobro una sola vez por temporada. Desde ahí todo se registra solo, también lo que ya
+          pasó en la temporada. Apagar un cobro no borra lo ya registrado.
         </p>
         <Field label="Temporada">
           <FormSelect value={seasonId} onChange={(e) => setSeasonId(e.target.value)}>
@@ -93,19 +93,16 @@ function FeeRow({ seasonId, fee, onSaved }: { seasonId: string; fee: LeagueFee; 
   const fromSource = AMOUNT_FROM_SOURCE.includes(kind);
   const [enabled, setEnabled] = useState(fee.enabled);
   const [amount, setAmount] = useState(fee.amount > 0 ? String(fee.amount) : "");
-  const [period, setPeriod] = useState<LeagueFeePeriod>(fee.period);
   const [splitMode, setSplitMode] = useState<LeagueSplitMode>(fee.splitMode);
-  const [includes, setIncludes] = useState(fee.includesRegistration);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const dirty =
     enabled !== fee.enabled ||
-    (amount || "0") !== String(fee.amount) ||
-    period !== fee.period ||
-    splitMode !== fee.splitMode ||
-    includes !== fee.includesRegistration;
+    // El monto no cuenta en los cobros que toman su precio de la cancha o del anuncio
+    (!fromSource && parseFloat(amount || "0") !== fee.amount) ||
+    splitMode !== fee.splitMode;
 
   const save = async () => {
     if (savingRef.current) return;
@@ -118,8 +115,14 @@ function FeeRow({ seasonId, fee, onSaved }: { seasonId: string; fee: LeagueFee; 
     savingRef.current = true;
     setSaving(true);
     try {
-      await saveFee({ seasonId, kind, enabled, amount: value, period, splitMode, includesRegistration: includes });
-      setSaved(true);
+      const created = await saveFee({ seasonId, kind, enabled, amount: value, splitMode });
+      setSaved(
+        created === 1
+          ? "Guardado. Se registró 1 cobro de lo que ya pasó."
+          : created > 1
+            ? `Guardado. Se registraron ${created} cobros de lo que ya pasó.`
+            : "Guardado.",
+      );
       onSaved();
     } catch (err) {
       console.error(err);
@@ -147,7 +150,7 @@ function FeeRow({ seasonId, fee, onSaved }: { seasonId: string; fee: LeagueFee; 
           checked={enabled}
           onChange={(e) => {
             setEnabled(e.target.checked);
-            setSaved(false);
+            setSaved("");
           }}
         />
         {FEE_KIND_LABEL[kind]}
@@ -163,37 +166,28 @@ function FeeRow({ seasonId, fee, onSaved }: { seasonId: string; fee: LeagueFee; 
               style={{ width: "8rem" }}
               onChange={(e) => {
                 setAmount(moneyText(e.target.value));
-                setSaved(false);
+                setSaved("");
               }}
             />
           </Field>
         )}
-        {kind === "CLUB_PAGE" && (
-          <Field label="Cobro">
-            <FormSelect value={period} onChange={(e) => { setPeriod(e.target.value as LeagueFeePeriod); setSaved(false); }}>
-              <option value="SEASON">Por temporada</option>
-              <option value="MONTH">Por mes</option>
-            </FormSelect>
-          </Field>
-        )}
         {(kind === "MATCH_REFEREE" || kind === "MATCH_COURT") && (
           <Field label="Reparto">
-            <FormSelect value={splitMode} onChange={(e) => { setSplitMode(e.target.value as LeagueSplitMode); setSaved(false); }}>
-              <option value="EACH">Cada club paga el precio</option>
+            <FormSelect value={splitMode} onChange={(e) => { setSplitMode(e.target.value as LeagueSplitMode); setSaved(""); }}>
+              <option value="EACH">{kind === "MATCH_COURT" ? "Cada club paga el costo completo" : "Cada club paga el precio"}</option>
               <option value="HALF">Se reparte entre los dos</option>
             </FormSelect>
           </Field>
         )}
-        {(kind === "SEASON_ENROLLMENT" || kind === "TOURNAMENT_ENROLLMENT") && (
-          <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.78rem", color: C.gray600, paddingBottom: "0.5rem" }}>
-            <input type="checkbox" checked={includes} onChange={(e) => { setIncludes(e.target.checked); setSaved(false); }} />
-            Incluye el registro del club
-          </label>
-        )}
         <PrimaryButton type="button" disabled={!dirty || saving} onClick={() => void save()} style={{ padding: "0.45rem 0.8rem", fontSize: "0.78rem" }}>
-          {saving ? "Guardando…" : saved && !dirty ? "Guardado" : "Guardar"}
+          {saving ? "Guardando…" : "Guardar"}
         </PrimaryButton>
       </div>
+      {saved && !dirty ? (
+        <span style={{ fontSize: "0.75rem", color: C.green }} role="status">
+          {saved}
+        </span>
+      ) : null}
       <FormError>{error}</FormError>
     </div>
   );

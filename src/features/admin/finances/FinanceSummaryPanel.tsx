@@ -11,6 +11,7 @@ import { EXPENSE_CATEGORY_LABEL, FEE_KIND_LABEL, monthName } from "../../../doma
 import { formatCurrency } from "../../../domains/finances/helpers";
 import { C, FormSelect, RADIUS, SectionCard, SegmentedControl } from "../../../shared/ui";
 import Field from "../Field";
+import ChargeItem from "./ChargeItem";
 
 const SCOPES: { value: LeagueSummaryScope; label: string }[] = [
   { value: "TOTAL", label: "Total" },
@@ -35,6 +36,8 @@ export default function FinanceSummaryPanel({ setup }: { setup: AdminFinanceSetu
   const [data, setData] = useState<AdminFinanceSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Sube al marcar un registro como pagado, para recalcular el resumen
+  const [version, setVersion] = useState(0);
   const ticket = useRef(0);
 
   const years = useMemo(() => {
@@ -77,7 +80,7 @@ export default function FinanceSummaryPanel({ setup }: { setup: AdminFinanceSetu
       .finally(() => {
         if (current === ticket.current) setLoading(false);
       });
-  }, [scope, year, month, seasonId, activeTournament]);
+  }, [scope, year, month, seasonId, activeTournament, version]);
 
   const summary = data?.summary;
   const seriesTitle =
@@ -203,6 +206,22 @@ export default function FinanceSummaryPanel({ setup }: { setup: AdminFinanceSetu
                 ])}
               />
             )}
+            <div>
+              <div style={{ fontSize: "0.75rem", fontWeight: 800, color: C.navy900, marginBottom: "0.35rem" }}>
+                Registros del periodo{(data?.charges?.length ?? 0) >= 300 ? " (los 300 más recientes)" : ""}
+              </div>
+              {(data?.charges?.length ?? 0) === 0 ? (
+                <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray500 }}>
+                  Todavía no hay cobros en este periodo. Se registran solos al inscribir clubes, jugar partidos y apartar canchas.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                  {(data?.charges ?? []).map((charge) => (
+                    <ChargeItem key={charge.id} charge={charge} onChanged={() => setVersion((v) => v + 1)} />
+                  ))}
+                </div>
+              )}
+            </div>
             <Table
               title="Clubes con adeudo (hoy)"
               head={["Club", "Cargos", "Debe"]}
