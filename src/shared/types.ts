@@ -257,8 +257,21 @@ export interface CourtHold {
   matchStartDate?: string;
   note?: string;
   guestEmail?: string;
-  /** Club al que se le cobra la renta (finanzas de la liga). */
-  clubId?: string | null;
+  /** Lo pagado al apartar; null = se pagó todo (solo rentas manuales). */
+  deposit?: number | null;
+  /** Su cobro en las finanzas de la liga; null si no hay (tarifa de renta apagada o cancha sin costo). */
+  rental?: HoldRental | null;
+}
+
+/** Cobro de una renta manual (league_hold_rental, 1015_fn_finance.sql). */
+export interface HoldRental {
+  chargeId: string;
+  amount: number;
+  /** Todo lo abonado: lo pagado al apartar más el resto. */
+  paid: number;
+  status: "PENDIENTE" | "PARCIAL" | "PAGADO" | "CONDONADO";
+  /** Lo cobrado aparte de lo pagado al apartar (el resto). */
+  restPaid: number;
 }
 
 export type InquiryStatus = "new" | "done";

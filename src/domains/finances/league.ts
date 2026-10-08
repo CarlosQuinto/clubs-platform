@@ -37,7 +37,7 @@ export const FEE_KIND_HINT: Partial<Record<LeagueFeeKind, string>> = {
   CARD_RED: "Por cada roja, cuando el partido queda jugado.",
   TOURNAMENT_ENROLLMENT: "Al inscribir un club a un torneo.",
   CLUB_REGISTRATION: "Un solo pago por club, cuando se da de alta en la plataforma.",
-  COURT_RENTAL: "Se registra sola, ya pagada, cada vez que se aparta una cancha. Usa el costo por hora de la cancha.",
+  COURT_RENTAL: "Se registra sola al apartar una cancha, con lo que se pagó (todo o un anticipo); el resto se cobra después. Usa el costo por hora de la cancha.",
   AD: "Se cobra sola al anunciante cuando un anuncio tiene precio (Publicidad).",
 };
 
@@ -68,9 +68,17 @@ export function defaultFee(kind: LeagueFeeKind): LeagueFee {
   };
 }
 
-/** Una renta se paga al apartar: no se marca ni desmarca a mano. */
-export function isPaidOnBooking(charge: { kind: LeagueFeeKind; automatic?: boolean }) {
+/**
+ * Renta ligada a su apartado: lo pagado al apartar (todo o un anticipo) no se toca a mano; solo se cobra o se
+ * quita el resto. Una renta sin apartado (cancelada con «la liga se lo queda») es un cobro como cualquier otro.
+ */
+export function isRental(charge: { kind: LeagueFeeKind; automatic?: boolean }) {
   return charge.kind === "COURT_RENTAL" && charge.automatic !== false;
+}
+
+/** Abono automático de una renta: lo pagado al apartar (1015_fn_finance.sql, league_hold_payment_id). */
+export function isAutoPayment(payment: { id: string }) {
+  return payment.id.startsWith("auto-hold:");
 }
 
 export const CHARGE_STATUS_LABEL: Record<LeagueChargeStatus, string> = {

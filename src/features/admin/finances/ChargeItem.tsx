@@ -6,14 +6,18 @@ import {
   CHARGE_STATUS_COLOR,
   CHARGE_STATUS_LABEL,
   PAYMENT_METHOD_LABEL,
-  isPaidOnBooking,
+  isAutoPayment,
+  isRental,
   payerLabel,
 } from "../../../domains/finances/league";
 import { formatCurrency } from "../../../domains/finances/helpers";
 import { formatShortDate } from "../../../shared/helpers";
 import { Badge, C, FormError, RADIUS, SecondaryButton } from "../../../shared/ui";
 
-/** Un registro (cargo) con «Marcar como pagado / no pagado». Lo usan el resumen y la lista de cargos. */
+/**
+ * Un registro (cargo) con «Marcar como pagado / no pagado». Lo usan el resumen y la lista de cargos.
+ * En una renta lo pagado al apartar se queda: los botones cobran o quitan solo el resto.
+ */
 export default function ChargeItem({
   charge,
   onChanged,
@@ -29,8 +33,13 @@ export default function ChargeItem({
   const [error, setError] = useState("");
   const busyRef = useRef(false);
   const open = charge.status === "PENDIENTE" || charge.status === "PARCIAL";
-  const rental = isPaidOnBooking(charge);
-  const canToggle = !rental && (open || charge.status === "PAGADO");
+  const rental = isRental(charge);
+  // Lo cobrado de una renta aparte de lo pagado al apartar (el resto)
+  const restPaid = charge.payments.some((p) => !isAutoPayment(p));
+  const canToggle = rental ? open || (charge.status === "PAGADO" && restPaid) : open || charge.status === "PAGADO";
+  const toggleLabel = rental
+    ? charge.status === "PAGADO" ? "Quitar cobro del resto" : "Cobrar resto"
+    : charge.status === "PAGADO" ? "Marcar como no pagado" : "Marcar como pagado";
 
   const toggle = async () => {
     if (busyRef.current) return;
@@ -76,16 +85,20 @@ export default function ChargeItem({
         </div>
       </div>
 
-      {charge.payments.length > 0 && !rental && (
+      {charge.payments.length > 0 && (!rental || restPaid || open) && (
         <div style={{ fontSize: "0.72rem", color: C.gray500, marginTop: "0.35rem" }}>
           {charge.payments
-            .map((p) => `${formatShortDate(p.paidOn)} · ${PAYMENT_METHOD_LABEL[p.method]} · ${formatCurrency(p.amount)}`)
+            .map((p) =>
+              rental && isAutoPayment(p)
+                ? `${formatShortDate(p.paidOn)} · Anticipo · ${formatCurrency(p.amount)}`
+                : `${formatShortDate(p.paidOn)} · ${PAYMENT_METHOD_LABEL[p.method]} · ${formatCurrency(p.amount)}`,
+            )
             .join("  |  ")}
         </div>
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem", alignItems: "center" }}>
-        {rental && charge.status === "PAGADO" ? (
+        {rental && charge.status === "PAGADO" && !restPaid ? (
           <span style={{ fontSize: "0.75rem", color: C.green, display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
             <Check size={14} /> Pagada al apartar
           </span>
@@ -97,7 +110,7 @@ export default function ChargeItem({
             disabled={busy}
             style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem" }}
           >
-            {busy ? "Guardando…" : charge.status === "PAGADO" ? "Marcar como no pagado" : "Marcar como pagado"}
+            {busy ? "Guardando…" : toggleLabel}
           </SecondaryButton>
         )}
         {actions}

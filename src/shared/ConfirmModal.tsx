@@ -68,6 +68,9 @@ export default function ConfirmModal({
         style={{
           width: "100%",
           maxWidth: 440,
+          // Un formulario largo (el apartado con su pago) se desplaza dentro del modal en pantallas bajas
+          maxHeight: "calc(100vh - 2.5rem)",
+          overflowY: "auto",
           backgroundColor: C.white,
           borderRadius: RADIUS.xl,
           border: `1px solid ${C.gray200}`,

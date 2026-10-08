@@ -3,8 +3,8 @@
 -- Cargos automáticos: triggers sobre matches, match_cards, tournament_clubs, court_holds y ads llaman a una
 -- función league_sync_* que compara lo que debería cobrarse con lo que ya existe:
 -- - lo que falta se crea con league_charge_put (o revive si el sistema lo había cancelado);
--- - lo que ya no tiene origen (se borró la tarjeta, se canceló la reserva) pasa a CANCELADO, solo si sigue
---   PENDIENTE y sin abonos. Desactivar una tarifa no cancela lo ya cobrado: solo deja de generar cargos nuevos.
+-- - lo que ya no tiene origen (se borró la tarjeta, se dio de baja del torneo) pasa a CANCELADO, solo si sigue
+--   PENDIENTE y sin abonos; una renta cancelada pierde además sus abonos (se devolvió lo pagado). Desactivar una tarifa no cancela lo ya cobrado: solo deja de generar cargos nuevos.
 -- Solo se cobra lo que la temporada tiene activo en league_fees. Los cargos manuales no tienen source_key.
 --
 -- RPC: lecturas con require_platform_admin() (42501); mutaciones devuelven NULL si no hay permiso o la
@@ -31,6 +31,14 @@ BEGIN
 EXCEPTION WHEN others THEN
   RETURN NULL;
 END
+$$;
+
+-- Hoy en la liga: Hermosillo, UTC-7 todo el año (sin horario de verano), la zona de la demo y de docker:smoke.
+-- La base corre en UTC, donde una renta de hoy en la noche ya es «ayer». Es la fecha que el administrador ve en
+-- Canchas; se usa para saber si una renta ya pasó. Desfase fijo: no depende de los datos de zonas horarias.
+CREATE OR REPLACE FUNCTION public.league_today()
+RETURNS date LANGUAGE sql STABLE AS $$
+  SELECT ((now() AT TIME ZONE 'UTC') - interval '7 hours')::date
 $$;
 
 -- Temporada de una fecha: la que la contiene (la activa primero); si ninguna, la activa más reciente.
@@ -437,18 +445,18 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT 'auto-hold:' || md5(p_hold)
 $$;
 
--- Cada renta manual es un cobro ya pagado: el cargo lleva un abono automático por lo que falte de pagar.
--- El precio se fija al apartar con el costo por hora de la cancha; solo se vuelve a calcular si cambian la
--- cancha, la fecha o el horario de la renta (p_reprice), nunca al resincronizar. Si la renta se cancela o
--- cambia de club, el cargo anterior y su abono se anulan. Si la tarifa de renta está apagada no se crean
--- cobros nuevos (los existentes se quedan).
+-- Cada renta manual es un cobro a quien aparta (el nombre de la nota), pagado al apartar: completo
+-- (court_holds.deposit NULL) o con un anticipo. El abono automático cubre eso y el resto se cobra después
+-- (set_league_charge_paid). El precio se fija al apartar con el costo por hora de la cancha; solo se vuelve a
+-- calcular si cambian la cancha, la fecha o el horario de la renta (p_reprice), nunca al resincronizar.
+-- Si la renta ya no existe, lo pagado se devolvió: se borran los abonos de su cargo y el cargo se anula
+-- (delete_manual_court_hold con keepPaid deja antes el cargo como historial, sin clave). Si la tarifa de renta
+-- está apagada no se crean cobros nuevos (los existentes se quedan).
 DROP FUNCTION IF EXISTS public.league_sync_hold(text);
 CREATE OR REPLACE FUNCTION public.league_sync_hold(p_hold text, p_reprice boolean)
 RETURNS void LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   h record;
-  v_exists boolean;
-  v_club text;
   v_season text;
   v_minutes int;
   v_amount numeric := 0;
@@ -456,80 +464,80 @@ DECLARE
   v_concept text;
   v_charge league_charges;
   v_other numeric;
+  v_auto numeric;
   v_key text := 'hold:' || p_hold;
   v_pay text := league_hold_payment_id(p_hold);
 BEGIN
   IF p_hold IS NULL THEN
     RETURN;
   END IF;
-  SELECT ch.*, co.name AS court_name, co.hourly_rate, cl.name AS club_name INTO h
+  SELECT ch.*, co.name AS court_name, co.hourly_rate INTO h
   FROM court_holds ch
   JOIN courts co ON co.id = ch.court_id
-  LEFT JOIN clubs cl ON cl.id = ch.club_id
   WHERE ch.id = p_hold AND ch.source = 'MANUAL';
-  v_exists := FOUND;
 
-  IF v_exists THEN
-    v_club := h.club_id;
-    v_season := league_season_on(h.hold_date);
-    v_minutes := (split_part(h.end_time, ':', 1)::int * 60 + split_part(h.end_time, ':', 2)::int)
-      - (split_part(h.start_time, ':', 1)::int * 60 + split_part(h.start_time, ':', 2)::int);
-    IF league_fee_on(v_season, 'COURT_RENTAL') THEN
-      v_amount := round(coalesce(h.hourly_rate, 0) * v_minutes / 60.0, 2);
-    END IF;
-  END IF;
-
-  -- Renta cancelada o con otro club: se quita el abono automático y el cargo queda anulado
-  DELETE FROM league_payments lp
-  USING league_charges c
-  WHERE lp.id = v_pay AND lp.charge_id = c.id
-    AND (NOT v_exists OR c.club_id IS DISTINCT FROM v_club);
-  UPDATE league_charges c
-  SET status = 'CANCELADO', auto_cancelled = true, updated_at = now()
-  WHERE c.source_key = v_key AND c.kind = 'COURT_RENTAL' AND c.status NOT IN ('CANCELADO', 'CONDONADO')
-    AND (NOT v_exists OR c.club_id IS DISTINCT FROM v_club)
-    AND NOT EXISTS (SELECT 1 FROM league_payments lp WHERE lp.charge_id = c.id);
-
-  IF NOT v_exists OR v_amount <= 0 THEN
+  IF NOT FOUND THEN
+    -- Renta cancelada: se devolvió lo pagado (no se tocan las condonadas ni las canceladas a mano)
+    DELETE FROM league_payments lp
+    USING league_charges c
+    WHERE lp.charge_id = c.id AND c.kind = 'COURT_RENTAL' AND c.source_key = v_key
+      AND c.status NOT IN ('CANCELADO', 'CONDONADO');
+    UPDATE league_charges c
+    SET status = 'CANCELADO', auto_cancelled = true, updated_at = now()
+    WHERE c.kind = 'COURT_RENTAL' AND c.source_key = v_key AND c.status NOT IN ('CANCELADO', 'CONDONADO');
     RETURN;
   END IF;
 
-  v_payer := coalesce(h.club_name, nullif(split_part(h.note, ' · ', 1), ''), 'Externo');
+  v_season := league_season_on(h.hold_date);
+  v_minutes := (split_part(h.end_time, ':', 1)::int * 60 + split_part(h.end_time, ':', 2)::int)
+    - (split_part(h.start_time, ':', 1)::int * 60 + split_part(h.start_time, ':', 2)::int);
+  IF league_fee_on(v_season, 'COURT_RENTAL') THEN
+    v_amount := round(coalesce(h.hourly_rate, 0) * v_minutes / 60.0, 2);
+  END IF;
+
+  v_payer := coalesce(nullif(split_part(h.note, ' · ', 1), ''), 'Externo');
   v_concept := league_kind_label('COURT_RENTAL') || ' · ' || h.court_name || ' · ' || to_char(h.hold_date, 'DD/MM/YYYY')
     || ' ' || h.start_time || '–' || h.end_time;
   SELECT * INTO v_charge FROM league_charges
-  WHERE kind = 'COURT_RENTAL' AND source_key = v_key AND coalesce(club_id, '') = coalesce(v_club, '')
+  WHERE kind = 'COURT_RENTAL' AND source_key = v_key AND club_id IS NULL
   FOR UPDATE;
-  IF NOT FOUND THEN
+  -- Sin precio (tarifa apagada o cancha en $0) no se crea ni se revive un cobro; el que ya existe conserva su
+  -- monto y su abono sigue al anticipo
+  IF v_amount <= 0 AND (NOT FOUND OR v_charge.status = 'CANCELADO') THEN
+    RETURN;
+  END IF;
+  IF v_charge.id IS NULL THEN
     INSERT INTO league_charges (id, kind, club_id, payer_name, payer_contact, concept, amount, charged_on,
       season_id, source_key)
-    VALUES (gen_random_uuid()::text, 'COURT_RENTAL', v_club, left(v_payer, 160),
-      CASE WHEN v_club IS NULL THEN left(h.guest_email, 160) ELSE '' END, left(v_concept, 160), v_amount,
-      least(h.hold_date, CURRENT_DATE), v_season, v_key)
+    VALUES (gen_random_uuid()::text, 'COURT_RENTAL', NULL, left(v_payer, 160), left(h.guest_email, 160),
+      left(v_concept, 160), v_amount, least(h.hold_date, CURRENT_DATE), v_season, v_key)
     RETURNING * INTO v_charge;
   ELSIF (v_charge.status = 'CANCELADO' AND NOT v_charge.auto_cancelled) OR v_charge.status = 'CONDONADO' THEN
     -- El administrador la canceló o la condonó a mano: no se toca
     RETURN;
   ELSE
     UPDATE league_charges
-    SET amount = CASE WHEN p_reprice OR status = 'CANCELADO' THEN v_amount ELSE amount END,
-        concept = CASE WHEN p_reprice OR status = 'CANCELADO' THEN left(v_concept, 160) ELSE concept END,
+    SET amount = CASE WHEN (p_reprice OR status = 'CANCELADO') AND v_amount > 0 THEN v_amount ELSE amount END,
+        concept = CASE WHEN (p_reprice OR status = 'CANCELADO') AND v_amount > 0 THEN left(v_concept, 160) ELSE concept END,
         payer_name = left(v_payer, 160),
-        payer_contact = CASE WHEN v_club IS NULL THEN left(h.guest_email, 160) ELSE '' END,
+        payer_contact = left(h.guest_email, 160),
         status = CASE WHEN status = 'CANCELADO' THEN 'PENDIENTE' ELSE status END,
         auto_cancelled = false, updated_at = now()
     WHERE id = v_charge.id
     RETURNING * INTO v_charge;
   END IF;
 
-  -- El abono automático cubre lo que falte después de otros abonos (cargos de la primera versión que se
-  -- pagaron a mano); el de la primera versión, con id 'auto-hold:' || id, se reemplaza por el nuevo.
+  -- El abono automático cubre lo pagado al apartar (todo o el anticipo), sin pasar de lo que falte después
+  -- de los demás abonos (el resto cobrado, o cargos de la primera versión pagados a mano); el de la primera
+  -- versión, con id 'auto-hold:' || id, se reemplaza por el nuevo.
   DELETE FROM league_payments WHERE id = 'auto-hold:' || p_hold AND id <> v_pay;
   SELECT coalesce(sum(amount), 0) INTO v_other FROM league_payments WHERE charge_id = v_charge.id AND id <> v_pay;
-  IF v_charge.amount > v_other THEN
+  v_auto := greatest(0, least(coalesce(h.deposit, v_charge.amount), v_charge.amount - v_other));
+  IF v_auto > 0 THEN
     INSERT INTO league_payments (id, charge_id, amount, paid_on, method, note)
-    VALUES (v_pay, v_charge.id, v_charge.amount - v_other, least(h.hold_date, CURRENT_DATE), 'OTRO', 'Pagada al apartar')
-    ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount, charge_id = EXCLUDED.charge_id;
+    VALUES (v_pay, v_charge.id, v_auto, least(h.hold_date, CURRENT_DATE), 'OTRO',
+      CASE WHEN coalesce(h.deposit, v_charge.amount) < v_charge.amount THEN 'Anticipo al apartar' ELSE 'Pagada al apartar' END)
+    ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount, charge_id = EXCLUDED.charge_id, note = EXCLUDED.note;
   ELSE
     DELETE FROM league_payments WHERE id = v_pay;
   END IF;
@@ -538,12 +546,27 @@ END
 $$;
 REVOKE ALL ON FUNCTION public.league_sync_hold(text, boolean) FROM PUBLIC, anon, authenticated;
 
+-- Cobro vigente de una renta (sin los cancelados) para Canchas: monto, lo abonado, estado y restPaid (lo cobrado
+-- aparte del abono automático, o sea el resto). NULL si no hay (tarifa apagada o cancha sin costo).
+CREATE OR REPLACE FUNCTION public.league_hold_rental(p_hold text)
+RETURNS jsonb LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
+  SELECT jsonb_build_object('chargeId', c.id, 'amount', c.amount, 'status', to_jsonb(c.status),
+    'paid', coalesce((SELECT sum(lp.amount) FROM league_payments lp WHERE lp.charge_id = c.id), 0),
+    'restPaid', coalesce((SELECT sum(lp.amount) FROM league_payments lp
+      WHERE lp.charge_id = c.id AND lp.id NOT LIKE 'auto-hold:%'), 0))
+  FROM league_charges c
+  WHERE c.kind = 'COURT_RENTAL' AND c.source_key = 'hold:' || p_hold AND c.club_id IS NULL AND c.status <> 'CANCELADO'
+$$;
+REVOKE ALL ON FUNCTION public.league_hold_rental(text) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.league_trg_court_holds()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    -- Una renta que ya pasó se jugó y se cobró: si se borra (p. ej. al borrar la cancha) queda en las finanzas
-    IF OLD.hold_date < CURRENT_DATE THEN
+    -- Una renta que ya pasó (en la fecha de la liga) se jugó: si se borra (p. ej. al borrar la cancha) su cobro
+    -- queda en las finanzas tal cual. Las cancelaciones con decisión (delete_manual_court_hold con keepPaid) no
+    -- dependen de este corte.
+    IF OLD.hold_date < league_today() THEN
       RETURN NULL;
     END IF;
     PERFORM league_sync_hold(OLD.id, false);
@@ -1137,12 +1160,15 @@ $$;
 CALL api_expose('set_league_charge_status', 'USER');
 
 -- «Cubierto / no cubierto»: paid = true abona el saldo con fecha de hoy y deja el cargo PAGADO; paid = false
--- borra sus abonos y lo deja PENDIENTE. Las rentas se pagan al apartar y no se desmarcan.
+-- borra sus abonos y lo deja PENDIENTE. En una renta (con clave) cobra o quita solo el resto: lo pagado al
+-- apartar (abono auto-hold:) se queda; quitar un resto que no se ha cobrado devuelve null.
 CREATE OR REPLACE FUNCTION public.set_league_charge_paid(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_charge record;
+  v_rental boolean;
+  v_n int;
 BEGIN
   IF NOT is_platform_admin() OR NOT api_required(p, ARRAY['id', 'paid']) OR jsonb_typeof(p -> 'paid') <> 'boolean' THEN
     RETURN jsonb_build_object('charge', NULL);
@@ -1151,18 +1177,22 @@ BEGIN
   SELECT c.id, c.kind::text AS kind, c.source_key, c.status::text AS status, c.amount, cp.paid INTO v_charge
   FROM league_charges c JOIN league_charge_paid cp ON cp.id = c.id
   WHERE c.id = p ->> 'id';
-  IF NOT FOUND OR v_charge.status NOT IN ('PENDIENTE', 'PARCIAL', 'PAGADO')
-     OR (v_charge.kind = 'COURT_RENTAL' AND v_charge.source_key IS NOT NULL) THEN
+  IF NOT FOUND OR v_charge.status NOT IN ('PENDIENTE', 'PARCIAL', 'PAGADO') THEN
     RETURN jsonb_build_object('charge', NULL);
   END IF;
+  v_rental := v_charge.kind = 'COURT_RENTAL' AND v_charge.source_key IS NOT NULL;
   IF (p ->> 'paid')::boolean THEN
     IF v_charge.amount > v_charge.paid THEN
       INSERT INTO league_payments (id, charge_id, amount, paid_on, method, note, created_by)
       VALUES (gen_random_uuid()::text, v_charge.id, v_charge.amount - v_charge.paid, CURRENT_DATE, 'OTRO',
-        'Marcado como pagado', v_uid);
+        CASE WHEN v_rental THEN 'Resto de la renta' ELSE 'Marcado como pagado' END, v_uid);
     END IF;
   ELSE
-    DELETE FROM league_payments WHERE charge_id = v_charge.id;
+    DELETE FROM league_payments WHERE charge_id = v_charge.id AND id NOT LIKE 'auto-hold:%';
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_rental AND v_n = 0 THEN
+      RETURN jsonb_build_object('charge', NULL);
+    END IF;
   END IF;
   PERFORM league_charge_refresh(v_charge.id);
   RETURN jsonb_build_object('charge',
@@ -1171,7 +1201,7 @@ END
 $$;
 CALL api_expose('set_league_charge_paid', 'USER');
 
--- Abono a un cargo pendiente o parcial; no puede pasar del saldo (las rentas se pagan solas al apartar)
+-- Abono a un cargo pendiente o parcial (también el resto de una renta); no puede pasar del saldo
 CREATE OR REPLACE FUNCTION public.add_league_payment(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -1200,7 +1230,6 @@ BEGIN
   FROM league_charges c JOIN league_charge_paid cp ON cp.id = c.id
   WHERE c.id = p ->> 'chargeId';
   IF NOT FOUND OR v_charge.status NOT IN ('PENDIENTE', 'PARCIAL')
-     OR EXISTS (SELECT 1 FROM league_charges WHERE id = v_charge.id AND kind = 'COURT_RENTAL' AND source_key IS NOT NULL)
      OR v_amount <= 0 OR v_amount > v_charge.amount - v_charge.paid
      OR v_paid_on NOT BETWEEN DATE '2000-01-01' AND CURRENT_DATE + 1 THEN
     RETURN jsonb_build_object('payment', NULL, 'charge', NULL);
@@ -1225,7 +1254,7 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_tem
 DECLARE
   v_charge text;
 BEGIN
-  -- El abono automático de una renta solo se va si se cancela la renta
+  -- El abono automático de una renta (lo pagado al apartar) solo se va si se cancela la renta
   IF NOT is_platform_admin() OR p ->> 'id' IS NULL OR p ->> 'id' LIKE 'auto-hold:%' THEN
     RETURN jsonb_build_object('deleted', NULL);
   END IF;

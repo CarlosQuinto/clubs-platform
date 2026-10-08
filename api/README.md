@@ -20,6 +20,6 @@ npm run build && npm start   # compila a dist/ y arranca
   - `sendClubInvite` `{ clubId, email, role, token, hold? }` -> `{ kind, mailed, url, held? }` (presidente del club o superadmin).
   - `reviewTeamApplication` `{ applicationId, action, token?, emailKey? }` -> `{ ok, action, mailed, clubId?, slug?, kind?, url? }` (superadmin).
   - `sendPlatformAdminInvite` `{ email }` -> `{ kind, mailed, url }` (superadmin; máx. 20 por admin y 3 por correo cada 15 min).
-  - `sendCourtBookingNotice` `{ to, kind, dateLabel, note, slots[] }` -> `{ mailed }`.
+  - `sendCourtBookingNotice` `{ to, kind, dateLabel, note, slots[], paymentLabel? }` -> `{ mailed }` (`paymentLabel`: lo pagado y lo que resta de la renta, en el alta y el cambio).
   - `sendMatchScheduleNotice` `{ matchId }` -> `{ mailed }` (superadmin; no repite el aviso si no cambió fecha, hora ni cancha).
   - `sendTournamentEnrollmentNotice` `{ tournamentId, clubIds[] }` -> `{ notified }` (superadmin; avisa una sola vez por club).

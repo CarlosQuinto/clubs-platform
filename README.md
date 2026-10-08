@@ -97,13 +97,13 @@ Hay tres tipos de usuario:
 
 ### Superadministración (`/admin?tab=`)
 
-`clubs`, `competition` (temporadas, categorías, torneos), `cover` (portada y marca de la plataforma), `ads` (anuncios por ubicación `home`, `tournament`, `club`, `teams`; la vigencia la deciden las fechas y «Pausar» es el único freno manual), `inbox` (contactos y solicitudes de equipo), `admins` (superadministradores e invitaciones), `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido; al apartar se elige a qué club se le cobra la renta) y `finances` (finanzas de la liga, ver abajo).
+`clubs`, `competition` (temporadas, categorías, torneos), `cover` (portada y marca de la plataforma), `ads` (anuncios por ubicación `home`, `tournament`, `club`, `teams`; la vigencia la deciden las fechas y «Pausar» es el único freno manual), `inbox` (contactos y solicitudes de equipo), `admins` (superadministradores e invitaciones), `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido; la renta se cobra a quien aparta y al apartar se anota si pagó todo o un anticipo: lo que resta se cobra desde el apartado, que lo marca con $ en la rejilla, o en Finanzas) y `finances` (finanzas de la liga, ver abajo).
 
 **Finanzas de la liga** (`/admin?tab=finances`, [`1015_fn_finance.sql`](db/migrations/1015_fn_finance.sql)):
 
-- **Todo se registra solo.** Triggers sobre `matches`, `match_cards`, `tournament_clubs`, `court_holds` y `ads` crean el cobro cuando pasa el hecho: alta de un club en la plataforma (**registro del club**, un solo pago por club, con la tarifa de la temporada de su alta), inscripción de un club a un torneo, partido jugado (arbitraje y **uso de cancha**), tarjeta en un partido jugado, «no se presentó», **renta de cancha** y anuncio con precio. Si el hecho desaparece (baja del torneo, tarjeta borrada, renta cancelada, no presentado deshecho), el cobro se anula. No hay cobros que se generen con botón.
+- **Todo se registra solo.** Triggers sobre `matches`, `match_cards`, `tournament_clubs`, `court_holds` y `ads` crean el cobro cuando pasa el hecho: alta de un club en la plataforma (**registro del club**, un solo pago por club, con la tarifa de la temporada de su alta), inscripción de un club a un torneo, partido jugado (arbitraje y **uso de cancha**), tarjeta en un partido jugado, «no se presentó», **renta de cancha** y anuncio con precio. Si el hecho desaparece (baja del torneo, tarjeta borrada, renta cancelada, no presentado deshecho), el cobro se anula; al eliminar una renta con algo pagado se decide si se le devolvió (se anula) o la liga se lo queda (el cobro queda por lo pagado, como historial). No hay cobros que se generen con botón.
 - **Tarifas** por temporada (`league_fees`): el precio de cada cobro se pone una sola vez. Arbitraje (a cada club o a medias), no presentarse, amarilla, roja, inscripción al torneo y registro del club. El **uso de cancha** cuesta lo que la cancha del partido por hora × la duración del partido (a medias por defecto), la **renta** usa el costo por hora de la cancha y la **publicidad** el precio del anuncio: esos tres se cobran solos y la tarifa solo sirve para apagarlos. Al guardar una tarifa se registran también los cobros de lo que ya pasó en la temporada (`league_backfill_season`, sin duplicar); `1015` hace lo mismo cada vez que se aplica.
-- **Pagado o no.** Cada cobro se marca como pagado o no pagado (`set_league_charge_paid`): pagado abona el saldo con fecha de hoy; no pagado borra sus abonos. Una **renta ya está pagada** al apartarse (abono automático `auto-hold:<id>`); si se cancela, el cobro y su pago se anulan. También se puede condonar (cuenta como pérdida), cancelar un error y registrar «Otro cobro» manual a un club o a un externo.
+- **Pagado o no.** Cada cobro se marca como pagado o no pagado (`set_league_charge_paid`): pagado abona el saldo con fecha de hoy; no pagado borra sus abonos. Una **renta se paga al apartarse**, completa o con un anticipo (`court_holds.deposit`; abono automático `auto-hold:<id>`); en una renta, pagado o no pagado cobra o quita solo el resto. Si la liga quita la renta (cambio de horario o se borra la cancha), el cobro y lo pagado se anulan. También se puede condonar (cuenta como pérdida), cancelar un error y registrar «Otro cobro» manual a un club o a un externo.
 - **Gastos y pérdidas** (`league_expenses`): árbitros, premios, mantenimiento, servicios, material, servidor, publicidad propia y otros; pérdidas = devoluciones (fianza, protesta procedente, reserva pagada y cancelada) y daños y robos, más lo condonado.
 - **Resumen** (`admin_finance_summary`) por total, año, mes, temporada o torneo: generado, cobrado, por cobrar, gastos, pérdidas y resultado (cobrado − gastos − devoluciones − daños), desglose por concepto y por categoría, serie mes a mes, año a año o por jornada, **cada registro del periodo** con su botón de pagado, y clubes con adeudo. Lo cobrado cuenta por la fecha del pago; lo generado y lo pendiente, por la fecha del cobro. Rentas y anuncios no pertenecen a un torneo. Los adeudos solo se avisan (también en la lista de clubes); no bloquean nada.
 
@@ -270,7 +270,7 @@ npm run check:firebase  # falla si reaparece Firebase
 
 ### Cambiar el esquema o una operación
 
-- **Esquema:** añade una migración nueva con el siguiente número libre (`db/migrations/0009_*.sql` después de `0008`; las `0*` se aplican una sola vez y quedan anotadas en `public.schema_migrations`). No edites `0001_schema.sql` en una base que ya existe.
+- **Esquema:** añade una migración nueva con el siguiente número libre (`db/migrations/0010_*.sql` después de `0009`; las `0*` se aplican una sola vez y quedan anotadas en `public.schema_migrations`). No edites `0001_schema.sql` en una base que ya existe.
 - **Operaciones:** cada operación del cliente es una función `public.<nombre_en_snake>(p jsonb) RETURNS jsonb` en `db/migrations/1*.sql` (se vuelven a aplicar en cada `db:migrate` porque usan `CREATE OR REPLACE`). Su salida debe tener exactamente la forma de la interfaz `<Op>Data` de [`src/infrastructure/api/types.ts`](src/infrastructure/api/types.ts). Al crear una, añade su export en [`src/infrastructure/dataconnect.ts`](src/infrastructure/dataconnect.ts) y sus tipos, y una prueba en `scripts/db/pruebas/`.
 
 Reglas de las funciones SQL (detalladas en la cabecera de [`db/migrations/1010_fn_public.sql`](db/migrations/1010_fn_public.sql)):
@@ -305,6 +305,7 @@ clubs-platform/
 │   │   ├── 0006_no_presentado.sql # matches.no_show y la tabla con «no se presentó ninguno»
 │   │   ├── 0007_finanzas_liga.sql # tarifas, cargos, pagos y gastos de la liga
 │   │   ├── 0008_jugadores_borrado_logico.sql # players.deleted_at (borrado lógico de jugadores)
+│   │   ├── 0009_rentas_anticipo.sql # court_holds.deposit (anticipo); se quita court_holds.club_id
 │   │   ├── 1013_fn_admin.sql      # funciones RPC: /admin
 │   │   ├── 1014_fn_api.sql        # funciones de la API de correo
 │   │   └── 1015_fn_finance.sql    # finanzas de la liga: triggers de cargos, resumen y RPC
@@ -438,7 +439,7 @@ Todo está en PostgreSQL, definido en [`db/migrations/0001_schema.sql`](db/migra
 | Clubes | `clubs`, `club_hero_images`, `club_availability_windows`, `club_default_lineups`, `club_members`, `club_invites`, `players` |
 | Agenda del club | `club_events`, `club_event_attendees`, `club_event_goals`, `club_event_cards`, `club_event_goalkeepers`, `club_event_photos` |
 | Finanzas e inventario | `transactions`, `financial_goals`, `goal_contributions`, `inventory_items` |
-| Finanzas de la liga | `league_fees`, `league_charges`, `league_payments`, `league_expenses` ([`0007_finanzas_liga.sql`](db/migrations/0007_finanzas_liga.sql)); además `ads.price`, `ads.advertiser_name`, `ads.advertiser_contact` y `court_holds.club_id` |
+| Finanzas de la liga | `league_fees`, `league_charges`, `league_payments`, `league_expenses` ([`0007_finanzas_liga.sql`](db/migrations/0007_finanzas_liga.sql)); además `ads.price`, `ads.advertiser_name`, `ads.advertiser_contact` y `court_holds.deposit` ([`0009_rentas_anticipo.sql`](db/migrations/0009_rentas_anticipo.sql)) |
 | Galería | `albums`, `gallery_photos` |
 | Anuncios y entrada | `ads`, `ad_placements`, `inquiries`, `team_applications` |
 

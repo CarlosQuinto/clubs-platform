@@ -1,5 +1,6 @@
 // Pruebas de las finanzas de la liga (0007_finanzas_liga.sql y 1015_fn_finance.sql) sobre los datos dummy.
-// Todo se registra solo: uso de cancha (costo de la cancha × duración, sin tarifa), rentas (ya pagadas) y
+// Todo se registra solo: uso de cancha (costo de la cancha × duración, sin tarifa), rentas (pagadas al apartar,
+// todo o un anticipo) y
 // anuncios con precio; arbitraje, tarjetas, no presentarse, inscripción y registro del club (un solo pago
 // al darse de alta en la plataforma) con su tarifa.
 // Al guardar una tarifa se registra lo que ya pasó en la temporada. Al final se dejan las tarifas como estaban
@@ -202,35 +203,74 @@ export async function run({ db, rpc, check }) {
   await rpc("admin", "clear_match_no_show", { id: ns.id });
   check((await charges("c.match_id = $1 AND c.status = 'PENDIENTE'", [ns.id])).length === 0, "deshacer el no presentado cancela la multa");
 
-  // ---------- Rentas: cada apartado es un cobro ya pagado ----------
-  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, club_id)
-    VALUES ('fin-hold-1', $1, CURRENT_DATE + 2, '18:00', '19:30', 'MANUAL', 'Halcones', '', $2)`, [court.id, HALCONES]);
+  // ---------- Rentas: cada apartado es un cobro a quien aparta, pagado al apartar (todo o un anticipo) ----------
+  const autoNote = async (holdId) => (await one("SELECT note FROM league_payments WHERE id = league_hold_payment_id($1)", [holdId]))?.note;
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email)
+    VALUES ('fin-hold-1', $1, CURRENT_DATE + 2, '18:00', '19:30', 'MANUAL', 'Juan Perez · Cumple', 'juan@demo.local')`, [court.id]);
   let rent = await charges("c.source_key = 'hold:fin-hold-1'");
   check(rent.length === 1 && rent[0].status === "PAGADO" && rent[0].amount === court.rate * 1.5 && rent[0].paid === court.rate * 1.5
-    && rent[0].club_id === HALCONES && rent[0].charged_on === today, "apartar una cancha registra la renta ya pagada, sin tarifa", rent);
+    && rent[0].club_id === null && rent[0].charged_on === today && (await autoNote("fin-hold-1")) === "Pagada al apartar",
+    "apartar una cancha registra la renta ya pagada, sin tarifa", rent);
+  const payer = await one("SELECT payer_name, payer_contact FROM league_charges WHERE source_key = 'hold:fin-hold-1'");
+  check(payer.payer_name === "Juan Perez" && payer.payer_contact === "juan@demo.local", "la renta se cobra a quien aparta (nombre de la nota y correo)", payer);
   await db.query("UPDATE court_holds SET end_time = '20:00' WHERE id = 'fin-hold-1'");
   rent = await charges("c.source_key = 'hold:fin-hold-1'");
   check(rent.length === 1 && rent[0].amount === court.rate * 2 && rent[0].paid === court.rate * 2 && rent[0].status === "PAGADO",
-    "alargar la renta ajusta el monto y el pago", rent);
+    "alargar la renta pagada completa ajusta el monto y el pago", rent);
   r = await rpc("admin", "set_league_charge_paid", { id: rent[0].id, paid: false });
-  check(r.data?.charge === null, "una renta no se desmarca como no pagada", r.data);
+  check(r.data?.charge === null, "una renta pagada al apartar no se desmarca (no hay resto que quitar)", r.data);
   r = await rpc("admin", "delete_league_payment", { id: "auto-hold:fin-hold-1" });
   check(r.data?.deleted === null, "el pago automático de la renta no se borra a mano", r.data);
-  r = await rpc("admin", "add_league_payment", { id: "fin-p-rent", chargeId: rent[0].id, amount: 1, paidOn: today, method: "EFECTIVO" });
-  check(r.data?.payment === null, "no se abona a mano a una renta", r.data);
-  await db.query("UPDATE court_holds SET club_id = NULL, note = 'Juan Perez', guest_email = 'juan@demo.local' WHERE id = 'fin-hold-1'");
+  // Anticipo: lo abonado al apartar es el anticipo y el resto queda por cobrar
+  const dep = Math.floor(court.rate * 50) / 100;
+  await db.query("UPDATE court_holds SET deposit = $1 WHERE id = 'fin-hold-1'", [dep]);
   rent = await charges("c.source_key = 'hold:fin-hold-1'");
-  check(rent.length === 2 && rent.some((c) => c.club_id === HALCONES && c.status === "CANCELADO" && c.paid === 0)
-    && rent.some((c) => c.club_id === null && c.status === "PAGADO" && c.paid === court.rate * 2),
-    "cambiar a quién se cobra anula el cargo anterior y paga el nuevo", rent);
+  check(rent.length === 1 && rent[0].status === "PARCIAL" && rent[0].amount === court.rate * 2 && rent[0].paid === dep
+    && (await autoNote("fin-hold-1")) === "Anticipo al apartar", "con anticipo la renta queda parcial: lo abonado es el anticipo", rent);
+  await db.query("UPDATE court_holds SET end_time = '20:30' WHERE id = 'fin-hold-1'");
+  rent = await charges("c.source_key = 'hold:fin-hold-1'");
+  check(rent[0].amount === court.rate * 2.5 && rent[0].paid === dep && rent[0].status === "PARCIAL",
+    "alargar una renta con anticipo sube el monto y conserva el anticipo", rent);
+  r = await rpc("admin", "set_league_charge_paid", { id: rent[0].id, paid: false });
+  check(r.data?.charge === null, "quitar un resto que no se ha cobrado -> null", r.data);
+  r = await rpc("admin", "add_league_payment", { id: "fin-p-rent", chargeId: rent[0].id, amount: 1, paidOn: today, method: "EFECTIVO" });
+  rent = await charges("c.source_key = 'hold:fin-hold-1'");
+  check(r.data?.payment?.id === "fin-p-rent" && rent[0].paid === dep + 1 && rent[0].status === "PARCIAL", "se abona a mano parte del resto de una renta", r.data);
+  r = await rpc("admin", "set_league_charge_paid", { id: rent[0].id, paid: true });
+  rent = await charges("c.source_key = 'hold:fin-hold-1'");
+  const restNote = await one("SELECT count(*)::int AS n FROM league_payments WHERE charge_id = $1 AND note = 'Resto de la renta'", [rent[0].id]);
+  check(r.data?.charge?.status === "PAGADO" && rent[0].paid === rent[0].amount && restNote.n === 1, "cobrar el resto deja la renta pagada", rent);
+  r = await rpc("admin", "set_league_charge_paid", { id: rent[0].id, paid: false });
+  rent = await charges("c.source_key = 'hold:fin-hold-1'");
+  check(r.data?.charge?.status === "PARCIAL" && rent[0].paid === dep && (await autoNote("fin-hold-1")) === "Anticipo al apartar",
+    "quitar el cobro del resto conserva el anticipo", rent);
+  // La nota del abono automático sigue a la renta: de anticipo a completa y de vuelta
+  await db.query("UPDATE court_holds SET deposit = NULL WHERE id = 'fin-hold-1'");
+  check((await charges("c.source_key = 'hold:fin-hold-1'"))[0].status === "PAGADO" && (await autoNote("fin-hold-1")) === "Pagada al apartar",
+    "pasar a pagada completa cambia la nota del abono");
+  await db.query("UPDATE court_holds SET deposit = $1 WHERE id = 'fin-hold-1'", [dep]);
+  check((await autoNote("fin-hold-1")) === "Anticipo al apartar", "volver al anticipo regresa la nota del abono");
+  // Cancelar una renta futura: se devuelve todo lo pagado (anticipo y resto) y el cobro se anula
+  await rpc("admin", "set_league_charge_paid", { id: rent[0].id, paid: true });
   await db.query("DELETE FROM court_holds WHERE id = 'fin-hold-1'");
   rent = await charges("c.source_key = 'hold:fin-hold-1'");
-  check(rent.every((c) => c.status === "CANCELADO" && c.paid === 0), "cancelar la renta anula el cargo y su pago", rent);
+  check(rent.length === 1 && rent[0].status === "CANCELADO" && rent[0].paid === 0, "cancelar la renta anula el cobro y todo lo abonado", rent);
+  // Con la tarifa apagada no se registran rentas nuevas; el cobro de una que ya existía sigue a su anticipo
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, deposit)
+    VALUES ('fin-hold-antes', $1, CURRENT_DATE + 2, '10:00', '11:00', 'MANUAL', 'Pedro', '', $2)`, [court.id, dep]);
   await fee("COURT_RENTAL", { enabled: false });
   await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email)
     VALUES ('fin-hold-off', $1, CURRENT_DATE + 2, '08:00', '09:00', 'MANUAL', 'Pedro', '')`, [court.id]);
   check((await charges("c.source_key = 'hold:fin-hold-off'")).length === 0, "renta apagada en tarifas: no se registra");
-  await db.query("DELETE FROM court_holds WHERE id = 'fin-hold-off'");
+  await db.query("UPDATE court_holds SET deposit = NULL WHERE id = 'fin-hold-antes'");
+  rent = await charges("c.source_key = 'hold:fin-hold-antes'");
+  check(rent.length === 1 && rent[0].status === "PAGADO" && rent[0].paid === court.rate && rent[0].amount === court.rate,
+    "tarifa apagada: pasar a pagada completa una renta que ya tenía cobro actualiza su abono", rent);
+  await db.query("UPDATE court_holds SET deposit = $1, end_time = '12:00' WHERE id = 'fin-hold-antes'", [dep]);
+  rent = await charges("c.source_key = 'hold:fin-hold-antes'");
+  check(rent[0].status === "PARCIAL" && rent[0].paid === dep && rent[0].amount === court.rate,
+    "tarifa apagada: volver al anticipo lo sigue, sin recotizar", rent);
+  await db.query("DELETE FROM court_holds WHERE id IN ('fin-hold-off', 'fin-hold-antes')");
   await fee("COURT_RENTAL", { enabled: true });
 
   // ---------- Publicidad ----------
@@ -363,18 +403,57 @@ export async function run({ db, rpc, check }) {
     const endTime = `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
     const holdVars = { id: "fin-hold-2", courtId: court.id, holdDate: holdDay, startTime: win.start_time, endTime,
       note: "Juan Perez", guestEmail: "juan@demo.local", fresh: true };
-    const badClub = await rpc("admin", "save_court_hold", { ...holdVars, clubId: "no-existe" });
-    check(!badClub.data?.hold, "save_court_hold: club inexistente -> no se guarda", badClub.data ?? badClub.error);
-    const hold = await rpc("admin", "save_court_hold", { ...holdVars, clubId: HALCONES });
-    check(Boolean(hold.data?.hold), "save_court_hold con el club a cobrar", hold.data ?? hold.error);
-    rent = await charges("c.source_key = 'hold:fin-hold-2' AND c.status = 'PAGADO'");
-    check(rent.length === 1 && rent[0].club_id === HALCONES, "la renta apartada desde Canchas queda pagada por el club", rent);
+    const price = Math.round(court.rate * 100 * slotMin / 60) / 100;
+    const deposit = Math.floor(price * 50) / 100;
+    const depositNow = async () => {
+      const row = await one("SELECT deposit::float AS d FROM court_holds WHERE id = 'fin-hold-2'");
+      return row ? row.d : undefined;
+    };
+    const hold = await rpc("admin", "save_court_hold", { ...holdVars, deposit });
+    const saved = hold.data?.hold;
+    check(saved?.id === "fin-hold-2" && saved.rental?.amount === price && saved.rental.paid === deposit && saved.rental.status === "PARCIAL"
+      && saved.rental.restPaid === 0, "save_court_hold con anticipo responde el cobro ya calculado", hold.data ?? hold.error);
+    for (const bad of [0, -5, "abc"]) {
+      const badEdit = await rpc("admin", "save_court_hold", { ...holdVars, fresh: false, note: "Juan Perez · Otra", deposit: bad });
+      check(badEdit.data?.hold === null && (await depositNow()) === deposit, `save_court_hold: anticipo ${bad} al editar -> null y no cambia`, badEdit.data ?? badEdit.error);
+    }
     await rpc("admin", "save_court_hold", { ...holdVars, note: "Juan Perez · Final", fresh: false });
-    check((await one("SELECT club_id FROM court_holds WHERE id = 'fin-hold-2'")).club_id === HALCONES, "editar la renta sin clubId conserva el club");
+    check((await depositNow()) === deposit, "editar la renta sin la clave conserva el anticipo");
     const courtsAdmin = await rpc("admin", "admin_courts", {});
-    check(courtsAdmin.data?.clubs?.length > 0 && courtsAdmin.data.courtHolds.some((h) => h.id === "fin-hold-2" && h.clubId === HALCONES),
-      "admin_courts devuelve clubes y el club de la renta", courtsAdmin.error);
-    await db.query("DELETE FROM court_holds WHERE id = 'fin-hold-2'");
+    const listed = courtsAdmin.data?.courtHolds?.find((h) => h.id === "fin-hold-2");
+    check(courtsAdmin.data && !("clubs" in courtsAdmin.data) && listed?.deposit === deposit && !("clubId" in listed)
+      && listed.rental?.chargeId === saved.rental.chargeId && listed.rental.paid === deposit && listed.rental.status === "PARCIAL",
+      "admin_courts: cada renta trae su anticipo y su cobro, sin clubes", listed ?? courtsAdmin.error);
+    // Con el resto cobrado la renta no cambia de fecha ni de horario (sí de nota)
+    await rpc("admin", "set_league_charge_paid", { id: saved.rental.chargeId, paid: true });
+    const otherDay = (await one("SELECT to_char(CURRENT_DATE + 10, 'YYYY-MM-DD') AS d")).d;
+    const moved = await rpc("admin", "save_court_hold", { ...holdVars, holdDate: otherDay, fresh: false });
+    const stillDay = (await one("SELECT to_char(hold_date, 'YYYY-MM-DD') AS d FROM court_holds WHERE id = 'fin-hold-2'")).d;
+    check(moved.data?.hold === null && stillDay === holdDay, "con el resto cobrado la renta no cambia de fecha", moved.data ?? moved.error);
+    const renamed = await rpc("admin", "save_court_hold", { ...holdVars, note: "Juan Perez · Final Dos", fresh: false });
+    check(renamed.data?.hold?.rental?.status === "PAGADO" && renamed.data.hold.rental.restPaid > 0, "con el resto cobrado sí cambia la nota", renamed.data ?? renamed.error);
+    await rpc("admin", "set_league_charge_paid", { id: saved.rental.chargeId, paid: false });
+    const full = await rpc("admin", "save_court_hold", { ...holdVars, fresh: false, deposit: null });
+    check(full.data?.hold?.rental?.status === "PAGADO" && full.data.hold.rental.paid === price && (await depositNow()) === null,
+      "anticipo null: la renta queda pagada completa", full.data ?? full.error);
+    // Cambiar el costo de la cancha y luego corregir el anticipo no vuelve a cotizar la renta
+    for (const factor of [3, 0.5]) {
+      await db.query("UPDATE courts SET hourly_rate = $2 WHERE id = $1", [court.id, court.rate * factor]);
+      const fix = await rpc("admin", "save_court_hold", { ...holdVars, fresh: false, deposit });
+      check(fix.data?.hold?.rental?.amount === price && fix.data.hold.rental.paid === deposit && fix.data.hold.rental.status === "PARCIAL",
+        `costo de la cancha × ${factor} y corregir el anticipo: el precio cotizado no cambia`, fix.data ?? fix.error);
+    }
+    await db.query("UPDATE courts SET hourly_rate = $2 WHERE id = $1", [court.id, court.rate]);
+    // Eliminar con «la liga se lo queda»: el cobro queda como historial por lo pagado, ya sin la renta
+    const keep = await rpc("admin", "delete_manual_court_hold", { id: "fin-hold-2", keepPaid: true });
+    const keptRow = (await charges("c.id = $1", [saved.rental.chargeId]))[0];
+    const autoLeft = await one("SELECT count(*)::int AS n FROM league_payments WHERE charge_id = $1 AND id LIKE 'auto-hold:%'", [saved.rental.chargeId]);
+    const keptListed = (await rpc("admin", "admin_league_charges", { kind: "COURT_RENTAL" })).data?.charges?.find((c) => c.id === saved.rental.chargeId);
+    check(keep.data?.hold?.id === "fin-hold-2" && keptRow.status === "PAGADO" && keptRow.amount === deposit && keptRow.paid === deposit
+      && keptRow.source_key === null && keptRow.concept.endsWith(" · cancelada") && autoLeft.n === 0 && keptListed?.automatic === false,
+      "eliminar con «la liga se lo queda»: el cobro queda pagado por lo abonado, sin clave", { keptRow, keptListed });
+    const badKeep = await rpc("admin", "delete_manual_court_hold", { id: "fin-hold-x", keepPaid: "si" });
+    check(badKeep.data?.hold === null, "delete_manual_court_hold: keepPaid que no es booleano -> null", badKeep.data);
   } else {
     check(true, "sin horario de canchas: se omite la prueba de save_court_hold");
   }
@@ -406,8 +485,8 @@ export async function run({ db, rpc, check }) {
   await rpc("admin", "save_league_fee", { seasonId: season, kind: "MATCH_REFEREE", enabled: true, amount: 200, splitMode: "EACH" });
 
   // Una renta se cotiza al apartarla: cambiar el costo de la cancha y volver a sincronizar no la cambia
-  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, club_id)
-    VALUES ('fin-hold-fija', $1, CURRENT_DATE + 2, '06:00', '07:00', 'MANUAL', 'Halcones', '', $2)`, [court.id, HALCONES]);
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email)
+    VALUES ('fin-hold-fija', $1, CURRENT_DATE + 2, '06:00', '07:00', 'MANUAL', 'Halcones', '')`, [court.id]);
   await db.query("UPDATE courts SET hourly_rate = hourly_rate * 3 WHERE id = $1", [court.id]);
   await rpc("admin", "save_league_fee", { seasonId: season, kind: "CARD_RED", enabled: true, amount: 150 });
   rent = await charges("c.source_key = 'hold:fin-hold-fija'");
@@ -420,11 +499,30 @@ export async function run({ db, rpc, check }) {
   await db.query("DELETE FROM court_holds WHERE id = 'fin-hold-fija'");
 
   // Una renta que ya pasó se queda en las finanzas aunque se borre (p. ej. al borrar la cancha)
-  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, club_id)
-    VALUES ('fin-hold-pasada', $1, CURRENT_DATE - 3, '06:00', '07:00', 'MANUAL', 'Halcones', '', $2)`, [court.id, HALCONES]);
-  await db.query("DELETE FROM court_holds WHERE id = 'fin-hold-pasada'");
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email)
+    VALUES ('fin-hold-pasada', $1, CURRENT_DATE - 3, '06:00', '07:00', 'MANUAL', 'Halcones', '')`, [court.id]);
+  r = await rpc("admin", "delete_manual_court_hold", { id: "fin-hold-pasada" });
   rent = await charges("c.source_key = 'hold:fin-hold-pasada'");
-  check(rent.length === 1 && rent[0].status === "PAGADO" && rent[0].paid === court.rate, "borrar una renta que ya pasó conserva el cobro y su pago", rent);
+  check(r.data?.hold?.id === "fin-hold-pasada" && rent.length === 1 && rent[0].status === "PAGADO" && rent[0].paid === court.rate,
+    "borrar sin decidir una renta que ya pasó conserva el cobro y su pago", rent);
+
+  // Cancelar con decisión no depende de la fecha: una renta de hoy en la noche ya es «ayer» en UTC
+  const quarter = Math.floor(court.rate * 25) / 100;
+  for (const [day, label] of [["CURRENT_DATE", "hoy"], ["CURRENT_DATE - 1", "ayer en UTC"]]) {
+    for (const keepPaid of [true, false]) {
+      const id = `fin-hold-${keepPaid ? "queda" : "devuelve"}-${label.length}`;
+      await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, deposit)
+        VALUES ($2, $1, ${day}, '04:00', '05:00', 'MANUAL', 'Pedro', '', $3)`, [court.id, id, quarter]);
+      const before = (await charges("c.source_key = $1", [`hold:${id}`]))[0];
+      await rpc("admin", "set_league_charge_paid", { id: before.id, paid: true });
+      const gone = await rpc("admin", "delete_manual_court_hold", { id, keepPaid });
+      const after = (await charges("c.id = $1", [before.id]))[0];
+      check(gone.data?.hold?.id === id && (keepPaid
+        ? after.status === "PAGADO" && after.paid === court.rate && after.amount === court.rate && after.source_key === null
+        : after.status === "CANCELADO" && after.paid === 0),
+        `renta de ${label} con anticipo y resto: ${keepPaid ? "la liga se lo queda" : "se le devolvió"}`, after);
+    }
+  }
 
   // Un id de renta de 128 caracteres no rompe el abono automático
   const longId = "h".repeat(128);

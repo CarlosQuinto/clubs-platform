@@ -358,8 +358,10 @@ export interface AdminCourtsData {
     source: CourtHoldSource;
     note: string;
     guestEmail: string;
-    /** Club al que se le cobra la renta (finanzas de la liga). */
-    clubId?: string | null;
+    /** Lo pagado al apartar; null = se pagó todo (solo rentas manuales). */
+    deposit?: number | null;
+    /** Cobro de la renta en las finanzas de la liga; null si no hay (tarifa apagada o cancha sin costo). */
+    rental?: HoldRentalData | null;
     court: {
       id: string;
     } & Court_Key;
@@ -378,7 +380,17 @@ export interface AdminCourtsData {
       };
     } & Match_Key;
   } & CourtHold_Key)[];
-  clubs?: { id: string; name: string }[];
+}
+
+/** Cobro vigente de una renta manual (league_hold_rental en 1015_fn_finance.sql). */
+export interface HoldRentalData {
+  chargeId: string;
+  amount: number;
+  /** Todo lo abonado: lo pagado al apartar más el resto. */
+  paid: number;
+  status: Exclude<LeagueChargeStatus, "CANCELADO">;
+  /** Lo cobrado aparte de lo pagado al apartar (el resto). */
+  restPaid: number;
 }
 
 export interface AdminCoverData {
@@ -1318,6 +1330,8 @@ export interface DeleteManualCourtHoldData {
 
 export interface DeleteManualCourtHoldVariables {
   id: string;
+  /** Qué pasa con lo pagado: true = la liga se lo queda; false = se le devolvió. Sin la clave, como el trigger. */
+  keepPaid?: boolean;
 }
 
 export interface DeletePlayerData {
@@ -2592,7 +2606,8 @@ export interface SaveCourtHoldData {
   };
   saved?: number | null;
   race?: number | null;
-  hold?: unknown | null;
+  /** La renta guardada con su cobro ya calculado. */
+  hold?: { id: string; rental?: HoldRentalData | null } | null;
 }
 
 export interface SaveCourtHoldVariables {
@@ -2604,8 +2619,8 @@ export interface SaveCourtHoldVariables {
   endTime: string;
   note: string;
   guestEmail?: string;
-  /** Club al que se le cobra la renta; sin la clave, una edición conserva el que tenía. */
-  clubId?: string | null;
+  /** Lo pagado al apartar (mayor que 0); null = se pagó todo; sin la clave, una edición conserva el que tenía. */
+  deposit?: number | null;
   fresh?: boolean;
 }
 
@@ -2619,6 +2634,8 @@ export interface CourtHoldOutside {
   endTime: string;
   note: string;
   guestEmail?: string | null;
+  /** Lo que ya se pagó de la renta: al quitarla, su cobro se anula. */
+  paid?: number;
 }
 
 /** Partido programado cuyo apartado de cancha queda fuera del horario nuevo (save_court_module). */

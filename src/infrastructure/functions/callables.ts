@@ -96,6 +96,8 @@ export type CourtBookingNotice = {
     durationLabel: string;
     priceLabel: string;
   }[];
+  /** «Pagado: $X · Resta: $Y (se paga al llegar)», en el alta y el cambio. */
+  paymentLabel?: string;
 };
 
 export async function sendCourtBookingNotice(input: CourtBookingNotice) {

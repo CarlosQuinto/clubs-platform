@@ -369,8 +369,9 @@ export async function run({ db, rpc, check }) {
   check(holdPast.data?.hold === null, "save_court_hold: fecha pasada -> null", holdPast);
   const holdClosed = await rpc("admin", "save_court_hold", { ...holdVars, startTime: "05:00", endTime: "06:00" });
   check(holdClosed.data?.hold === null, "save_court_hold: fuera de la apertura -> null", holdClosed);
-  const hold = await rpc("admin", "save_court_hold", holdVars);
-  check(hold.data?.hold?.id === "prueba-hold-1", "save_court_hold: válido", hold);
+  // Con anticipo (la cancha cuesta 123.46 la hora): el cobro de la renta queda parcial
+  const hold = await rpc("admin", "save_court_hold", { ...holdVars, deposit: 50 });
+  check(hold.data?.hold?.id === "prueba-hold-1" && hold.data.hold.rental?.paid === 50 && hold.data.hold.rental.status === "PARCIAL", "save_court_hold: válido, con anticipo", hold);
 
   // El horario nuevo deja fuera el apartado de 10:00 a 11:00 (dos franjas por día: 07-10 y 11-23); las rentas
   // de la semilla son por la tarde y siguen dentro.
@@ -391,14 +392,27 @@ export async function run({ db, rpc, check }) {
     }
   };
   const splitWindows = WIN7.flatMap((w) => [{ ...w, endTime: "10:00" }, { ...w, startTime: "11:00" }]);
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, deposit)
+    VALUES ('prueba-hold-ayer', 'prueba-court-1', league_today() - 1, '10:00', '11:00', 'MANUAL', 'Pedro', '', 20)`);
   const conflict = await rpc("admin", "save_court_module", { enabled: true, slotMinutes: 60, windows: splitWindows });
   const splitSnap = await snapshotMatches((conflict.data?.matchConflicts ?? []).map((m) => m.matchId));
   const conflictRow = conflict.data?.conflicts?.[0];
-  check(conflict.data?.saved === null && conflict.data?.conflicts?.length === 1 && conflictRow?.id === "prueba-hold-1" && typeof conflictRow.courtName === "string" && typeof conflictRow.hourlyRate === "number" && conflictRow.holdDate === holdDate && conflictRow.guestEmail === "juan@correo.com", "save_court_module: renta fuera del horario -> conflicts sin guardar", conflict);
+  check(conflict.data?.saved === null && conflict.data?.conflicts?.length === 1 && conflictRow?.id === "prueba-hold-1" && typeof conflictRow.courtName === "string" && typeof conflictRow.hourlyRate === "number" && conflictRow.holdDate === holdDate && conflictRow.guestEmail === "juan@correo.com" && conflictRow.paid === 50, "save_court_module: renta fuera del horario -> conflicts sin guardar, con lo pagado", conflict);
   const windowsKept = (await rpc("admin", "admin_courts")).data?.courtOpenWindows;
   check(windowsKept?.length === 7 && windowsKept[0].endTime === "23:00", "save_court_module: sin force no toca las franjas", windowsKept?.length);
   const forced = await rpc("admin", "save_court_module", { enabled: true, slotMinutes: 60, windows: splitWindows, force: true });
   check(forced.data?.saved?.id === "config" && forced.data.removed?.length === 1 && forced.data.removed[0].id === "prueba-hold-1", "save_court_module: force elimina la renta y la devuelve", forced);
+  const voided = (await db.query(`SELECT c.status::text AS status, (SELECT count(*)::int FROM league_payments lp WHERE lp.charge_id = c.id) AS n
+    FROM league_charges c WHERE c.source_key = 'hold:prueba-hold-1'`)).rows;
+  check(voided.length === 1 && voided[0].status === "CANCELADO" && voided[0].n === 0, "save_court_module: la renta quitada anula su cobro y lo pagado", voided);
+  const yesterday = (await db.query(`SELECT c.status::text AS status, (SELECT sum(lp.amount)::float FROM league_payments lp WHERE lp.charge_id = c.id) AS paid,
+      (SELECT count(*)::int FROM court_holds WHERE id = 'prueba-hold-ayer') AS kept
+    FROM league_charges c WHERE c.source_key = 'hold:prueba-hold-ayer'`)).rows;
+  check(yesterday.length === 1 && yesterday[0].status === "PARCIAL" && yesterday[0].paid === 20 && yesterday[0].kept === 1,
+    "save_court_module: una renta de ayer (fecha de la liga) no es conflicto y conserva su cobro", yesterday);
+  await db.query("DELETE FROM court_holds WHERE id = 'prueba-hold-ayer'");
+  await db.query("DELETE FROM league_payments WHERE charge_id IN (SELECT id FROM league_charges WHERE source_key = 'hold:prueba-hold-ayer')");
+  await db.query("DELETE FROM league_charges WHERE source_key = 'hold:prueba-hold-ayer'");
   const afterForce = (await rpc("admin", "admin_courts")).data;
   check(!afterForce?.courtHolds?.some((h) => h.id === "prueba-hold-1") && afterForce?.courtHolds?.some((h) => h.id === matchHold?.id) && afterForce?.courtOpenWindows?.length === 14, "save_court_module: la renta ya no está y el apartado de partido sigue", afterForce?.courtHolds?.length);
   await restoreMatches(splitSnap);
@@ -456,10 +470,16 @@ export async function run({ db, rpc, check }) {
   check(delHold.data?.hold?.id === "prueba-hold-1", "delete_manual_court_hold: válido", delHold);
 
   await rpc("admin", "save_court_hold", holdVars);
+  await db.query(`INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, deposit)
+    VALUES ('prueba-hold-hoy', 'prueba-court-1', league_today(), '20:00', '21:00', 'MANUAL', 'Pedro', '', 20)`);
   const delCourtPres = await rpc("presidente", "delete_court", { id: "prueba-court-1" });
   check(delCourtPres.data?.court === null, "delete_court: presidente -> null", delCourtPres);
   const delCourt = await rpc("admin", "delete_court", { id: "prueba-court-1" });
   check(delCourt.data?.court?.id === "prueba-court-1", "delete_court: válido", delCourt);
+  const todayRent = (await db.query(`SELECT c.status::text AS status, (SELECT count(*)::int FROM league_payments lp WHERE lp.charge_id = c.id) AS n
+    FROM league_charges c WHERE c.source_key = 'hold:prueba-hold-hoy'`)).rows;
+  check(todayRent.length === 1 && todayRent[0].status === "CANCELADO" && todayRent[0].n === 0,
+    "delete_court: la renta de hoy (fecha de la liga) anula su cobro y lo pagado", todayRent);
   const courtsAfter = (await rpc("admin", "admin_courts")).data;
   check(courtsAfter?.courts?.length === 4 && !courtsAfter.courtHolds.some((h) => h.id === "prueba-hold-1"), "admin_courts: cancha y apartados borrados", courtsAfter?.courts?.length);
 

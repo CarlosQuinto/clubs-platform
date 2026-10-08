@@ -219,6 +219,8 @@ export function courtBookingEmailHtml(opts: {
   dateLabel: string;
   note: string;
   slots: CourtBookingSlot[];
+  /** «Pagado: $X · Resta: $Y (se paga al llegar)»; vacío si no aplica. */
+  paymentLabel?: string;
 }) {
   const platformName = escapeHtml(opts.platformName);
   const slots = opts.slots
@@ -236,11 +238,15 @@ export function courtBookingEmailHtml(opts: {
   const note = opts.note.trim()
     ? `<p>Nota: ${escapeHtml(opts.note.trim())}</p>`
     : "";
+  const payment = opts.paymentLabel?.trim()
+    ? `<p><strong>${escapeHtml(opts.paymentLabel.trim())}</strong></p>`
+    : "";
   return `
     <div style="font-family:Inter,system-ui,sans-serif;color:#292621;line-height:1.5;max-width:520px">
       <p>Hola:</p>
       <p>${escapeHtml(BOOKING_LEAD[opts.kind])}</p>
       ${slots}
+      ${payment}
       ${note}
       ${mailClose(platformName)}
     </div>
@@ -253,14 +259,17 @@ export function courtBookingEmailText(opts: {
   dateLabel: string;
   note: string;
   slots: CourtBookingSlot[];
+  paymentLabel?: string;
 }) {
   const slots = opts.slots.flatMap((slot) => ["", ...bookingSlotLines(slot, opts.dateLabel)]);
+  const payment = opts.paymentLabel?.trim() ? ["", opts.paymentLabel.trim()] : [];
   const note = opts.note.trim() ? ["", `Nota: ${opts.note.trim()}`] : [];
   return [
     "Hola:",
     "",
     BOOKING_LEAD[opts.kind],
     ...slots,
+    ...payment,
     ...note,
     "",
     "Si no esperabas este correo, puedes ignorarlo.",

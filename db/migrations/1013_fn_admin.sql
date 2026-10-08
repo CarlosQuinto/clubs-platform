@@ -190,7 +190,9 @@ BEGIN
     'courtHolds', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('id', h.id, 'holdDate', to_jsonb(h.hold_date), 'startTime', h.start_time,
         'endTime', h.end_time, 'source', to_jsonb(h.source), 'note', h.note, 'guestEmail', h.guest_email,
-        'clubId', h.club_id,
+        -- Lo pagado al apartar (NULL = todo) y su cobro en las finanzas de la liga (1015_fn_finance.sql)
+        'deposit', h.deposit,
+        'rental', CASE WHEN h.source = 'MANUAL' THEN league_hold_rental(h.id) END,
         'court', jsonb_build_object('id', h.court_id),
         'match', (SELECT jsonb_build_object('id', m.id,
             'homeClub', (SELECT jsonb_build_object('name', c.name) FROM clubs c WHERE c.id = m.home_club_id),
@@ -200,11 +202,7 @@ BEGIN
               FROM tournaments t JOIN seasons s ON s.id = t.season_id WHERE t.id = m.tournament_id))
           FROM matches m WHERE m.id = h.match_id))
         ORDER BY h.hold_date, h.start_time, h.id), '[]'::jsonb)
-      FROM court_holds h),
-    -- A quién se le puede cobrar una renta (finanzas de la liga, 1015_fn_finance.sql)
-    'clubs', (
-      SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name) ORDER BY c.name, c.id), '[]'::jsonb)
-      FROM clubs c WHERE c.active AND c.deleted_at IS NULL));
+      FROM court_holds h));
 END
 $$;
 CALL api_expose('admin_courts', 'USER');
@@ -821,6 +819,8 @@ DROP FUNCTION IF EXISTS public.save_court_window(jsonb);
 -- src/domains/courts/courts.ts). Si alguna renta manual pendiente o algún partido programado queda fuera del
 -- nuevo horario no guarda nada y los devuelve en `conflicts` / `matchConflicts`; con force: true elimina las
 -- rentas (`removed`) y deja los partidos por programar (`unscheduledMatches`), para avisar por correo.
+-- Cada renta en conflicto trae lo que se pagó (`paid`): al quitarla la liga, su cobro se anula (se devuelve; el
+-- trigger de court_holds lo hace con la fecha de la liga).
 -- PostgREST corre con la extensión safeupdate: todo DELETE lleva WHERE (aquí WHERE true).
 CREATE OR REPLACE FUNCTION public.save_court_module(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -859,16 +859,19 @@ BEGIN
       'removed', '[]'::jsonb, 'unscheduledMatches', '[]'::jsonb);
   END IF;
 
-  -- Rentas manuales desde ayer (hoy en México) que ninguna franja nueva de su día contiene
+  -- Rentas manuales de hoy en adelante (fecha de la liga, 1015_fn_finance.sql) que ninguna franja nueva de su
+  -- día contiene. Las que ya pasaron se quedan con su cobro. paid: lo que se devuelve (nada si se condonó).
   SELECT coalesce(jsonb_agg(jsonb_build_object(
       'id', h.id, 'courtName', c.name, 'hourlyRate', c.hourly_rate, 'holdDate', to_jsonb(h.hold_date),
-      'startTime', h.start_time, 'endTime', h.end_time, 'note', h.note, 'guestEmail', h.guest_email)
+      'startTime', h.start_time, 'endTime', h.end_time, 'note', h.note, 'guestEmail', h.guest_email,
+      'paid', CASE WHEN r.rental ->> 'status' = 'CONDONADO' THEN 0 ELSE coalesce((r.rental ->> 'paid')::numeric, 0) END)
       ORDER BY h.hold_date, h.start_time, h.id), '[]'::jsonb)
   INTO v_affected
   FROM court_holds h
   JOIN courts c ON c.id = h.court_id
+  CROSS JOIN LATERAL (SELECT league_hold_rental(h.id) AS rental) r
   WHERE h.source::text = 'MANUAL'
-    AND h.hold_date >= CURRENT_DATE - 1
+    AND h.hold_date >= league_today()
     AND NOT EXISTS (
       SELECT 1 FROM jsonb_array_elements(v_windows) w
       WHERE (w ->> 'weekday')::int = EXTRACT(ISODOW FROM h.hold_date)
@@ -1014,6 +1017,9 @@ CALL api_expose('delete_court', 'USER');
 -- La nota llega como "Nombre · Nota". Nombre: letras y espacios, 3 a 30, en Title Case.
 -- Nota: opcional, hasta 50. Correo obligatorio. Fecha desde ayer en UTC (hoy en México).
 -- El tramo cae en la rejilla, dentro de la apertura de ese día y sin cruzarse con otro.
+-- deposit: lo pagado al apartar. Sin la clave, una edición conserva el que tenía; null = se pagó todo; si no,
+-- un monto mayor que 0 (el cobro lo limita a su precio, 1015_fn_finance.sql). Con el resto ya cobrado la renta
+-- no cambia de cancha, fecha ni horario. Devuelve hold { id, rental } con el cobro ya calculado.
 CREATE OR REPLACE FUNCTION public.save_court_hold(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -1026,22 +1032,41 @@ DECLARE
   v_note text := btrim(coalesce(p ->> 'note', ''));
   v_email text := btrim(coalesce(p ->> 'guestEmail', ''));
   v_fresh boolean := coalesce((p ->> 'fresh')::boolean, false);
-  v_club text := p ->> 'clubId';
+  v_has_deposit boolean := p ? 'deposit';
+  v_deposit numeric;
   v_slot int := (SELECT court_slot_minutes FROM platform_settings WHERE id = 'config');
   v_hold text;
+  v_lost int;
 BEGIN
   IF NOT is_platform_admin() THEN
     RETURN jsonb_build_object('saved', NULL, 'race', NULL, 'hold', NULL);
   END IF;
+  -- El anticipo se valida antes de convertirlo: «abc» o 0 devuelven null, también al editar
+  IF v_has_deposit AND p ->> 'deposit' IS NOT NULL THEN
+    IF p ->> 'deposit' !~ '^[0-9]{1,8}(\.[0-9]{1,2})?$' OR (p ->> 'deposit')::numeric <= 0 THEN
+      RETURN jsonb_build_object('saved', NULL, 'race', NULL, 'hold', NULL);
+    END IF;
+    v_deposit := (p ->> 'deposit')::numeric;
+  END IF;
+  -- Con el resto ya cobrado no se mueve: volver a cotizar a la baja borraría lo pagado al apartar. El cobro se
+  -- bloquea antes de revisarlo, como en set_league_charge_paid, para no cruzarse con «Cobrar resto».
+  PERFORM 1 FROM league_charges
+  WHERE kind = 'COURT_RENTAL' AND source_key = 'hold:' || v_id AND club_id IS NULL
+  FOR UPDATE;
+  IF coalesce((league_hold_rental(v_id) ->> 'restPaid')::numeric, 0) > 0 AND EXISTS (
+    SELECT 1 FROM court_holds
+    WHERE id = v_id AND (court_id, hold_date, start_time, end_time) IS DISTINCT FROM (v_court, v_date, v_start, v_end)
+  ) THEN
+    RETURN jsonb_build_object('saved', NULL, 'race', NULL, 'hold', NULL);
+  END IF;
 
-  INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, club_id)
+  INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, deposit)
   SELECT
     v_id, v_court, v_date, v_start, v_end, 'MANUAL'::court_hold_source,
     initcap(split_part(v_note, ' · ', 1))
       || CASE WHEN strpos(v_note, ' · ') > 0 THEN ' · ' || split_part(v_note, ' · ', 2) ELSE '' END,
-    lower(v_email), v_club
+    lower(v_email), v_deposit
   WHERE v_id IS NOT NULL
-    AND (v_club IS NULL OR EXISTS (SELECT 1 FROM clubs WHERE id = v_club AND deleted_at IS NULL))
     AND EXISTS (SELECT 1 FROM courts WHERE id = v_court)
     AND v_date >= CURRENT_DATE - 1
     AND v_note ~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*( · [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+( [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+)*)?$'
@@ -1077,7 +1102,7 @@ BEGIN
     end_time = EXCLUDED.end_time,
     note = EXCLUDED.note,
     guest_email = EXCLUDED.guest_email,
-    club_id = CASE WHEN p ? 'clubId' THEN EXCLUDED.club_id ELSE court_holds.club_id END
+    deposit = CASE WHEN v_has_deposit THEN EXCLUDED.deposit ELSE court_holds.deposit END
   WHERE court_holds.source::text = 'MANUAL'
     AND court_holds.hold_date >= CURRENT_DATE - 1;
 
@@ -1095,6 +1120,10 @@ BEGIN
         AND o.start_time < h.end_time
         AND h.start_time < o.end_time
     );
+  GET DIAGNOSTICS v_lost = ROW_COUNT;
+  IF v_lost > 0 THEN
+    PERFORM league_sync_hold(v_id, false);
+  END IF;
 
   SELECT id INTO v_hold FROM court_holds
   WHERE id = v_id
@@ -1103,22 +1132,57 @@ BEGIN
     AND start_time = v_start
     AND end_time = v_end
     AND lower(note) = lower(v_note)
-    AND guest_email = lower(v_email);
+    AND guest_email = lower(v_email)
+    AND (NOT v_has_deposit OR deposit IS NOT DISTINCT FROM v_deposit);
   RETURN jsonb_build_object('saved', NULL, 'race', NULL,
-    'hold', CASE WHEN v_hold IS NULL THEN NULL ELSE jsonb_build_object('id', v_hold) END);
+    'hold', CASE WHEN v_hold IS NULL THEN NULL ELSE jsonb_build_object('id', v_hold, 'rental', league_hold_rental(v_hold)) END);
 END
 $$;
 CALL api_expose('save_court_hold', 'USER');
 
+-- keepPaid (opcional): qué pasa con lo que ya se pagó de la renta, decidido al cancelarla.
+-- - true, «la liga se lo queda»: su cobro queda como historial por lo pagado (PAGADO, sin clave, «cancelada»);
+-- - false, «se le devolvió»: el cobro se anula y pierde sus abonos;
+-- - sin la clave, como el trigger: las que ya pasaron (fecha de la liga) conservan su cobro y las demás se anulan.
+-- Con la clave la decisión no depende de la fecha.
 CREATE OR REPLACE FUNCTION public.delete_manual_court_hold(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_id text;
+  v_keep boolean;
+  v_charge text;
+  v_paid numeric;
 BEGIN
-  IF NOT is_platform_admin() THEN RETURN jsonb_build_object('hold', NULL); END IF;
+  IF NOT is_platform_admin() OR (p ? 'keepPaid' AND jsonb_typeof(p -> 'keepPaid') <> 'boolean') THEN
+    RETURN jsonb_build_object('hold', NULL);
+  END IF;
+  v_keep := (p ->> 'keepPaid')::boolean;
+  IF v_keep THEN
+    SELECT c.id INTO v_charge
+    FROM league_charges c
+    JOIN court_holds h ON h.id = p ->> 'id' AND h.source::text = 'MANUAL'
+    WHERE c.kind = 'COURT_RENTAL' AND c.source_key = 'hold:' || h.id AND c.club_id IS NULL
+      AND c.status IN ('PENDIENTE', 'PARCIAL', 'PAGADO')
+    FOR UPDATE OF c;
+    SELECT coalesce(sum(amount), 0) INTO v_paid FROM league_payments WHERE charge_id = v_charge;
+    IF v_charge IS NOT NULL AND v_paid > 0 THEN
+      -- El abono automático pasa a ser uno normal: ya no depende de la renta
+      UPDATE league_payments SET id = gen_random_uuid()::text, note = 'Renta cancelada'
+      WHERE id = league_hold_payment_id(p ->> 'id');
+      UPDATE league_charges
+      SET amount = v_paid, source_key = NULL, auto_cancelled = false, note = 'Renta cancelada',
+          concept = left(concept, 148) || ' · cancelada', updated_at = now()
+      WHERE id = v_charge;
+      PERFORM league_charge_refresh(v_charge);
+    END IF;
+  END IF;
   DELETE FROM court_holds WHERE id = p ->> 'id' AND source::text = 'MANUAL'
   RETURNING id INTO v_id;
+  -- Con decisión, lo que siga ligado a la renta se anula aunque sea de «ayer» en UTC
+  IF v_id IS NOT NULL AND v_keep IS NOT NULL THEN
+    PERFORM league_sync_hold(v_id, false);
+  END IF;
   RETURN jsonb_build_object('hold', CASE WHEN v_id IS NULL THEN NULL ELSE jsonb_build_object('id', v_id) END);
 END
 $$;

@@ -16,6 +16,8 @@ export const sendCourtBookingNotice: FnHandler = async ({ data }) => {
   const kind = String(data.kind || "") as CourtBookingKind;
   const dateLabel = String(data.dateLabel || "").trim();
   const note = String(data.note || "");
+  // Lo pagado y lo que resta (alta y cambio); opcional
+  const paymentLabel = String(data.paymentLabel || "").trim().slice(0, 160);
   const rawSlots: unknown[] = Array.isArray(data.slots) ? data.slots : [];
   if (!EMAIL_RE.test(to)) {
     throw new FnError("invalid-argument", "El correo no es válido.");
@@ -38,7 +40,7 @@ export const sendCourtBookingNotice: FnHandler = async ({ data }) => {
     throw new FnError("invalid-argument", "Faltan los datos de la renta.");
   }
   const { name: platformName } = await platformBrand();
-  const content = { platformName, kind, dateLabel, note, slots };
+  const content = { platformName, kind, dateLabel, note, slots, paymentLabel };
   const mailed = await sendGmail({
     to,
     subject: courtBookingSubject(kind, platformName),

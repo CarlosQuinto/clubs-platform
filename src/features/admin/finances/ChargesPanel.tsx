@@ -7,7 +7,7 @@ import type {
   LeagueFeeKind,
 } from "../../../infrastructure/api/types";
 import { changeChargeStatus, loadLeagueCharges } from "../../../domains/finances/leagueCommands";
-import { CHARGE_KINDS, CHARGE_STATUS_LABEL, FEE_KIND_LABEL, isPaidOnBooking, payerLabel } from "../../../domains/finances/league";
+import { CHARGE_KINDS, CHARGE_STATUS_LABEL, FEE_KIND_LABEL, isRental, payerLabel } from "../../../domains/finances/league";
 import { formatCurrency } from "../../../domains/finances/helpers";
 import { financeText, isFinanceNote } from "../../../shared/textLimits";
 import ConfirmModal from "../../../shared/ConfirmModal";
@@ -104,8 +104,8 @@ export default function ChargesPanel({ setup }: { setup: AdminFinanceSetupData }
     <SectionCard title="Cobros" icon={<Wallet size={16} color={C.amber} />}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
         <p style={{ margin: 0, fontSize: "0.8rem", color: C.gray500 }}>
-          Los cobros se registran solos: inscripciones, partidos jugados, tarjetas, rentas de cancha (ya pagadas) y
-          anuncios con precio. Aquí marcas si el equipo ya lo cubrió.
+          Los cobros se registran solos: inscripciones, partidos jugados, tarjetas, rentas de cancha (con lo pagado al
+          apartar) y anuncios con precio. Aquí marcas si el equipo ya lo cubrió.
         </p>
         <div>
           <PrimaryButton type="button" onClick={() => setCreating((open) => !open)}>
@@ -200,7 +200,7 @@ export default function ChargesPanel({ setup }: { setup: AdminFinanceSetupData }
                         Cancelar
                       </SecondaryButton>
                     )}
-                    {(charge.status === "CONDONADO" || (charge.status === "CANCELADO" && !isPaidOnBooking(charge))) && (
+                    {(charge.status === "CONDONADO" || (charge.status === "CANCELADO" && !isRental(charge))) && (
                       <SecondaryButton type="button" onClick={() => ask("reactivate", charge)} style={small}>
                         Reactivar
                       </SecondaryButton>
