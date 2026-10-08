@@ -10,7 +10,7 @@ export default function ResultCard({ match, actions }: { match: LiveMatchView; a
   const scored = match.homeScore != null && match.awayScore != null;
   const home = scored ? String(match.homeScore) : live ? "0" : "–";
   const away = scored ? String(match.awayScore) : live ? "0" : "–";
-  const note = [match.walkover ? "W.O." : null, match.penaltiesLabel].filter(Boolean).join(" · ");
+  const note = [match.walkover ? "W.O." : null, match.walkoverNote, match.penaltiesLabel].filter(Boolean).join(" · ");
   const label = live
     ? ["En vivo", match.minuteLabel].filter(Boolean).join(" ")
     : match.pending

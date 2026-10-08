@@ -259,6 +259,7 @@ export default function CourtsAdmin() {
   );
   const courts = view?.courts ?? [];
   const holds = view?.holds ?? [];
+  const clubs = view?.clubs ?? [];
   const [enabled, setEnabled] = useState(false);
   const [slot, setSlot] = useState<CourtSlotMinutes>(60);
   const [windows, setWindows] = useState<TimeWindow[]>([]);
@@ -565,6 +566,7 @@ export default function CourtsAdmin() {
           onDate={setGridDate}
           courts={courts}
           holds={holds}
+          clubs={clubs}
           windows={windows}
           slot={slot}
           onEditCourt={openEditCourt}
@@ -920,6 +922,7 @@ function DayGrid({
   onDate,
   courts,
   holds,
+  clubs,
   windows,
   slot,
   onEditCourt,
@@ -930,6 +933,7 @@ function DayGrid({
   onDate: (value: string) => void;
   courts: Court[];
   holds: CourtHold[];
+  clubs: { id: string; name: string }[];
   windows: TimeWindow[];
   slot: CourtSlotMinutes;
   onEditCourt: (court: Court) => void;
@@ -943,6 +947,8 @@ function DayGrid({
   const [guest, setGuest] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [note, setNote] = useState("");
+  // Club al que se le cobra la renta; vacío = quien aparta (externo)
+  const [chargeClub, setChargeClub] = useState("");
   const [bookSeen, setBookSeen] = useState<Partial<Record<HoldField, boolean>>>({});
   const [busy, setBusy] = useState(false);
   const booking = useRef(false);
@@ -1119,6 +1125,7 @@ function DayGrid({
           endTime: fromMinutes(range.end),
           note: text,
           guestEmail: cleanEmail,
+          clubId: chargeClub || null,
           fresh: true,
         });
       }
@@ -1140,6 +1147,7 @@ function DayGrid({
       setGuest("");
       setGuestEmail("");
       setNote("");
+      setChargeClub("");
       setBookSeen({});
       setOpen(false);
       if (!mailed) setNotice(BOOKING_MAIL_FAIL);
@@ -1315,6 +1323,16 @@ function DayGrid({
               onBlur={() => seeBook("note")}
               placeholder="Opcional"
             />
+          </Field>
+          <Field label="Cobrar a" hint="Si la liga cobra la renta (Finanzas → Tarifas), el cargo va a este club o a quien aparta.">
+            <FormSelect value={chargeClub} disabled={busy} onChange={(e) => setChargeClub(e.target.value)}>
+              <option value="">Quien aparta</option>
+              {clubs.map((club) => (
+                <option key={club.id} value={club.id}>
+                  {club.name}
+                </option>
+              ))}
+            </FormSelect>
           </Field>
         </div>
       </ConfirmModal>

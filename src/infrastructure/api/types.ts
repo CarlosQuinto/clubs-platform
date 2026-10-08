@@ -77,6 +77,9 @@ export enum InviteKind {
   ACCEPT = "ACCEPT",
 }
 
+/** Quién no se presentó a un partido dado por W.O. (null = W.O. por ingreso tardío). */
+export type MatchNoShow = "HOME" | "AWAY" | "BOTH";
+
 export enum MatchStatus {
   UNSCHEDULED = "UNSCHEDULED",
   SCHEDULED = "SCHEDULED",
@@ -253,6 +256,9 @@ export interface AdminAdsData {
     endsOn: DateString;
     status: AdStatus;
     sortOrder: number;
+    price?: number;
+    advertiserName?: string;
+    advertiserContact?: string;
     adPlacements_on_ad: ({
       placement: AdPlacementKind;
     })[];
@@ -295,6 +301,8 @@ export interface AdminClubsData {
     locality?: {
       id: string;
     } & Locality_Key;
+    /** Saldo pendiente con la liga (finanzas). */
+    leagueDebt?: number;
   } & Club_Key)[];
 }
 
@@ -350,6 +358,8 @@ export interface AdminCourtsData {
     source: CourtHoldSource;
     note: string;
     guestEmail: string;
+    /** Club al que se le cobra la renta (finanzas de la liga). */
+    clubId?: string | null;
     court: {
       id: string;
     } & Court_Key;
@@ -368,6 +378,7 @@ export interface AdminCourtsData {
       };
     } & Match_Key;
   } & CourtHold_Key)[];
+  clubs?: { id: string; name: string }[];
 }
 
 export interface AdminCoverData {
@@ -870,6 +881,7 @@ export interface ClubScreenData {
     homeScore?: number | null;
     awayScore?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     homeClub: {
       id: string;
       name: string;
@@ -1374,6 +1386,23 @@ export interface ReopenTournamentVariables {
   id: string;
 }
 
+export interface MarkMatchNoShowData {
+  match?: unknown | null;
+}
+
+export interface MarkMatchNoShowVariables {
+  id: string;
+  noShow: MatchNoShow;
+}
+
+export interface ClearMatchNoShowData {
+  match?: unknown | null;
+}
+
+export interface ClearMatchNoShowVariables {
+  id: string;
+}
+
 export interface ResetWalkoverMatchData {
   match?: unknown | null;
 }
@@ -1700,6 +1729,7 @@ export interface LiveMatchesData {
     penaltiesHome?: number | null;
     penaltiesAway?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     homeClub: {
       name: string;
       logoUrl?: string | null;
@@ -1783,6 +1813,7 @@ export interface MatchDetailData {
     penaltiesHome?: number | null;
     penaltiesAway?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     court?: {
       name: string;
       imageUrl?: string | null;
@@ -1918,6 +1949,7 @@ export interface MatchPreviewData {
     penaltiesHome?: number | null;
     penaltiesAway?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     homeClub: {
       id: string;
       name: string;
@@ -2098,6 +2130,7 @@ export interface MatchesByTournamentData {
     homeScore?: number | null;
     awayScore?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     homeClub: {
       id: string;
       name: string;
@@ -2463,6 +2496,9 @@ export interface SaveAdVariables {
   endsOn: DateString;
   status: string;
   sortOrder: number;
+  price?: number;
+  advertiserName?: string;
+  advertiserContact?: string;
 }
 
 export interface SaveClubDefaultLineupData {
@@ -2558,6 +2594,8 @@ export interface SaveCourtHoldVariables {
   endTime: string;
   note: string;
   guestEmail?: string;
+  /** Club al que se le cobra la renta; sin la clave, una edición conserva el que tenía. */
+  clubId?: string | null;
   fresh?: boolean;
 }
 
@@ -3136,6 +3174,7 @@ export interface TournamentEditorData {
     homeScore?: number | null;
     awayScore?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     roundLabel: string;
     homeClub: {
       id: string;
@@ -3224,6 +3263,7 @@ export interface TournamentScreenData {
     penaltiesHome?: number | null;
     penaltiesAway?: number | null;
     walkover: boolean;
+    noShow?: MatchNoShow | null;
     homeClub: {
       id: string;
       name: string;
@@ -3398,4 +3438,249 @@ export interface UpdateTournamentSettingsVariables {
 export interface User_Key {
   id: string;
   __typename?: 'User_Key';
+}
+
+// ---- Finanzas de la liga (db/migrations/1015_fn_finance.sql) ----
+
+export type LeagueFeeKind =
+  | "CLUB_REGISTRATION" | "CLUB_PAGE" | "SEASON_ENROLLMENT" | "TOURNAMENT_ENROLLMENT" | "DEPOSIT"
+  | "MATCH_REFEREE" | "MATCH_COURT" | "COURT_RENTAL"
+  | "CARD_YELLOW" | "CARD_RED" | "WALKOVER" | "PROTEST" | "RESCHEDULE"
+  | "PLAYER_CARD" | "LATE_SIGNING"
+  | "AD" | "SPONSORSHIP"
+  | "OTHER";
+export type LeagueChargeStatus = "PENDIENTE" | "PARCIAL" | "PAGADO" | "CONDONADO" | "CANCELADO";
+export type LeaguePaymentMethod = "EFECTIVO" | "TRANSFERENCIA" | "OTRO";
+export type LeagueExpenseCategory =
+  | "ARBITROS" | "PREMIOS" | "MANTENIMIENTO" | "SERVICIOS" | "MATERIAL" | "SERVIDOR" | "PUBLICIDAD" | "OTRO"
+  | "DEVOLUCION" | "DANOS";
+export type LeagueFeePeriod = "ONCE" | "MONTH" | "SEASON";
+export type LeagueSplitMode = "EACH" | "HALF";
+export type LeagueSummaryScope = "TOTAL" | "YEAR" | "MONTH" | "SEASON" | "TOURNAMENT";
+
+export interface LeagueFee {
+  kind: LeagueFeeKind;
+  enabled: boolean;
+  amount: number;
+  period: LeagueFeePeriod;
+  splitMode: LeagueSplitMode;
+  includesRegistration: boolean;
+}
+
+export interface AdminFinanceSetupVariables {
+  seasonId?: string | null;
+}
+
+export interface AdminFinanceSetupData {
+  seasonId: string | null;
+  seasons: { id: string; name: string; active: boolean; startDate?: DateString | null; endDate?: DateString | null }[];
+  tournaments: { id: string; name: string; seasonId: string }[];
+  clubs: { id: string; name: string; active: boolean }[];
+  fees: LeagueFee[];
+}
+
+export interface LeaguePayment {
+  id: string;
+  amount: number;
+  paidOn: DateString;
+  method: LeaguePaymentMethod;
+  note: string;
+}
+
+export interface LeagueCharge {
+  id: string;
+  kind: LeagueFeeKind;
+  status: LeagueChargeStatus;
+  concept: string;
+  amount: number;
+  paid: number;
+  balance: number;
+  chargedOn: DateString;
+  dueDate?: DateString | null;
+  club?: { id: string; name: string } | null;
+  payerName: string;
+  payerContact: string;
+  seasonId?: string | null;
+  tournament?: { id: string; name: string } | null;
+  matchId?: string | null;
+  note?: string;
+  automatic?: boolean;
+  createdAt: TimestampString;
+  payments: LeaguePayment[];
+}
+
+export interface AdminLeagueChargesVariables {
+  seasonId?: string | null;
+  tournamentId?: string | null;
+  clubId?: string | null;
+  status?: LeagueChargeStatus | null;
+  kind?: LeagueFeeKind | null;
+}
+
+export interface AdminLeagueChargesData {
+  charges: LeagueCharge[];
+}
+
+export interface LeagueExpense {
+  id: string;
+  category: LeagueExpenseCategory;
+  description: string;
+  amount: number;
+  spentOn: DateString;
+  seasonId?: string | null;
+  tournament?: { id: string; name: string } | null;
+  chargeId?: string | null;
+}
+
+export interface AdminLeagueExpensesVariables {
+  seasonId?: string | null;
+  tournamentId?: string | null;
+}
+
+export interface AdminLeagueExpensesData {
+  expenses: LeagueExpense[];
+}
+
+export interface AdminFinanceSummaryVariables {
+  scope: LeagueSummaryScope;
+  year?: number;
+  month?: number;
+  seasonId?: string;
+  tournamentId?: string;
+}
+
+export interface LeagueSummaryTotals {
+  generated: number;
+  collected: number;
+  pending: number;
+  condoned: number;
+  expenses: number;
+  refunds: number;
+  damages: number;
+  losses: number;
+  result: number;
+}
+
+export interface AdminFinanceSummaryData {
+  summary: LeagueSummaryTotals | null;
+  byKind?: { kind: LeagueFeeKind; generated: number; collected: number; pending: number }[];
+  byCategory?: { category: LeagueExpenseCategory; amount: number }[];
+  series?: { key: string; label: string; generated: number; collected: number; expenses: number; losses: number }[];
+  debtors?: { club: { id: string; name: string }; pending: number; charges: number }[];
+}
+
+export interface SaveLeagueFeeVariables {
+  seasonId: string;
+  kind: LeagueFeeKind;
+  enabled: boolean;
+  amount: number;
+  period?: LeagueFeePeriod;
+  splitMode?: LeagueSplitMode;
+  includesRegistration?: boolean;
+}
+
+export interface SaveLeagueFeeData {
+  fee?: { kind: LeagueFeeKind } | null;
+}
+
+export interface CreateLeagueChargeVariables {
+  id: string;
+  kind: LeagueFeeKind;
+  clubId?: string | null;
+  payerName?: string | null;
+  payerContact?: string | null;
+  concept: string;
+  amount: number;
+  chargedOn: string;
+  dueDate?: string | null;
+  seasonId?: string | null;
+  tournamentId?: string | null;
+}
+
+export interface CreateLeagueChargeData {
+  charge?: { id: string } | null;
+}
+
+export interface SetLeagueChargeStatusVariables {
+  id: string;
+  action: "CONDONAR" | "CANCELAR" | "REACTIVAR";
+  note?: string;
+}
+
+export interface SetLeagueChargeStatusData {
+  charge?: { id: string; status: LeagueChargeStatus } | null;
+}
+
+export interface AddLeaguePaymentVariables {
+  id: string;
+  chargeId: string;
+  amount: number;
+  paidOn: string;
+  method: LeaguePaymentMethod;
+  note?: string;
+}
+
+export interface AddLeaguePaymentData {
+  payment?: { id: string } | null;
+  charge?: { id: string; status: LeagueChargeStatus } | null;
+}
+
+export interface DeleteLeaguePaymentVariables {
+  id: string;
+}
+
+export interface DeleteLeaguePaymentData {
+  deleted?: number | null;
+}
+
+export interface SaveLeagueExpenseVariables {
+  id: string;
+  category: LeagueExpenseCategory;
+  description: string;
+  amount: number;
+  spentOn: string;
+  seasonId?: string | null;
+  tournamentId?: string | null;
+  chargeId?: string | null;
+}
+
+export interface SaveLeagueExpenseData {
+  expense?: { id: string } | null;
+}
+
+export interface DeleteLeagueExpenseVariables {
+  id: string;
+}
+
+export interface DeleteLeagueExpenseData {
+  deleted?: number | null;
+}
+
+export interface GenerateSeasonChargesVariables {
+  seasonId: string;
+}
+
+export interface GenerateSeasonChargesData {
+  created?: number | null;
+}
+
+export interface GenerateMonthlyPageChargesVariables {
+  month: string;
+}
+
+export interface GenerateMonthlyPageChargesData {
+  created?: number | null;
+  configured?: boolean | null;
+}
+
+export interface ClubLeagueAccountVariables {
+  clubId: string;
+}
+
+export interface ClubLeagueAccountData {
+  account: {
+    pending: number;
+    paid: number;
+    charges: Omit<LeagueCharge, "note" | "automatic" | "matchId">[];
+  } | null;
 }

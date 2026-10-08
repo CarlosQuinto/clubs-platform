@@ -34,6 +34,10 @@ export interface Ad {
   endsAt: string;
   status: AdStatus;
   order: number;
+  /** Precio que la liga cobra por el anuncio (0 = sin cobro) y a quién. */
+  price: number;
+  advertiserName: string;
+  advertiserContact: string;
   /** El documento guardaba una ubicación que la app ya no ofrece. */
   hasLegacyPlacement: boolean;
 }

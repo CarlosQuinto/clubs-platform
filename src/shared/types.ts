@@ -130,8 +130,9 @@ export interface Match {
   status: MatchStatus;
   homeScore?: number | null;
   awayScore?: number | null;
-  /** Victoria 3-0 otorgada: el rival entró con esa jornada ya jugada. */
+  /** W.O.: 3-0 por ingreso tardío al torneo, o un club (o ninguno) no se presentó (`noShow`). */
   walkover?: boolean;
+  noShow?: "HOME" | "AWAY" | "BOTH" | null;
   penaltiesHome?: number | null;
   penaltiesAway?: number | null;
   sides?: Record<string, MatchSide>;
@@ -256,6 +257,8 @@ export interface CourtHold {
   matchStartDate?: string;
   note?: string;
   guestEmail?: string;
+  /** Club al que se le cobra la renta (finanzas de la liga). */
+  clubId?: string | null;
 }
 
 export type InquiryStatus = "new" | "done";

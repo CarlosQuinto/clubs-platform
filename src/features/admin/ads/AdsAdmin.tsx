@@ -36,7 +36,13 @@ import {
   brandName,
   canonicalWebUrl,
   isBrandName,
+  isMoneyText,
+  isPayerContact,
+  isPayerName,
   isWebUrl,
+  moneyText,
+  payerContact,
+  payerName,
   webUrl,
 } from "../../../shared/textLimits";
 import { IMAGE_ACCEPT, isAllowedImage } from "../../../shared/imageFile";
@@ -64,10 +70,14 @@ interface Draft {
   startsAt: string;
   endsAt: string;
   order: number;
+  /** Lo que la liga cobra por el anuncio (finanzas); vacío = sin cobro. */
+  price: string;
+  advertiserName: string;
+  advertiserContact: string;
 }
 
 type InventoryStatus = AdStatus;
-type AdField = "brand" | "startsAt" | "endsAt" | "href" | "placements" | "image";
+type AdField = "brand" | "startsAt" | "endsAt" | "href" | "placements" | "image" | "price" | "advertiser" | "contact";
 
 const STATUS_COLOR: Record<InventoryStatus, "red" | "amber" | "gray" | "green"> = {
   EXPIRADO: "red",
@@ -94,6 +104,9 @@ function emptyDraft(order: number): Draft {
     startsAt: todayIso(),
     endsAt: addDaysIso(30),
     order,
+    price: "",
+    advertiserName: "",
+    advertiserContact: "",
   };
 }
 
@@ -130,6 +143,10 @@ function draftTips(draft: Draft, editing: boolean, today: string): Record<AdFiel
       : isWebUrl(draft.imageUrl, IMAGE_URL_MAX)
         ? ""
         : "Usa una URL de imagen que empiece con http:// o https://.",
+    price: !draft.price || isMoneyText(draft.price) ? "" : "Escribe el precio con hasta dos decimales.",
+    advertiser:
+      !draft.advertiserName.trim() || isPayerName(draft.advertiserName) ? "" : "Usa de 3 a 50 letras, números o comas.",
+    contact: isPayerContact(draft.advertiserContact) ? "" : "Teléfono o correo, hasta 100 caracteres.",
   };
 }
 
@@ -369,7 +386,7 @@ export default function AdsAdmin() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (savingAd.current || !ready) {
-      setSeen(new Set<AdField>(["brand", "startsAt", "endsAt", "href", "placements", "image"]));
+      setSeen(new Set<AdField>(["brand", "startsAt", "endsAt", "href", "placements", "image", "price", "advertiser", "contact"]));
       return;
     }
     const existing = draft.id ? ads.find((ad) => ad.id === draft.id) : undefined;
@@ -395,6 +412,9 @@ export default function AdsAdmin() {
         endsOn: draft.endsAt,
         status,
         sortOrder: order,
+        price: draft.price ? parseFloat(draft.price) : 0,
+        advertiserName: draft.advertiserName.trim(),
+        advertiserContact: draft.advertiserContact.trim(),
         placements: placements.map((placement) => TO_SQL_PLACEMENT[placement]),
       });
       screen.reload();
@@ -431,6 +451,9 @@ export default function AdsAdmin() {
       startsAt: ad.startsAt,
       endsAt: ad.endsAt,
       order: ad.order,
+      price: ad.price > 0 ? String(ad.price) : "",
+      advertiserName: ad.advertiserName,
+      advertiserContact: ad.advertiserContact,
     });
   };
 
@@ -593,6 +616,46 @@ export default function AdsAdmin() {
               placeholder="https://"
               maxLength={HREF_MAX}
               aria-invalid={Boolean(tipFor("href"))}
+              disabled={locked}
+            />
+          </Field>
+          <div className="admin-grid-2">
+            <Field label="Precio" hint="Opcional. Lo que la liga cobra por el anuncio (Finanzas)." tip={tipFor("price")}>
+              <FormInput
+                inputMode="decimal"
+                value={draft.price}
+                onChange={(e) => {
+                  touch("price");
+                  setDraft((current) => ({ ...current, price: moneyText(e.target.value) }));
+                }}
+                placeholder="0.00"
+                aria-invalid={Boolean(tipFor("price"))}
+                disabled={locked}
+              />
+            </Field>
+            <Field label="Anunciante" hint="Opcional. Si no, se cobra a la marca." tip={tipFor("advertiser")}>
+              <FormInput
+                value={draft.advertiserName}
+                maxLength={50}
+                onChange={(e) => {
+                  touch("advertiser");
+                  setDraft((current) => ({ ...current, advertiserName: payerName(e.target.value) }));
+                }}
+                onBlur={() => touch("advertiser")}
+                aria-invalid={Boolean(tipFor("advertiser"))}
+                disabled={locked}
+              />
+            </Field>
+          </div>
+          <Field label="Contacto del anunciante" hint="Opcional. Teléfono o correo." tip={tipFor("contact")}>
+            <FormInput
+              value={draft.advertiserContact}
+              maxLength={100}
+              onChange={(e) => {
+                touch("contact");
+                setDraft((current) => ({ ...current, advertiserContact: payerContact(e.target.value) }));
+              }}
+              aria-invalid={Boolean(tipFor("contact"))}
               disabled={locked}
             />
           </Field>

@@ -4,6 +4,8 @@ import { TransactionForm } from "./TransactionForm";
 import { TransactionHistory } from "./TransactionHistory";
 import { FinancesProps } from "../../../domains/finances/types";
 import { useFinancesPage } from "./useFinancesPage";
+import { LeagueAccount } from "./LeagueAccount";
+import { useClub } from "../../../domains/clubs/ClubContext";
 
 export default function Finances(props: FinancesProps) {
   const {
@@ -21,6 +23,7 @@ export default function Finances(props: FinancesProps) {
     handleSubmitTransaction,
     perms,
   } = useFinancesPage(props);
+  const { clubId } = useClub();
 
   return (
     <div
@@ -36,6 +39,8 @@ export default function Finances(props: FinancesProps) {
         totalExpense={totalExpense}
         balance={balance}
       />
+
+      {perms.canEditFinanzas && <LeagueAccount clubId={clubId} />}
 
       <GoalsList
         goals={goals}

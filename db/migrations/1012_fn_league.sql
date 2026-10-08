@@ -34,7 +34,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     'matches', (
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'id', m.id, 'status', to_jsonb(m.status), 'matchDate', to_jsonb(m.match_date), 'startTime', m.start_time,
-        'homeScore', m.home_score, 'awayScore', m.away_score, 'walkover', m.walkover, 'roundLabel', m.round_label,
+        'homeScore', m.home_score, 'awayScore', m.away_score, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show), 'roundLabel', m.round_label,
         'homeClub', jsonb_build_object('id', m.home_club_id), 'awayClub', jsonb_build_object('id', m.away_club_id))
         ORDER BY m.round_number NULLS LAST, m.match_date NULLS LAST, m.id), '[]'::jsonb)
       FROM matches m WHERE m.tournament_id = p ->> 'id')
@@ -396,6 +396,7 @@ BEGIN
   UPDATE matches
   SET status = 'PLAYED'::match_status,
       walkover = (p ->> 'walkover')::boolean,
+      no_show = NULL,
       home_score = (p ->> 'homeScore')::int,
       away_score = (p ->> 'awayScore')::int
   WHERE id = p ->> 'id'
@@ -434,7 +435,7 @@ BEGIN
     RETURN jsonb_build_object('match', NULL);
   END IF;
   UPDATE matches
-  SET status = 'UNSCHEDULED'::match_status, walkover = false,
+  SET status = 'UNSCHEDULED'::match_status, walkover = false, no_show = NULL,
       home_score = NULL, away_score = NULL, penalties_home = NULL, penalties_away = NULL,
       match_date = NULL, start_time = NULL, court_id = NULL, venue = '', updated_at = now()
   WHERE id = v_id AND walkover = true AND NOT match_locked(v_id)
@@ -448,6 +449,67 @@ BEGIN
 END
 $$;
 CALL api_expose('reset_walkover_match', 'USER');
+
+-- No se presentó el local (HOME), el visitante (AWAY) o ninguno (BOTH): el partido se da por jugado como W.O.,
+-- 3-0 a favor del que llegó o 0-0 si faltaron los dos (la tabla les da derrota a ambos, 0006_no_presentado.sql).
+-- Vale para partidos con fecha de hoy o anterior, programados o ya capturados, pero no para el W.O. por ingreso
+-- tardío. Se borran goles y tarjetas; la cancha apartada se conserva porque estuvo reservada.
+CREATE OR REPLACE FUNCTION public.mark_match_no_show(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_id text := p ->> 'id';
+  v_no_show text := p ->> 'noShow';
+  v_saved text;
+BEGIN
+  IF NOT is_platform_admin() OR v_id IS NULL OR v_no_show IS NULL
+     OR v_no_show NOT IN ('HOME', 'AWAY', 'BOTH') OR match_locked(v_id) THEN
+    RETURN jsonb_build_object('match', NULL);
+  END IF;
+  UPDATE matches
+  SET status = 'PLAYED'::match_status,
+      walkover = true,
+      no_show = v_no_show::match_no_show,
+      home_score = CASE WHEN v_no_show = 'AWAY' THEN 3 ELSE 0 END,
+      away_score = CASE WHEN v_no_show = 'HOME' THEN 3 ELSE 0 END,
+      penalties_home = NULL, penalties_away = NULL,
+      updated_at = now()
+  WHERE id = v_id
+    AND match_date IS NOT NULL AND match_date <= CURRENT_DATE
+    AND (status = 'SCHEDULED'::match_status
+      OR (status = 'PLAYED'::match_status AND (NOT walkover OR no_show IS NOT NULL)))
+  RETURNING id INTO v_saved;
+  IF v_saved IS NOT NULL THEN
+    DELETE FROM match_goals WHERE match_id = v_saved;
+    DELETE FROM match_cards WHERE match_id = v_saved;
+    UPDATE tournaments
+    SET status = 'ACTIVE'::tournament_status
+    WHERE id = (SELECT tournament_id FROM matches WHERE id = v_saved) AND status = 'UPCOMING';
+  END IF;
+  RETURN jsonb_build_object('match', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('id', v_saved) END);
+END
+$$;
+CALL api_expose('mark_match_no_show', 'USER');
+
+-- Deshace un «no se presentó» marcado por error: vuelve a programado con su fecha, hora y cancha, sin marcador.
+CREATE OR REPLACE FUNCTION public.clear_match_no_show(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_id text := p ->> 'id';
+  v_saved text;
+BEGIN
+  IF NOT is_platform_admin() OR v_id IS NULL OR match_locked(v_id) THEN
+    RETURN jsonb_build_object('match', NULL);
+  END IF;
+  UPDATE matches
+  SET status = 'SCHEDULED'::match_status, walkover = false, no_show = NULL,
+      home_score = NULL, away_score = NULL, penalties_home = NULL, penalties_away = NULL,
+      updated_at = now()
+  WHERE id = v_id AND no_show IS NOT NULL
+  RETURNING id INTO v_saved;
+  RETURN jsonb_build_object('match', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('id', v_saved) END);
+END
+$$;
+CALL api_expose('clear_match_no_show', 'USER');
 
 -- Renumera la jornada de un partido no jugado (al pasar un torneo a 1 partido, el cruce que se conserva
 -- puede venir de la vuelta y hay que llevarlo a su jornada de ida).
@@ -560,7 +622,8 @@ BEGIN
   SET home_score = (p ->> 'homeScore')::int,
       away_score = (p ->> 'awayScore')::int,
       status = 'PLAYED'::match_status,
-      walkover = coalesce((p ->> 'walkover')::boolean, false)
+      walkover = coalesce((p ->> 'walkover')::boolean, false),
+      no_show = NULL
   WHERE id = p ->> 'id'
     AND NOT match_locked(p ->> 'id')
   RETURNING id INTO v_saved;

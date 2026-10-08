@@ -22,6 +22,8 @@ export interface MatchHeaderView {
   /** «4–3 pen.» cuando hubo penales. */
   penaltiesLabel: string | null;
   walkover: boolean;
+  /** «No se presentó X» o «3-0 por ingreso tardío» en un W.O. */
+  walkoverNote: string | null;
   dateLabel: string | null;
   timeLabel: string | null;
   venue: string | null;

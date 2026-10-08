@@ -20,6 +20,7 @@ import InboxAdmin from "./inbox/InboxAdmin";
 import SuperAdminsAdmin from "./admins/SuperAdminsAdmin";
 import CompetitionAdminView from "./competition/CompetitionAdminView";
 import CourtsAdmin from "./courts/CourtsAdmin";
+import FinancesAdmin from "./finances/FinancesAdmin";
 import Field from "./Field";
 import InviteSignupLink from "../shell/InviteSignupLink";
 import ConfirmModal from "../../shared/ConfirmModal";
@@ -54,6 +55,7 @@ import {
   validateNewClub,
 } from "./clubsAdminMapper";
 import { useAdminQuery } from "./useAdminQuery";
+import { formatCurrency } from "../../domains/finances/helpers";
 import {
   DEFAULT_CLUB_DESCRIPTION,
   DEFAULT_HERO_IMAGE,
@@ -69,7 +71,7 @@ import {
   SectionCard,
 } from "../../shared/ui";
 
-type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
+type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
 
 export default function SuperAdmin() {
   const { user, loading, isSuperAdmin, sqlAdmin } = useAuth();
@@ -81,7 +83,8 @@ export default function SuperAdmin() {
     tabParam === "ads" ||
     tabParam === "inbox" ||
     tabParam === "admins" ||
-    tabParam === "courts"
+    tabParam === "courts" ||
+    tabParam === "finances"
       ? tabParam
       : "clubs";
   const [membersClub, setMembersClub] = useState<ClubSummary | null>(null);
@@ -139,6 +142,8 @@ export default function SuperAdmin() {
 
       {tab === "courts" && <CourtsAdmin />}
 
+      {tab === "finances" && <FinancesAdmin />}
+
       {tab === "competition" && <CompetitionAdminView />}
 
       {tab === "clubs" && <ClubsAdmin onMembers={setMembersClub} />}
@@ -172,6 +177,7 @@ function ClubsAdmin({
     active: club.active,
     disabledReason: club.disabledReason || "",
   }));
+  const debts = new Map((screen.data?.clubs ?? []).map((club) => [club.id, club.leagueDebt ?? 0]));
   const [newLocality, setNewLocality] = useState("");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -635,6 +641,9 @@ function ClubsAdmin({
                   <Badge color={club.active ? "green" : "gray"}>
                     {club.active ? "Activo" : "Oculto"}
                   </Badge>
+                  {(debts.get(club.id) ?? 0) > 0 && (
+                    <Badge color="red">Debe {formatCurrency(debts.get(club.id) ?? 0)}</Badge>
+                  )}
                 </div>
                 <div className="admin-club-item__meta">
                   /{club.slug} ·{" "}

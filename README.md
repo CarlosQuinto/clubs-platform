@@ -91,17 +91,25 @@ Hay tres tipos de usuario:
 - **Inicio:** cumpleaños, portada (imágenes del héroe), récord del equipo, vitrina de trofeos, salón de la fama y galería por álbumes. Editar portada y galería requiere `canEditPortada`.
 - **Agenda:** entrenamientos, amistosos y partidos oficiales; asistencia, alineación, marcador, álbum y estadísticas del evento. Desde aquí se guarda la **disponibilidad semanal** del club, que se usa para sugerir fechas de partido.
 - **Jugadores:** plantilla, estadísticas, comparación y ficha con foto.
-- **Finanzas:** resumen, movimientos (ingresos y gastos), metas con aportación por jugador.
+- **Finanzas:** resumen, movimientos (ingresos y gastos), metas con aportación por jugador. El Presidente y el Tesorero ven además la **cuenta con la liga** (`club_league_account`): lo que la liga le cobra al club, lo pagado y el saldo, solo lectura.
 - **Inventario:** material por estado (`BUENO`, `MALO`, `PERDIDO`).
 - **Miembros:** modal en el encabezado del club para invitar, cambiar roles y cancelar invitaciones (solo Presidente o superadmin).
 
 ### Superadministración (`/admin?tab=`)
 
-`clubs`, `competition` (temporadas, categorías, torneos), `cover` (portada y marca de la plataforma), `ads` (anuncios por ubicación `home`, `tournament`, `club`, `teams`; la vigencia la deciden las fechas y «Pausar» es el único freno manual), `inbox` (contactos y solicitudes de equipo), `admins` (superadministradores e invitaciones) y `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido).
+`clubs`, `competition` (temporadas, categorías, torneos), `cover` (portada y marca de la plataforma), `ads` (anuncios por ubicación `home`, `tournament`, `club`, `teams`; la vigencia la deciden las fechas y «Pausar» es el único freno manual), `inbox` (contactos y solicitudes de equipo), `admins` (superadministradores e invitaciones), `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido; al apartar se elige a qué club se le cobra la renta) y `finances` (finanzas de la liga, ver abajo).
+
+**Finanzas de la liga** (`/admin?tab=finances`, [`1015_fn_finance.sql`](db/migrations/1015_fn_finance.sql)):
+
+- **Tarifas** por temporada (`league_fees`): cada tipo de cobro se activa y lleva su precio. Partidos (arbitraje y uso de cancha, a cada club o repartido entre los dos), renta de cancha (usa el costo por hora de la cancha), registro del club, página del club (por mes o por temporada), inscripción a la temporada o al torneo (puede incluir el registro del club), fianza, multas (amarilla, roja, no presentarse, protesta, reprogramación), credencial y fichaje tardío, publicidad (usa el precio del anuncio) y patrocinio.
+- **Cargos automáticos.** Triggers sobre `matches`, `match_cards`, `tournament_clubs`, `court_holds` y `ads` crean el cargo cuando pasa el hecho: partido jugado, tarjeta en un partido jugado, «no se presentó», inscripción a un torneo, renta manual y anuncio con precio. Si el hecho desaparece (se borra la tarjeta, se cancela la renta, se deshace el no presentado), el cargo pendiente y sin abonos pasa a `CANCELADO`, y revive si el hecho vuelve. Desactivar una tarifa no cancela lo ya cobrado. Los cobros de temporada y la mensualidad de la página se generan con un botón; repetirlo no duplica (`source_key` único).
+- **Cargos manuales** a un club o a un externo (patrocinador, quien renta), **pagos** que anota el administrador (efectivo, transferencia u otro; parciales hasta el saldo), **condonar** (lo que falta cuenta como pérdida), **cancelar** (un error, sin abonos) y **reactivar**.
+- **Gastos y pérdidas** (`league_expenses`): árbitros, premios, mantenimiento, servicios, material, servidor, publicidad propia y otros; pérdidas = devoluciones (fianza, protesta procedente, reserva pagada y cancelada) y daños y robos, más lo condonado.
+- **Resumen** (`admin_finance_summary`) por total, año, mes, temporada o torneo: generado, cobrado, por cobrar, gastos, pérdidas y resultado (cobrado − gastos − devoluciones − daños), desglose por concepto y por categoría, serie mes a mes, año a año o por jornada, y clubes con adeudo. Lo cobrado cuenta por la fecha del pago; lo generado y lo pendiente, por la fecha del cargo. Renta de canchas, anuncios, registro y página no pertenecen a un torneo. Los adeudos solo se avisan (también en la lista de clubes); no bloquean nada.
 
 En la ficha del torneo el superadministrador además edita el torneo, suma equipos (genera los partidos, uno o ida y vuelta según `legs`), programa fecha, hora y cancha, y captura marcador, goles y tarjetas.
 
-**Cerrar un torneo** (`close_tournament`) lo deja `FINISHED`, arma el podio con la tabla y desprograma los partidos pendientes liberando sus canchas; un torneo finalizado no admite marcadores, calendario ni inscripciones hasta **reabrirlo** (`reopen_tournament`, solo mientras su temporada siga activa). Cambiar la duración del partido desprograma todos los partidos programados; adelantar la fecha de inicio, solo los anteriores a ella; ningún partido se programa antes del inicio del torneo. Un partido otorgado por ingreso tardío (W.O.) se devuelve a «por programar» con `reset_walkover_match` desde el botón «Marcador». **Cerrar una temporada** (`set_season_active`) exige que sus torneos estén finalizados o forzar el cierre (los finaliza uno a uno); una temporada cerrada no se reabre.
+**Cerrar un torneo** (`close_tournament`) lo deja `FINISHED`, arma el podio con la tabla y desprograma los partidos pendientes liberando sus canchas; un torneo finalizado no admite marcadores, calendario ni inscripciones hasta **reabrirlo** (`reopen_tournament`, solo mientras su temporada siga activa). Cambiar la duración del partido desprograma todos los partidos programados; adelantar la fecha de inicio, solo los anteriores a ella; ningún partido se programa antes del inicio del torneo. Un partido otorgado por ingreso tardío (W.O.) se devuelve a «por programar» con `reset_walkover_match` desde el botón «Marcador». En la misma hoja de «Marcador», un partido con fecha de hoy o anterior se marca como **no jugado** (`mark_match_no_show`): «No se presentó» el local, el visitante o ninguno. Queda como W.O. 3-0 a favor del que llegó, o 0-0 con derrota y 0 puntos para los dos (`matches.no_show`); se borran goles y tarjetas y la ficha dice quién faltó. «Deshacer» (`clear_match_no_show`) lo devuelve a programado con su fecha, hora y cancha. **Cerrar una temporada** (`set_season_active`) exige que sus torneos estén finalizados o forzar el cierre (los finaliza uno a uno); una temporada cerrada no se reabre.
 
 ### Correo
 
@@ -294,7 +302,11 @@ clubs-platform/
 │   │   ├── 1010_fn_public.sql     # funciones RPC: pantallas públicas y sesión
 │   │   ├── 1011_fn_club.sql       # funciones RPC: panel del club
 │   │   ├── 1012_fn_league.sql     # funciones RPC: competición y marcador en vivo
-│   │   └── 1013_fn_admin.sql      # funciones RPC: /admin
+│   │   ├── 0006_no_presentado.sql # matches.no_show y la tabla con «no se presentó ninguno»
+│   │   ├── 0007_finanzas_liga.sql # tarifas, cargos, pagos y gastos de la liga
+│   │   ├── 1013_fn_admin.sql      # funciones RPC: /admin
+│   │   ├── 1014_fn_api.sql        # funciones de la API de correo
+│   │   └── 1015_fn_finance.sql    # finanzas de la liga: triggers de cargos, resumen y RPC
 │   └── seed/                      # usuarios de prueba y sus roles en los clubes dummy
 ├── docker/
 │   ├── docker-compose.yml         # stack de desarrollo y base de producción
@@ -379,7 +391,7 @@ Al rechazar, la app ejecuta `rejectTeamApplication` y la API manda el correo de 
 - Al guardar, si la cancha ya no está libre, no se guarda y se muestra «Esa cancha no está disponible en esa fecha y hora».
 - Después de programar, la app llama a `sendMatchScheduleNotice`. La API compara fecha, hora y cancha con `matches.schedule_notice_key`; solo si cambiaron, avisa a los Presidentes de ambos clubes y actualiza la llave.
 - Al sumar equipos a un torneo, la app llama a `sendTournamentEnrollmentNotice`. La API inserta en `tournament_notices` y solo manda el correo si la fila es nueva.
-- La tabla de posiciones y los goleadores no se guardan: son vistas SQL (`tournament_standings`, `tournament_scorers`) sobre los partidos `PLAYED`. Victoria 3, empate 1; desempate por puntos, diferencia, goles a favor e ID de club.
+- La tabla de posiciones y los goleadores no se guardan: son vistas SQL (`tournament_standings`, `tournament_scorers`) sobre los partidos `PLAYED`. Victoria 3, empate 1; desempate por puntos, diferencia, goles a favor e ID de club. Un partido con `no_show = 'BOTH'` cuenta como derrota sin puntos para los dos.
 
 ### Partidos en vivo
 
@@ -425,6 +437,7 @@ Todo está en PostgreSQL, definido en [`db/migrations/0001_schema.sql`](db/migra
 | Clubes | `clubs`, `club_hero_images`, `club_availability_windows`, `club_default_lineups`, `club_members`, `club_invites`, `players` |
 | Agenda del club | `club_events`, `club_event_attendees`, `club_event_goals`, `club_event_cards`, `club_event_goalkeepers`, `club_event_photos` |
 | Finanzas e inventario | `transactions`, `financial_goals`, `goal_contributions`, `inventory_items` |
+| Finanzas de la liga | `league_fees`, `league_charges`, `league_payments`, `league_expenses` ([`0007_finanzas_liga.sql`](db/migrations/0007_finanzas_liga.sql)); además `ads.price`, `ads.advertiser_name`, `ads.advertiser_contact` y `court_holds.club_id` |
 | Galería | `albums`, `gallery_photos` |
 | Anuncios y entrada | `ads`, `ad_placements`, `inquiries`, `team_applications` |
 
@@ -432,7 +445,7 @@ Todo está en PostgreSQL, definido en [`db/migrations/0001_schema.sql`](db/migra
 
 Desactivar un club (botón del ojo en `/admin`) pone `clubs.active = false` y exige un motivo en `clubs.disabled_reason` (de 5 a 100 caracteres); su página sigue abierta y muestra el motivo con un enlace a `/contacto`.
 
-Enums: `member_role` (`ADMIN`, `DT`, `PRENSA`, `TESORERO`), `tournament_status` (`UPCOMING`, `ACTIVE`, `FINISHED`), `match_status` (`UNSCHEDULED`, `SCHEDULED`, `PLAYED`), `football_type` (`FUT_7`, `FUT_9`, `FUT_11`), `court_hold_source`, `ad_status`, `ad_placement_kind`, `team_application_status`, `invite_kind`, `event_type`, `card_color`, `transaction_type`, `transaction_source`, `goal_status`, `inventory_condition`, `inquiry_status`, `friendly_match_type`.
+Enums: `member_role` (`ADMIN`, `DT`, `PRENSA`, `TESORERO`), `tournament_status` (`UPCOMING`, `ACTIVE`, `FINISHED`), `match_status` (`UNSCHEDULED`, `SCHEDULED`, `PLAYED`), `football_type` (`FUT_7`, `FUT_9`, `FUT_11`), `court_hold_source`, `ad_status`, `ad_placement_kind`, `team_application_status`, `invite_kind`, `event_type`, `card_color`, `transaction_type`, `transaction_source`, `goal_status`, `inventory_condition`, `inquiry_status`, `friendly_match_type`, `match_no_show` (`HOME`, `AWAY`, `BOTH`), `league_fee_kind`, `league_charge_status` (`PENDIENTE`, `PARCIAL`, `PAGADO`, `CONDONADO`, `CANCELADO`), `league_payment_method`.
 
 Vistas ([`db/migrations/0002_views.sql`](db/migrations/0002_views.sql)):
 
@@ -607,6 +620,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) comprueba tipos, bui
 - **Renta de canchas pública** termina en WhatsApp; no crea apartados. Los apartados manuales los hace el superadmin en `/admin?tab=courts`.
 - **Partidos jugados** no se pueden reprogramar ni cambiar de cancha; un **torneo en curso** no se puede borrar.
 - **Studio** no tiene pestaña de logs (no se despliega el servicio de analytics).
+- **Finanzas de la liga:** no hay pago en línea; los pagos los anota el administrador. No hay árbitros como entidad: el arbitraje es una tarifa por partido y el pago a árbitros se anota como gasto. No se generan cargos por hechos anteriores a activar una tarifa.
 - No hay tests de interfaz ni lint, y el chunk `vendor` pasa de 1000 kB.
 
 ---

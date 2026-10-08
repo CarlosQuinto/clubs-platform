@@ -1,3 +1,4 @@
+import { walkoverNote } from "../matches/noShow";
 import type {
   Match,
   MatchSide,
@@ -326,7 +327,10 @@ export function matchToClubEvent(
     round: m.round,
     eventDate: m.date,
     eventTime: m.time || "00:00",
-    location: m.walkover ? "3-0 por ingreso tardío" : m.venue || "Por definir",
+    location:
+      walkoverNote(m.walkover, m.noShow, clubNames[m.homeClubId] || "el local", clubNames[m.awayClubId] || "el visitante") ||
+      m.venue ||
+      "Por definir",
     scoreOurs: played ? (isHome ? m.homeScore : m.awayScore) : undefined,
     scoreTheirs: played ? (isHome ? m.awayScore : m.homeScore) : undefined,
     penaltiesOurs: isHome ? m.penaltiesHome ?? null : m.penaltiesAway ?? null,

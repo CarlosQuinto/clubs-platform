@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import { useModalLock } from "../../shared/useModalLock";
+import ConfirmModal from "../../shared/ConfirmModal";
+import { isoDate } from "../../shared/helpers";
+import type { MatchNoShow } from "../../infrastructure/api/types";
 import { C, FormSelect, PrimaryButton, RADIUS, SHADOWS, SecondaryButton } from "../../shared/ui";
 import { loadMatchScoreSheet } from "./tournamentQueries";
-import { saveMatchEvents } from "../../domains/matches/matchCommands";
+import { markNoShow, saveMatchEvents } from "../../domains/matches/matchCommands";
 import type { CalendarMatchView, ScoreCardView, ScoreGoalView, ScorePlayerView } from "./tournamentViewState";
 
 const SCORE_MAX = 30;
@@ -37,6 +40,30 @@ export default function MatchScoreModal({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [noShow, setNoShow] = useState<MatchNoShow | null>(null);
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  const [noShowError, setNoShowError] = useState("");
+  const noShowRef = useRef(false);
+  // Solo un partido con fecha de hoy o anterior puede darse por no jugado (la misma regla está en SQL).
+  const canMarkNoShow = Boolean(match.isoDate) && match.isoDate <= isoDate() && !match.walkover;
+
+  const confirmNoShow = async () => {
+    if (!noShow || noShowRef.current) return;
+    noShowRef.current = true;
+    setNoShowBusy(true);
+    setNoShowError("");
+    try {
+      await markNoShow(match.id, noShow);
+      setNoShow(null);
+      onSaved();
+    } catch (err) {
+      console.error(err);
+      setNoShowError("No se pudo guardar. Revisa que el partido tenga fecha de hoy o anterior.");
+    } finally {
+      noShowRef.current = false;
+      setNoShowBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -178,7 +205,40 @@ export default function MatchScoreModal({
             </div>
           )}
           {error ? <p style={{ color: C.red, fontSize: "0.8rem", margin: "0.75rem 0 0" }}>{error}</p> : null}
+          {canMarkNoShow ? (
+            <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid " + C.gray200 }}>
+              <div className="match-section-label">¿No se jugó?</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                <SecondaryButton type="button" disabled={busy || noShowBusy} onClick={() => setNoShow("HOME")}>
+                  No se presentó {match.home.name}
+                </SecondaryButton>
+                <SecondaryButton type="button" disabled={busy || noShowBusy} onClick={() => setNoShow("AWAY")}>
+                  No se presentó {match.away.name}
+                </SecondaryButton>
+                <SecondaryButton type="button" disabled={busy || noShowBusy} onClick={() => setNoShow("BOTH")}>
+                  No se presentó ninguno
+                </SecondaryButton>
+              </div>
+            </div>
+          ) : null}
         </div>
+        <ConfirmModal
+          open={noShow !== null}
+          title="Partido no jugado"
+          message={noShowMessage(noShow, match.home.name, match.away.name)}
+          confirmLabel="Marcar W.O."
+          cancelLabel="Volver"
+          danger
+          busy={noShowBusy}
+          confirmHint={noShowError || undefined}
+          zIndex={10200}
+          onConfirm={() => void confirmNoShow()}
+          onCancel={() => {
+            if (noShowBusy) return;
+            setNoShow(null);
+            setNoShowError("");
+          }}
+        />
         <div className="match-stats-footer">
           <SecondaryButton type="button" onClick={onClose} disabled={busy}>
             Cancelar
@@ -191,6 +251,14 @@ export default function MatchScoreModal({
     </div>,
     document.body,
   );
+}
+
+function noShowMessage(noShow: MatchNoShow | null, home: string, away: string) {
+  const tail = " Se borran los goles y tarjetas capturados. Puedes deshacerlo desde «Marcador».";
+  if (noShow === "HOME") return `No se presentó ${home}: el partido queda como W.O. 0-3 a favor de ${away}.${tail}`;
+  if (noShow === "AWAY") return `No se presentó ${away}: el partido queda como W.O. 3-0 a favor de ${home}.${tail}`;
+  if (noShow === "BOTH") return `No se presentó ninguno: el partido queda 0-0 y los dos suman una derrota sin puntos.${tail}`;
+  return "";
 }
 
 function ScoreStepper({

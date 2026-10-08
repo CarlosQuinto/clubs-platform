@@ -1,3 +1,4 @@
+import { walkoverNote } from "../../domains/matches/noShow";
 import {
   FootballType,
   type HomePageData,
@@ -305,6 +306,7 @@ export function toLiveMatches(data: LiveMatchesData, now: Date): LiveMatchView[]
           ? `${penaltiesHome}–${penaltiesAway} pen.`
           : null,
       walkover: match.walkover,
+      walkoverNote: match.noShow ? walkoverNote(match.walkover, match.noShow, match.homeClub.name, match.awayClub.name) : null,
       subtitle: [match.tournament.category.name, match.tournament.name].filter(Boolean).join(" · "),
       timeLabel: formatFriendlyTime(match.startTime),
       venue: venue || null,

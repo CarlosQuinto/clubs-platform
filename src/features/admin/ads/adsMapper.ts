@@ -27,6 +27,9 @@ export function toAds(data: AdminAdsData | null): Ad[] {
     endsAt: calendarDay(ad.endsOn),
     status: ad.status,
     order: ad.sortOrder,
+    price: ad.price ?? 0,
+    advertiserName: ad.advertiserName ?? "",
+    advertiserContact: ad.advertiserContact ?? "",
     hasLegacyPlacement: false,
   }));
 }

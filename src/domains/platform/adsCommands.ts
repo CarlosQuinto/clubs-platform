@@ -25,6 +25,9 @@ export async function upsertAd(input: {
   endsOn: string;
   status: string;
   sortOrder: number;
+  price: number;
+  advertiserName: string;
+  advertiserContact: string;
   placements: string[];
 }) {
   const { placements, ...ad } = input;

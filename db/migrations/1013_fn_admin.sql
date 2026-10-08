@@ -35,7 +35,11 @@ BEGIN
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'id', c.id, 'slug', c.slug, 'name', c.name, 'location', c.location, 'presidentPhone', c.president_phone,
         'active', c.active, 'disabledReason', c.disabled_reason,
-        'locality', (SELECT jsonb_build_object('id', l.id, 'name', l.name) FROM localities l WHERE l.id = c.locality_id))
+        'locality', (SELECT jsonb_build_object('id', l.id, 'name', l.name) FROM localities l WHERE l.id = c.locality_id),
+        -- Lo que debe a la liga (finanzas, 1015_fn_finance.sql): solo es un aviso
+        'leagueDebt', (SELECT coalesce(sum(lc.amount - cp.paid), 0) FROM league_charges lc
+          JOIN league_charge_paid cp ON cp.id = lc.id
+          WHERE lc.club_id = c.id AND lc.status IN ('PENDIENTE', 'PARCIAL')))
         ORDER BY c.name, c.id), '[]'::jsonb)
       FROM clubs c WHERE c.deleted_at IS NULL));
 END
@@ -131,6 +135,7 @@ BEGIN
     SELECT coalesce(jsonb_agg(jsonb_build_object(
       'id', a.id, 'brand', a.brand, 'imageUrl', a.image_url, 'href', a.href, 'startsOn', to_jsonb(a.starts_on),
       'endsOn', to_jsonb(a.ends_on), 'status', to_jsonb(a.status), 'sortOrder', a.sort_order,
+      'price', a.price, 'advertiserName', a.advertiser_name, 'advertiserContact', a.advertiser_contact,
       'adPlacements_on_ad', (
         SELECT coalesce(jsonb_agg(jsonb_build_object('placement', to_jsonb(ap.placement)) ORDER BY ap.placement), '[]'::jsonb)
         FROM ad_placements ap WHERE ap.ad_id = a.id))
@@ -185,6 +190,7 @@ BEGIN
     'courtHolds', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('id', h.id, 'holdDate', to_jsonb(h.hold_date), 'startTime', h.start_time,
         'endTime', h.end_time, 'source', to_jsonb(h.source), 'note', h.note, 'guestEmail', h.guest_email,
+        'clubId', h.club_id,
         'court', jsonb_build_object('id', h.court_id),
         'match', (SELECT jsonb_build_object('id', m.id,
             'homeClub', (SELECT jsonb_build_object('name', c.name) FROM clubs c WHERE c.id = m.home_club_id),
@@ -194,7 +200,11 @@ BEGIN
               FROM tournaments t JOIN seasons s ON s.id = t.season_id WHERE t.id = m.tournament_id))
           FROM matches m WHERE m.id = h.match_id))
         ORDER BY h.hold_date, h.start_time, h.id), '[]'::jsonb)
-      FROM court_holds h));
+      FROM court_holds h),
+    -- A quién se le puede cobrar una renta (finanzas de la liga, 1015_fn_finance.sql)
+    'clubs', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name) ORDER BY c.name, c.id), '[]'::jsonb)
+      FROM clubs c WHERE c.active AND c.deleted_at IS NULL));
 END
 $$;
 CALL api_expose('admin_courts', 'USER');
@@ -1016,6 +1026,7 @@ DECLARE
   v_note text := btrim(coalesce(p ->> 'note', ''));
   v_email text := btrim(coalesce(p ->> 'guestEmail', ''));
   v_fresh boolean := coalesce((p ->> 'fresh')::boolean, false);
+  v_club text := p ->> 'clubId';
   v_slot int := (SELECT court_slot_minutes FROM platform_settings WHERE id = 'config');
   v_hold text;
 BEGIN
@@ -1023,13 +1034,14 @@ BEGIN
     RETURN jsonb_build_object('saved', NULL, 'race', NULL, 'hold', NULL);
   END IF;
 
-  INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email)
+  INSERT INTO court_holds (id, court_id, hold_date, start_time, end_time, source, note, guest_email, club_id)
   SELECT
     v_id, v_court, v_date, v_start, v_end, 'MANUAL'::court_hold_source,
     initcap(split_part(v_note, ' · ', 1))
       || CASE WHEN strpos(v_note, ' · ') > 0 THEN ' · ' || split_part(v_note, ' · ', 2) ELSE '' END,
-    lower(v_email)
+    lower(v_email), v_club
   WHERE v_id IS NOT NULL
+    AND (v_club IS NULL OR EXISTS (SELECT 1 FROM clubs WHERE id = v_club AND deleted_at IS NULL))
     AND EXISTS (SELECT 1 FROM courts WHERE id = v_court)
     AND v_date >= CURRENT_DATE - 1
     AND v_note ~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*( · [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+( [A-Za-zÀ-ÖØ-öø-ÿ0-9.,¡!¿?-]+)*)?$'
@@ -1064,7 +1076,8 @@ BEGIN
     start_time = EXCLUDED.start_time,
     end_time = EXCLUDED.end_time,
     note = EXCLUDED.note,
-    guest_email = EXCLUDED.guest_email
+    guest_email = EXCLUDED.guest_email,
+    club_id = CASE WHEN p ? 'clubId' THEN EXCLUDED.club_id ELSE court_holds.club_id END
   WHERE court_holds.source::text = 'MANUAL'
     AND court_holds.hold_date >= CURRENT_DATE - 1;
 
@@ -1125,11 +1138,24 @@ DECLARE
   v_ends date := (p ->> 'endsOn')::date;
   v_status text := p ->> 'status';
   v_order int := (p ->> 'sortOrder')::int;
+  v_price text := coalesce(p ->> 'price', '0');
+  v_advertiser text := api_clean_text(p ->> 'advertiserName');
+  v_contact text := api_clean_text(p ->> 'advertiserContact');
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() THEN RETURN jsonb_build_object('ad', NULL); END IF;
-  INSERT INTO ads (id, brand, image_url, href, starts_on, ends_on, status, sort_order, created_at)
-  SELECT v_id, v_brand, v_image, v_href, v_starts, v_ends, v_status::ad_status, v_order, now()
+  -- Mismas reglas que payerName / payerContact / moneyText (src/shared/textLimits.ts)
+  IF v_price !~ '^[0-9]{1,8}(\.[0-9]{1,2})?$'
+     OR (v_advertiser <> '' AND (char_length(v_advertiser) NOT BETWEEN 3 AND 50
+       OR v_advertiser !~ '^[A-Za-z0-9À-ÖØ-öø-ÿ][A-Za-z0-9À-ÖØ-öø-ÿ,]*( [A-Za-z0-9À-ÖØ-öø-ÿ,]+)*$'
+       OR v_advertiser ~ ',,'))
+     OR char_length(v_contact) > 100 OR v_contact ~ '[^A-Za-z0-9@._+ -]' THEN
+    RETURN jsonb_build_object('ad', NULL);
+  END IF;
+  INSERT INTO ads (id, brand, image_url, href, starts_on, ends_on, status, sort_order, created_at,
+    price, advertiser_name, advertiser_contact)
+  SELECT v_id, v_brand, v_image, v_href, v_starts, v_ends, v_status::ad_status, v_order, now(),
+    v_price::numeric, v_advertiser, v_contact
   WHERE v_id IS NOT NULL
     AND v_status IN ('PROGRAMADO', 'EN_CURSO', 'PAUSADO', 'EXPIRADO')
     AND v_order IS NOT NULL
@@ -1147,7 +1173,10 @@ BEGIN
     starts_on = EXCLUDED.starts_on,
     ends_on = EXCLUDED.ends_on,
     status = EXCLUDED.status,
-    sort_order = EXCLUDED.sort_order
+    sort_order = EXCLUDED.sort_order,
+    price = CASE WHEN p ? 'price' THEN EXCLUDED.price ELSE ads.price END,
+    advertiser_name = CASE WHEN p ? 'advertiserName' THEN EXCLUDED.advertiser_name ELSE ads.advertiser_name END,
+    advertiser_contact = CASE WHEN p ? 'advertiserContact' THEN EXCLUDED.advertiser_contact ELSE ads.advertiser_contact END
   RETURNING id INTO v_saved;
   RETURN jsonb_build_object('ad', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('id', v_saved) END);
 END

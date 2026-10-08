@@ -1,11 +1,13 @@
 import {
   activateTournament,
   clearMatchCourtHolds,
+  clearMatchNoShow,
   clearMatchEvents,
   courtBusyOnDate,
   dataConnect,
   insertMatchCard,
   insertTimedMatchGoal,
+  markMatchNoShow,
   QueryFetchPolicy,
   saveMatchCourtHold,
   saveMatchScore,
@@ -14,7 +16,9 @@ import {
 import { courtsFreeAt } from "../courts/courts";
 import { formatFriendlyDate } from "../../shared/helpers";
 import type { Court, CourtHold, CourtSlotMinutes, TimeWindow } from "../../shared/types";
+import type { MatchNoShow } from "../../infrastructure/api/types";
 import { sessionUserId } from "../../infrastructure/auth";
+import { savedRow } from "../../shared/saved";
 import { notifyMatchScheduled } from "../../infrastructure/functions/callables";
 
 export interface MatchGoalInput {
@@ -202,4 +206,16 @@ export async function saveMatchEvents(input: {
       if (created.data.card == null) throw new Error("No se pudo guardar.");
     }
   }
+}
+
+/** No se presentó el local, el visitante o ninguno: W.O. 3-0 (o derrota para ambos) y sin goles ni tarjetas. */
+export async function markNoShow(matchId: string, noShow: MatchNoShow) {
+  const result = await markMatchNoShow(dataConnect, { id: matchId, noShow });
+  savedRow(result.data.match);
+}
+
+/** Deshace un «no se presentó»: el partido vuelve a programado con su fecha, hora y cancha. */
+export async function clearNoShow(matchId: string) {
+  const result = await clearMatchNoShow(dataConnect, { id: matchId });
+  savedRow(result.data.match);
 }

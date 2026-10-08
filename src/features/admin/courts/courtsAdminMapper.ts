@@ -14,6 +14,8 @@ export interface CourtsAdminView {
   windows: TimeWindow[];
   courts: Court[];
   holds: CourtHold[];
+  /** Clubes a los que se puede cobrar una renta. */
+  clubs: { id: string; name: string }[];
 }
 
 export const EMPTY_COURTS_ADMIN: CourtsAdminView = {
@@ -22,6 +24,7 @@ export const EMPTY_COURTS_ADMIN: CourtsAdminView = {
   windows: [],
   courts: [],
   holds: [],
+  clubs: [],
 };
 
 export function toCourtsAdmin(data: AdminCourtsData): CourtsAdminView {
@@ -61,6 +64,8 @@ export function toCourtsAdmin(data: AdminCourtsData): CourtsAdminView {
       matchStartDate: hold.match?.tournament.startDate || undefined,
       note: hold.note,
       guestEmail: hold.guestEmail,
+      clubId: hold.clubId ?? null,
     })),
+    clubs: data.clubs ?? [],
   };
 }

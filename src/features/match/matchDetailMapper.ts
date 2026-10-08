@@ -1,3 +1,4 @@
+import { walkoverNote } from "../../domains/matches/noShow";
 import type { MatchDetailData, MatchPreviewData } from "../../infrastructure/dataconnect";
 import { matchMvp } from "../../domains/competition/stats";
 import { courtPlaceLabel } from "../../domains/courts/courts";
@@ -372,6 +373,7 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
       penaltiesLabel:
         penaltiesHome != null && penaltiesAway != null ? `${penaltiesHome}–${penaltiesAway} pen.` : null,
       walkover: match.walkover,
+      walkoverNote: walkoverNote(match.walkover, match.noShow, match.homeClub.name, match.awayClub.name),
       dateLabel: match.matchDate ? formatFriendlyDate(match.matchDate) : null,
       timeLabel: match.startTime ? formatFriendlyTime(match.startTime) : null,
       venue: venue || null,

@@ -183,6 +183,7 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
       homeScore: match.homeScore,
       awayScore: match.awayScore,
       walkover: match.walkover,
+      noShow: match.noShow ?? null,
       sides,
     };
   });

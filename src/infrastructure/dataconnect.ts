@@ -137,6 +137,10 @@ export const closeTournament = mutation<T.CloseTournamentVariables, T.CloseTourn
 export const reopenTournament = mutation<T.ReopenTournamentVariables, T.ReopenTournamentData>("reopen_tournament");
 /** mutation ResetWalkoverMatch (USER): un W.O. vuelve a «por programar» */
 export const resetWalkoverMatch = mutation<T.ResetWalkoverMatchVariables, T.ResetWalkoverMatchData>("reset_walkover_match");
+/** mutation MarkMatchNoShow (USER): no se presentó el local, el visitante o ninguno (W.O.) */
+export const markMatchNoShow = mutation<T.MarkMatchNoShowVariables, T.MarkMatchNoShowData>("mark_match_no_show");
+/** mutation ClearMatchNoShow (USER): deshace el «no se presentó» y el partido vuelve a programado */
+export const clearMatchNoShow = mutation<T.ClearMatchNoShowVariables, T.ClearMatchNoShowData>("clear_match_no_show");
 /** mutation SetMatchRound (USER): renumera la jornada de un partido no jugado */
 export const setMatchRound = mutation<T.SetMatchRoundVariables, T.SetMatchRoundData>("set_match_round");
 /** mutation DeleteUnplayedTournament (USER) */
@@ -357,3 +361,32 @@ export const tournamentScreen = query<T.TournamentScreenVariables, T.TournamentS
 // ---- league.gql ----
 /** mutation UpdateTournamentSettings (USER) */
 export const updateTournamentSettings = mutation<T.UpdateTournamentSettingsVariables, T.UpdateTournamentSettingsData>("update_tournament_settings");
+// ---- finanzas de la liga (1015_fn_finance.sql) ----
+/** query AdminFinanceSetup (USER): temporadas, torneos, clubes y tarifas de una temporada */
+export const adminFinanceSetup = query<T.AdminFinanceSetupVariables, T.AdminFinanceSetupData>("admin_finance_setup");
+/** query AdminLeagueCharges (USER) */
+export const adminLeagueCharges = query<T.AdminLeagueChargesVariables, T.AdminLeagueChargesData>("admin_league_charges");
+/** query AdminLeagueExpenses (USER) */
+export const adminLeagueExpenses = query<T.AdminLeagueExpensesVariables, T.AdminLeagueExpensesData>("admin_league_expenses");
+/** query AdminFinanceSummary (USER): resumen por periodo (total, año, mes, temporada o torneo) */
+export const adminFinanceSummary = query<T.AdminFinanceSummaryVariables, T.AdminFinanceSummaryData>("admin_finance_summary");
+/** query ClubLeagueAccount (USER): cuenta del club con la liga, para presidente y tesorero */
+export const clubLeagueAccount = query<T.ClubLeagueAccountVariables, T.ClubLeagueAccountData>("club_league_account");
+/** mutation SaveLeagueFee (USER) */
+export const saveLeagueFee = mutation<T.SaveLeagueFeeVariables, T.SaveLeagueFeeData>("save_league_fee");
+/** mutation CreateLeagueCharge (USER) */
+export const createLeagueCharge = mutation<T.CreateLeagueChargeVariables, T.CreateLeagueChargeData>("create_league_charge");
+/** mutation SetLeagueChargeStatus (USER): condonar, cancelar o reactivar */
+export const setLeagueChargeStatus = mutation<T.SetLeagueChargeStatusVariables, T.SetLeagueChargeStatusData>("set_league_charge_status");
+/** mutation AddLeaguePayment (USER) */
+export const addLeaguePayment = mutation<T.AddLeaguePaymentVariables, T.AddLeaguePaymentData>("add_league_payment");
+/** mutation DeleteLeaguePayment (USER) */
+export const deleteLeaguePayment = mutation<T.DeleteLeaguePaymentVariables, T.DeleteLeaguePaymentData>("delete_league_payment");
+/** mutation SaveLeagueExpense (USER) */
+export const saveLeagueExpense = mutation<T.SaveLeagueExpenseVariables, T.SaveLeagueExpenseData>("save_league_expense");
+/** mutation DeleteLeagueExpense (USER) */
+export const deleteLeagueExpense = mutation<T.DeleteLeagueExpenseVariables, T.DeleteLeagueExpenseData>("delete_league_expense");
+/** mutation GenerateSeasonCharges (USER): inscripción, registro y página por temporada a todos los clubes activos */
+export const generateSeasonCharges = mutation<T.GenerateSeasonChargesVariables, T.GenerateSeasonChargesData>("generate_season_charges");
+/** mutation GenerateMonthlyPageCharges (USER): mensualidad de la página de un mes */
+export const generateMonthlyPageCharges = mutation<T.GenerateMonthlyPageChargesVariables, T.GenerateMonthlyPageChargesData>("generate_monthly_page_charges");

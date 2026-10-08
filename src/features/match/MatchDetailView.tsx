@@ -213,7 +213,7 @@ function MatchHero({ header, shareText }: { header: MatchHeaderView; shareText: 
               <div className="match-hero__kickoff">{header.timeLabel || "vs"}</div>
             )}
             {header.penaltiesLabel ? <span className="match-hero__note">{header.penaltiesLabel}</span> : null}
-            {header.walkover ? <span className="match-hero__note">3-0 por ingreso tardío</span> : null}
+            {header.walkoverNote ? <span className="match-hero__note">{header.walkoverNote}</span> : null}
             {header.phase === "pending" ? (
               <span className="match-hero__note">El resultado aún no es oficial</span>
             ) : null}

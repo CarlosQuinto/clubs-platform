@@ -55,6 +55,8 @@ export interface LiveMatchView {
   /** «4–3 pen.» cuando hubo penales. */
   penaltiesLabel: string | null;
   walkover: boolean;
+  /** «No se presentó X» cuando el W.O. fue por ausencia. */
+  walkoverNote?: string | null;
   subtitle: string;
   timeLabel: string;
   venue: string | null;

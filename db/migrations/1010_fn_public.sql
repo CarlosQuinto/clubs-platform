@@ -123,7 +123,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       SELECT m.match_date, m.start_time, m.id, jsonb_build_object(
         'id', m.id, 'matchDate', to_jsonb(m.match_date), 'startTime', m.start_time, 'venue', m.venue,
         'status', to_jsonb(m.status), 'homeScore', m.home_score, 'awayScore', m.away_score,
-        'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover,
+        'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show),
         'homeClub', (SELECT jsonb_build_object('name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.home_club_id),
         'awayClub', (SELECT jsonb_build_object('name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.away_club_id),
         'court', (SELECT jsonb_build_object('name', co.name, 'location', co.location) FROM courts co WHERE co.id = m.court_id),
@@ -266,7 +266,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     SELECT coalesce(jsonb_agg(jsonb_build_object(
       'id', m.id, 'roundLabel', m.round_label, 'matchDate', to_jsonb(m.match_date), 'startTime', m.start_time,
       'venue', m.venue, 'status', to_jsonb(m.status), 'homeScore', m.home_score, 'awayScore', m.away_score,
-      'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover,
+      'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show),
       'court', (SELECT jsonb_build_object('name', co.name, 'imageUrl', co.image_url, 'location', co.location) FROM courts co WHERE co.id = m.court_id),
       'tournament', (SELECT jsonb_build_object('id', t.id, 'name', t.name, 'footballType', to_jsonb(t.football_type),
         'durationMinutes', t.duration_minutes,
@@ -325,7 +325,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       SELECT coalesce(jsonb_agg(mj ORDER BY match_date DESC NULLS LAST, start_time DESC NULLS LAST, id), '[]'::jsonb) FROM (
         SELECT m.match_date, m.start_time, m.id, jsonb_build_object(
           'id', m.id, 'matchDate', to_jsonb(m.match_date), 'homeScore', m.home_score, 'awayScore', m.away_score,
-          'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover,
+          'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show),
           'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name) FROM clubs c WHERE c.id = m.home_club_id),
           'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name) FROM clubs c WHERE c.id = m.away_club_id),
           'tournament', (SELECT jsonb_build_object('id', t.id, 'name', t.name) FROM tournaments t WHERE t.id = m.tournament_id)) AS mj
@@ -412,7 +412,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'id', m.id, 'roundLabel', m.round_label, 'matchDate', to_jsonb(m.match_date), 'startTime', m.start_time,
         'venue', m.venue, 'status', to_jsonb(m.status), 'homeScore', m.home_score, 'awayScore', m.away_score,
-        'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover,
+        'penaltiesHome', m.penalties_home, 'penaltiesAway', m.penalties_away, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show),
         'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.home_club_id),
         'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.away_club_id),
         'court', (SELECT jsonb_build_object('id', co.id, 'name', co.name, 'location', co.location) FROM courts co WHERE co.id = m.court_id))
@@ -554,7 +554,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       ORDER BY t.created_at, t.id), '[]'::jsonb) FROM tournaments t),
     'matches', (SELECT coalesce(jsonb_agg(jsonb_build_object(
       'id', m.id, 'roundLabel', m.round_label, 'matchDate', to_jsonb(m.match_date), 'startTime', m.start_time, 'venue', m.venue,
-      'status', to_jsonb(m.status), 'homeScore', m.home_score, 'awayScore', m.away_score, 'walkover', m.walkover,
+      'status', to_jsonb(m.status), 'homeScore', m.home_score, 'awayScore', m.away_score, 'walkover', m.walkover, 'noShow', to_jsonb(m.no_show),
       'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name) FROM clubs c WHERE c.id = m.home_club_id),
       'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name) FROM clubs c WHERE c.id = m.away_club_id),
       'tournament', (SELECT jsonb_build_object('id', t.id, 'name', t.name, 'season', jsonb_build_object('id', t.season_id),

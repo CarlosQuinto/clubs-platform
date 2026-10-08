@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   Inbox,
   Megaphone,
+  Wallet,
   LogIn,
   Calendar,
   Mail,
@@ -27,7 +28,7 @@ import {
   shouldScrollTopAfterNav,
 } from "./scrollAfterNav";
 
-type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts";
+type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
 
 export { markScrollTopAfterNav };
 
@@ -58,7 +59,8 @@ export default function PlatformLayout({
       tab === "ads" ||
       tab === "inbox" ||
       tab === "admins" ||
-      tab === "courts"
+      tab === "courts" ||
+      tab === "finances"
       ? tab
       : "clubs";
   })();
@@ -256,6 +258,13 @@ export default function PlatformLayout({
                 "Canchas",
                 <MapPin size={16} />,
                 pathname === "/admin" && adminTab === "courts",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=finances",
+                "Finanzas",
+                <Wallet size={16} />,
+                pathname === "/admin" && adminTab === "finances",
                 true,
               )}
               {navLink(

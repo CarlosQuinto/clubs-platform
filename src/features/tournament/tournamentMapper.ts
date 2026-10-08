@@ -1,3 +1,4 @@
+import { walkoverNote } from "../../domains/matches/noShow";
 import {
   FootballType,
   type MatchScoreSheetData,
@@ -156,6 +157,7 @@ function toResult(match: CalendarMatchView, row: ScreenMatch): LiveMatchView {
     penaltiesLabel:
       penaltiesHome != null && penaltiesAway != null ? `${penaltiesHome}–${penaltiesAway} pen.` : null,
     walkover: match.walkover,
+    walkoverNote: match.noShow ? walkoverNote(true, match.noShow, match.home.name, match.away.name) : null,
     subtitle: formatShortDate(match.isoDate),
     timeLabel: match.time ? formatFriendlyTime(match.time) : "",
     venue: match.venue || null,
@@ -179,6 +181,7 @@ function toRounds(matches: ScreenMatch[], durationMinutes: number, startDate: st
       awayScore: match.awayScore ?? null,
       played: match.status === MatchStatus.PLAYED,
       walkover: match.walkover,
+      noShow: match.noShow ?? null,
     };
     const card: CalendarCardView = {
       score: row,

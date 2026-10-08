@@ -526,3 +526,29 @@ export function isInventoryItemName(value: string) {
   const clean = value.trim();
   return clean.length >= 2 && clean.length <= 20 && WORDS_RE.test(clean);
 }
+
+// ---------- Finanzas de la liga: las mismas reglas que db/migrations/1015_fn_finance.sql ----------
+
+/** Deudor externo de un cargo (anunciante, quien renta): letras, números y comas, de 3 a 50. */
+export function payerName(value: string) {
+  return commaText(value, 50);
+}
+
+export function isPayerName(value: string) {
+  return isCommaText(value, 3, 50);
+}
+
+/** Contacto del deudor externo (teléfono o correo), hasta 100. */
+export function payerContact(value: string) {
+  return singleSpaces(value.replace(/[^A-Za-z0-9@._+ -]/g, "")).slice(0, 100);
+}
+
+export function isPayerContact(value: string) {
+  const clean = value.trim();
+  return clean.length <= 100 && /^[A-Za-z0-9@._+ -]*$/.test(clean);
+}
+
+/** Nota opcional de un abono o motivo de condonar: vacía o como financeText. */
+export function isFinanceNote(value: string) {
+  return value.trim() === "" || isFinanceText(value);
+}

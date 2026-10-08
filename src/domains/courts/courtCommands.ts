@@ -77,6 +77,8 @@ export async function upsertHold(input: {
   endTime: string;
   note: string;
   guestEmail?: string;
+  /** Club al que se le cobra la renta (finanzas de la liga). */
+  clubId?: string | null;
   /** Apartado nuevo: si otro se le cruzó al mismo tiempo, el SQL lo quita. */
   fresh?: boolean;
 }) {

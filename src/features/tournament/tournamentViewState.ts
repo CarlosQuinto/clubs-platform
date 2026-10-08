@@ -1,3 +1,4 @@
+import type { MatchNoShow } from "../../infrastructure/api/types";
 import type { LiveMatchView, UpcomingMatchView } from "../matches/matchesViewState";
 import type { TournamentPhase } from "./tournamentStatus";
 
@@ -56,6 +57,7 @@ export interface CalendarMatchView {
   awayScore: number | null;
   played: boolean;
   walkover: boolean;
+  noShow: MatchNoShow | null;
 }
 
 /** Un partido del calendario: `fixture` si falta jugarlo, `result` si ya tiene marcador; `score` alimenta «Marcador». */

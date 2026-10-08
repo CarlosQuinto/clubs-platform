@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { CalendarX2, ClipboardList } from "lucide-react";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { dataConnect, resetWalkoverMatch } from "../../infrastructure/dataconnect";
+import { clearNoShow } from "../../domains/matches/matchCommands";
+import { walkoverNote } from "../../domains/matches/noShow";
 import { ArchiveSection } from "../shell/ArchiveUI";
 import FixtureCard from "../matches/FixtureCard";
 import ResultCard from "../matches/ResultCard";
@@ -34,12 +36,16 @@ export default function TournamentCalendarPanel({
   };
 
   const confirmReset = async () => {
-    if (!resetting) return;
+    if (!resetting || resetBusy) return;
     setResetBusy(true);
     setResetError("");
     try {
-      const result = await resetWalkoverMatch(dataConnect, { id: resetting.id });
-      if (!result.data.match) throw new Error("No se pudo reiniciar el partido.");
+      if (resetting.noShow) {
+        await clearNoShow(resetting.id);
+      } else {
+        const result = await resetWalkoverMatch(dataConnect, { id: resetting.id });
+        if (!result.data.match) throw new Error("No se pudo reiniciar el partido.");
+      }
       setResetting(null);
       onSaved();
     } catch (err) {
@@ -88,11 +94,13 @@ export default function TournamentCalendarPanel({
       ) : null}
       <ConfirmModal
         open={resetting !== null}
-        title="Partido por ingreso tardío"
+        title={resetting?.noShow ? "Partido no jugado" : "Partido por ingreso tardío"}
         message={
-          resetting
-            ? `${resetting.home.name} vs ${resetting.away.name} se dio por terminado 3-0 por ingreso tardío. Si continúas dejará de ser W.O., el marcador vuelve a 0-0 y el partido quedará por programar para jugarse.`
-            : ""
+          !resetting
+            ? ""
+            : resetting.noShow
+              ? `${resetting.home.name} vs ${resetting.away.name} quedó como W.O. (${walkoverNote(true, resetting.noShow, resetting.home.name, resetting.away.name)}). Si continúas dejará de ser W.O. y el partido vuelve a programado con su fecha, hora y cancha para capturar el marcador.`
+              : `${resetting.home.name} vs ${resetting.away.name} se dio por terminado 3-0 por ingreso tardío. Si continúas dejará de ser W.O., el marcador vuelve a 0-0 y el partido quedará por programar para jugarse.`
         }
         confirmLabel="Continuar"
         cancelLabel="Volver"
