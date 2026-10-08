@@ -109,6 +109,34 @@ export async function run({ db, rpc, check }) {
   const boot = await rpc("presidente", "bootstrap_platform_admin", { userId: "x", email: "x", displayName: "x" });
   check(boot.data?.admin == null, "bootstrap_platform_admin: no se puede reclamar dos veces", boot.data);
 
+  // Resumen de temporada: solo de temporadas cerradas (la semilla trae 2025 cerrada con el Torneo Clausura)
+  const summaryActive = await rpc("anon", "season_summary", { id: "dummy-season-actual" });
+  check(!summaryActive.error && summaryActive.data?.season === null, "season_summary: temporada activa -> null", summaryActive);
+  const summaryMissing = await rpc("anon", "season_summary", { id: "no-existe" });
+  check(summaryMissing.data?.season === null, "season_summary: temporada inexistente -> null", summaryMissing.data);
+  const summary = await rpc("anon", "season_summary", { id: "dummy-season-anterior" });
+  check(!summary.error, "season_summary responde", summary.error);
+  const ss = summary.data?.season ?? {};
+  check(ss.name === "2025" && ss.startDate === "2025-01-01" && ss.endDate === "2025-12-31", "season_summary: datos de la temporada", ss);
+  const clausura = ss.tournaments?.find((t) => t.id === "dummy-tour-clausura-anterior");
+  check(ss.tournaments?.length === 1 && clausura?.category?.name === "Primera Fuerza" && clausura.prize === "$20,000 MXN", "season_summary: torneos de la temporada", ss.tournaments);
+  check(clausura?.podium?.map((x) => x.club?.id).join() === "dummy-club-tiburones,dummy-club-sanvicente,dummy-club-leones", "season_summary: podio en orden", clausura?.podium);
+  const expected = (await db.query(`
+    SELECT count(*)::int AS matches,
+      coalesce(sum(home_score + away_score) FILTER (WHERE NOT walkover), 0)::int AS goals,
+      (SELECT count(*)::int FROM match_cards c JOIN matches m2 ON m2.id = c.match_id
+        WHERE m2.tournament_id = 'dummy-tour-clausura-anterior' AND m2.status = 'PLAYED' AND c.color = 'YELLOW') AS yellow
+    FROM matches WHERE tournament_id = 'dummy-tour-clausura-anterior' AND status = 'PLAYED' AND home_score IS NOT NULL`)).rows[0];
+  const tt = ss.totals ?? {};
+  check(tt.tournaments === 1 && tt.clubs === 6 && tt.matches === expected.matches && tt.goals === expected.goals && tt.yellowCards === expected.yellow, "season_summary: cifras generales", { tt, expected });
+  const topScorer = (await db.query(`SELECT player_id, goals FROM tournament_scorers WHERE tournament_id = 'dummy-tour-clausura-anterior' ORDER BY goals DESC, assists DESC, player_name LIMIT 1`)).rows[0];
+  const aw = ss.awards ?? {};
+  check(aw.scorers?.length > 0 && aw.scorers.length <= 3 && aw.scorers[0].player?.id === topScorer?.player_id && aw.scorers[0].value === topScorer?.goals && aw.scorers[0].club?.name, "season_summary: goleador de la temporada", { got: aw.scorers?.[0], topScorer });
+  check(["assists", "mvps", "keepers"].every((k) => Array.isArray(aw[k]) && aw[k].length <= 3), "season_summary: premios como listas de hasta 3", aw);
+  const rec = ss.records ?? {};
+  check(tt.matches === 0 || (rec.biggestWin?.homeClub?.name && typeof rec.biggestWin.homeScore === "number" && rec.highestScoring?.id && rec.topAttack?.club?.id), "season_summary: récords", rec);
+  check(rec.biggestWin == null || Math.abs(rec.biggestWin.homeScore - rec.biggestWin.awayScore) > 0, "season_summary: la mayor goleada no es un empate", rec.biggestWin);
+
   // Formularios
   const inq = await rpc("anon", "submit_inquiry", { id: "prueba-inq-1", name: "ana lopez", email: "ana@correo.com", phone: "6221234567", topic: "Torneos", message: "Quiero información de los torneos." });
   check(inq.data?.inquiry?.id === "prueba-inq-1", "submit_inquiry: válido", inq);

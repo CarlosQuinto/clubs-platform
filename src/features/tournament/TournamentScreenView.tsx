@@ -9,15 +9,12 @@ import SectionHead from "../shell/SectionHead";
 import { Ranking, TeamsEmpty } from "../teams/StandingsRanking";
 import { useTournamentEdit } from "./TournamentEditModal";
 import { useAuth } from "../../domains/auth/AuthContext";
-import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
+import Podium from "./Podium";
 import TournamentCalendarPanel from "./TournamentCalendarPanel";
 import TournamentScorers from "./TournamentScorers";
 import { TOURNAMENT_STATUS } from "./tournamentStatus";
 import { useTournamentScreen } from "./useTournamentScreen";
 import type { PodiumSlotView } from "./tournamentViewState";
-
-/** Clase de cada escalón del podio, en el orden en que se pinta: subcampeón, campeón, tercero. */
-const PODIUM_TONE = ["is-second", "is-first", "is-third"] as const;
 
 function closeMessage(pending: number) {
   const lines = [
@@ -177,7 +174,7 @@ export default function TournamentScreenView() {
           </p>
         ) : null}
 
-        {view.showPodium ? <Podium slots={view.podium} /> : null}
+        {view.showPodium ? <PodiumSection slots={view.podium} /> : null}
 
         <section className="tour-detail__section">
           <SectionHead icon={<ListOrdered size={22} />} title="Posiciones" subtitle="Tabla del torneo" />
@@ -238,34 +235,11 @@ function BackLink() {
   );
 }
 
-function Podium({ slots }: { slots: PodiumSlotView[] }) {
+function PodiumSection({ slots }: { slots: PodiumSlotView[] }) {
   return (
     <section className="tour-detail__section">
       <SectionHead icon={<Trophy size={22} />} title="Podio" subtitle="Torneo finalizado" />
-      <ol className="tour-podium">
-        {slots.map((slot, index) => {
-          const tone = PODIUM_TONE[index] ?? "is-third";
-          const Icon = tone === "is-first" ? Trophy : Medal;
-          return (
-            <li key={slot.placeLabel} className={`tour-podium__step ${tone}`}>
-              <span className="home-crest home-crest--lg">
-                <img src={slot.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
-              </span>
-              <span className="tour-podium__place">
-                <Icon size={14} aria-hidden />
-                {slot.placeLabel}
-              </span>
-              {slot.clubName && slot.clubHref ? (
-                <Link to={slot.clubHref} className="tour-podium__club">
-                  {slot.clubName}
-                </Link>
-              ) : (
-                <span className="tour-podium__club is-empty">{slot.clubName || "—"}</span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <Podium slots={slots} />
     </section>
   );
 }

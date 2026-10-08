@@ -307,6 +307,8 @@ export const searchAdminClubs = query<T.SearchAdminClubsVariables, T.SearchAdmin
 // ---- queries.gql ----
 /** query SearchClubs (PUBLIC) */
 export const searchClubs = query<T.SearchClubsVariables, T.SearchClubsData>("search_clubs");
+/** query SeasonSummary (PUBLIC) — solo temporadas cerradas; si no, season = null */
+export const seasonSummary = query<T.SeasonSummaryVariables, T.SeasonSummaryData>("season_summary");
 // ---- admin.gql ----
 /** mutation SetAdOrder (USER) */
 export const setAdOrder = mutation<T.SetAdOrderVariables, T.SetAdOrderData>("set_ad_order");

@@ -29,6 +29,9 @@ export const normalizeSlug = (input: string) =>
 /** Página pública de un partido. */
 export const matchPath = (matchId: string) => `/partido/${encodeURIComponent(matchId)}`;
 
+/** Resumen público (por enlace) de una temporada cerrada. */
+export const seasonSummaryPath = (seasonId: string) => `/temporadas/${encodeURIComponent(seasonId)}/resumen`;
+
 /** Clave `email_key` de invitaciones y administradores. Debe coincidir con la de las Functions y con las filas guardadas. */
 export const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");

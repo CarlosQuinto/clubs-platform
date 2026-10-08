@@ -8926,6 +8926,180 @@ a.tour-podium__club:hover {
   font-size: 0.72rem;
 }
 
+/* ── Resumen de temporada (/temporadas/:id/resumen) ──
+   Reutiliza la ficha de torneo: cabecera, podio (.tour-podium) y listas de goleadores (.tour-scorers). */
+.season-summary__champions {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.season-summary__champion > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.season-summary__champion > header a {
+  color: #000;
+  font-size: 1rem;
+  font-weight: 900;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.season-summary__champion > header a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.season-summary__champion > header span,
+.season-summary__muted {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.season-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.season-summary__stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem;
+  border: 1px solid var(--sand-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--elev-1);
+}
+
+.season-summary__stats strong {
+  color: #000;
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.season-summary__stats span {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.season-summary__awards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+
+.season-summary__award > header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.75rem 0.6rem;
+}
+
+.season-summary__award > header strong {
+  color: var(--gold-deep);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.season-summary__award > header span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.season-summary__records {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.season-summary__record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid var(--sand-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--elev-1);
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+a.season-summary__record:hover {
+  border-color: var(--gold-cta);
+  box-shadow: var(--elev-2);
+}
+
+.season-summary__record-label {
+  color: var(--gold-deep);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.season-summary__record-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.season-summary__record-main strong {
+  min-width: 0;
+  color: #000;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.season-summary__record-logos {
+  display: flex;
+  flex: none;
+}
+
+.season-summary__record-logos img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+  box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.season-summary__record-logos img + img {
+  margin-left: -8px;
+}
+
+.season-summary__record-detail {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
 /* Calendario: una banda de /torneos por jornada. */
 .tour-rounds .tour-band:last-child {
   margin-bottom: 0;

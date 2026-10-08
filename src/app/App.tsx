@@ -17,6 +17,7 @@ import MatchPage from "../features/match/MatchDetailView";
 import Contact from "../features/contact/ContactView";
 import RegisterTeam from "../features/registerTeam/RegisterTeamView";
 import CourtsPage from "../features/courts/CourtsPageView";
+import SeasonSummary from "../features/seasonSummary/SeasonSummaryView";
 import { PrivacyPage, TermsPage } from "../features/legal/LegalPage";
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/torneos/:id" element={<TournamentPage />} />
             <Route path="/temporadas" element={<Navigate to="/torneos" replace />} />
             <Route path="/temporadas/:id" element={<Navigate to="/torneos" replace />} />
+            <Route path="/temporadas/:id/resumen" element={<SeasonSummary />} />
             <Route path="/equipos" element={<TeamsPage />} />
             <Route path="/partidos" element={<MatchesPage />} />
             <Route path="/partido/:id" element={<MatchPage />} />

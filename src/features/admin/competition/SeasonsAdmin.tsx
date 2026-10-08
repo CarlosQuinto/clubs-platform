@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CalendarRange, Trash2 } from "lucide-react";
 import { addSeason, closeSeason, removeSeason } from "../../../domains/competition/competitionCommands";
 import ConfirmModal from "../../../shared/ConfirmModal";
 import { isIsoDate } from "../../../domains/courts/courts";
+import { seasonSummaryPath } from "../../../shared/paths";
 import type { Season } from "../../../shared/types";
 import { isSeasonLabel, seasonLabel } from "../../../shared/textLimits";
 import Field from "../Field";
@@ -45,6 +47,7 @@ function formatSeasonRange(start?: string, end?: string) {
 }
 
 export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -251,7 +254,19 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
                   >
                     Cerrar
                   </SecondaryButton>
-                ) : null}
+                ) : (
+                  <SecondaryButton
+                    onClick={() => navigate(seasonSummaryPath(s.id))}
+                    title="Resumen público de la temporada: se puede compartir por enlace"
+                    style={{
+                      padding: "0.45rem 0.7rem",
+                      textAlign: "center",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Resumen
+                  </SecondaryButton>
+                )}
                 <SecondaryButton
                   onClick={() => handleDelete(s)}
                   aria-label={`Eliminar ${s.name}`}

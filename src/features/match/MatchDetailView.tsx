@@ -7,7 +7,6 @@ import {
   IdCard,
   ListOrdered,
   MapPin,
-  Share2,
   Shirt,
   Star,
   Trash2,
@@ -16,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import PlatformLayout from "../shell/PlatformLayout";
+import ShareButton from "../shell/ShareButton";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
@@ -251,32 +251,6 @@ function HeroTeam({ team }: { team: MatchTeamView }) {
       </span>
       <span className="match-hero__name">{team.name}</span>
     </Link>
-  );
-}
-
-function ShareButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const share = async () => {
-    const url = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: text, text, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      // Cancelar el menú de compartir no es un error.
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      console.error(err);
-    }
-  };
-  return (
-    <button type="button" className="match-hero__share" onClick={() => void share()}>
-      <Share2 size={14} />
-      {copied ? "Enlace copiado" : "Compartir"}
-    </button>
   );
 }
 

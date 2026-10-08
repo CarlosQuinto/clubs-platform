@@ -464,6 +464,165 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 CALL api_expose('tournament_screen', 'PUBLIC');
 
+-- Resumen de una temporada cerrada: podios, cifras, premios individuales y récords de todos sus torneos.
+-- Es pública (se comparte por enlace) pero solo responde si la temporada ya se cerró; si no, season = null.
+-- Los walkovers cuentan como jugados, pero no suman goles ni entran en los récords de partido ni de arqueros.
+CREATE OR REPLACE FUNCTION public.season_summary(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH se AS (
+    SELECT s.* FROM seasons s WHERE s.id = season_summary.p ->> 'id' AND NOT s.active
+  ),
+  tours AS (
+    SELECT t.* FROM tournaments t JOIN se ON se.id = t.season_id
+  ),
+  played AS (
+    SELECT m.* FROM matches m JOIN tours t ON t.id = m.tournament_id
+    WHERE m.status = 'PLAYED'::match_status AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+  ),
+  cards AS (
+    SELECT mc.* FROM match_cards mc JOIN played m ON m.id = mc.match_id
+  ),
+  -- La vista tiene una columna «p»: aquí no se usa el parámetro, pero se suma por club entre torneos
+  standings AS (
+    SELECT s.club_id, sum(s.pj)::int AS pj, sum(s.gf)::int AS gf, sum(s.gc)::int AS gc
+    FROM tournament_standings s JOIN tours t ON t.id = s.tournament_id
+    GROUP BY s.club_id
+  ),
+  club_cards AS (
+    SELECT st.club_id, st.pj,
+      count(c.id) FILTER (WHERE c.color = 'YELLOW'::card_color)::int AS yellow,
+      count(c.id) FILTER (WHERE c.color = 'RED'::card_color)::int AS red
+    FROM standings st LEFT JOIN cards c ON c.club_id = st.club_id
+    GROUP BY st.club_id, st.pj
+  ),
+  scorers AS (
+    SELECT sc.player_id, sc.club_id, max(sc.player_name) AS player_name,
+      sum(sc.goals)::int AS goals, sum(sc.assists)::int AS assists
+    FROM tournament_scorers sc JOIN tours t ON t.id = sc.tournament_id
+    GROUP BY sc.player_id, sc.club_id
+  ),
+  mvps AS (
+    SELECT r.mvp_id AS player_id, r.club_id, count(*)::int AS n
+    FROM match_club_reports r JOIN played m ON m.id = r.match_id
+    WHERE r.mvp_id IS NOT NULL
+    GROUP BY r.mvp_id, r.club_id
+  ),
+  keepers AS (
+    SELECT g.player_id, g.club_id, count(*)::int AS matches, sum(g.conceded)::int AS conceded, sum(g.saves)::int AS saves
+    FROM match_goalkeepers g JOIN played m ON m.id = g.match_id
+    WHERE NOT m.walkover
+    GROUP BY g.player_id, g.club_id
+    HAVING count(*) >= 3
+  )
+  SELECT jsonb_build_object('season', (
+    SELECT jsonb_build_object(
+      'id', se.id, 'name', se.name, 'startDate', to_jsonb(se.start_date), 'endDate', to_jsonb(se.end_date),
+      'tournaments', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'id', t.id, 'name', t.name, 'prize', t.prize,
+          'category', CASE WHEN ca.id IS NULL THEN NULL ELSE jsonb_build_object('name', ca.name) END,
+          'podium', (
+            SELECT coalesce(jsonb_agg(jsonb_build_object('place', po.place,
+              'club', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = po.club_id))
+              ORDER BY po.place), '[]'::jsonb)
+            FROM tournament_podium po WHERE po.tournament_id = t.id))
+          ORDER BY ca.sort_order NULLS LAST, t.start_date NULLS LAST, t.name, t.id), '[]'::jsonb)
+        FROM tours t LEFT JOIN categories ca ON ca.id = t.category_id),
+      'totals', (
+        SELECT jsonb_build_object(
+          'tournaments', (SELECT count(*) FROM tours),
+          'clubs', (SELECT count(DISTINCT tc.club_id) FROM tournament_clubs tc JOIN tours t ON t.id = tc.tournament_id),
+          'matches', count(*),
+          'goals', coalesce(sum(m.home_score + m.away_score) FILTER (WHERE NOT m.walkover), 0),
+          'walkovers', count(*) FILTER (WHERE m.walkover),
+          'shootouts', count(*) FILTER (WHERE m.penalties_home IS NOT NULL AND m.penalties_away IS NOT NULL),
+          'yellowCards', (SELECT count(*) FROM cards c WHERE c.color = 'YELLOW'::card_color),
+          'redCards', (SELECT count(*) FROM cards c WHERE c.color = 'RED'::card_color))
+        FROM played m),
+      'awards', jsonb_build_object(
+        'scorers', (
+          SELECT coalesce(jsonb_agg(x.row ORDER BY x.ord), '[]'::jsonb) FROM (
+            SELECT row_number() OVER (ORDER BY sc.goals DESC, sc.assists DESC, sc.player_name) AS ord,
+              jsonb_build_object('playerName', sc.player_name, 'value', sc.goals,
+                'player', (SELECT jsonb_build_object('id', pl.id, 'imageUrl', pl.image_url) FROM players pl WHERE pl.id = sc.player_id),
+                'club', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = sc.club_id)) AS row
+            FROM scorers sc WHERE sc.goals > 0
+            ORDER BY ord LIMIT 3) x),
+        'assists', (
+          SELECT coalesce(jsonb_agg(x.row ORDER BY x.ord), '[]'::jsonb) FROM (
+            SELECT row_number() OVER (ORDER BY sc.assists DESC, sc.goals DESC, sc.player_name) AS ord,
+              jsonb_build_object('playerName', sc.player_name, 'value', sc.assists,
+                'player', (SELECT jsonb_build_object('id', pl.id, 'imageUrl', pl.image_url) FROM players pl WHERE pl.id = sc.player_id),
+                'club', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = sc.club_id)) AS row
+            FROM scorers sc WHERE sc.assists > 0
+            ORDER BY ord LIMIT 3) x),
+        'mvps', (
+          SELECT coalesce(jsonb_agg(x.row ORDER BY x.ord), '[]'::jsonb) FROM (
+            SELECT row_number() OVER (ORDER BY mv.n DESC, pl.name, pl.id) AS ord,
+              jsonb_build_object('playerName', pl.name, 'value', mv.n,
+                'player', jsonb_build_object('id', pl.id, 'imageUrl', pl.image_url),
+                'club', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = mv.club_id)) AS row
+            FROM mvps mv JOIN players pl ON pl.id = mv.player_id
+            ORDER BY ord LIMIT 3) x),
+        'keepers', (
+          SELECT coalesce(jsonb_agg(x.row ORDER BY x.ord), '[]'::jsonb) FROM (
+            SELECT row_number() OVER (ORDER BY k.conceded::numeric / k.matches, k.saves DESC, k.matches DESC, pl.name, pl.id) AS ord,
+              jsonb_build_object('playerName', pl.name, 'matches', k.matches, 'conceded', k.conceded, 'saves', k.saves,
+                'player', jsonb_build_object('id', pl.id, 'imageUrl', pl.image_url),
+                'club', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = k.club_id)) AS row
+            FROM keepers k JOIN players pl ON pl.id = k.player_id
+            ORDER BY ord LIMIT 3) x)),
+      'records', jsonb_build_object(
+        'biggestWin', (
+          SELECT jsonb_build_object('id', m.id, 'matchDate', to_jsonb(m.match_date),
+            'homeScore', m.home_score, 'awayScore', m.away_score,
+            'tournament', (SELECT jsonb_build_object('name', t.name) FROM tours t WHERE t.id = m.tournament_id),
+            'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.home_club_id),
+            'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.away_club_id))
+          FROM played m WHERE NOT m.walkover AND m.home_score <> m.away_score
+          ORDER BY abs(m.home_score - m.away_score) DESC, m.home_score + m.away_score DESC, m.match_date NULLS LAST, m.id
+          LIMIT 1),
+        'highestScoring', (
+          SELECT jsonb_build_object('id', m.id, 'matchDate', to_jsonb(m.match_date),
+            'homeScore', m.home_score, 'awayScore', m.away_score,
+            'tournament', (SELECT jsonb_build_object('name', t.name) FROM tours t WHERE t.id = m.tournament_id),
+            'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.home_club_id),
+            'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url) FROM clubs c WHERE c.id = m.away_club_id))
+          FROM played m WHERE NOT m.walkover AND m.home_score + m.away_score > 0
+          ORDER BY m.home_score + m.away_score DESC, abs(m.home_score - m.away_score), m.match_date NULLS LAST, m.id
+          LIMIT 1),
+        'topAttack', (
+          SELECT jsonb_build_object('matches', s.pj, 'goals', s.gf,
+            'club', jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url))
+          FROM standings s JOIN clubs c ON c.id = s.club_id
+          WHERE s.gf > 0
+          ORDER BY s.gf DESC, s.pj, c.name, c.id
+          LIMIT 1),
+        'bestDefense', (
+          SELECT jsonb_build_object('matches', s.pj, 'conceded', s.gc,
+            'club', jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url))
+          FROM standings s JOIN clubs c ON c.id = s.club_id
+          WHERE s.pj >= 3
+          ORDER BY s.gc::numeric / s.pj, s.pj DESC, c.name, c.id
+          LIMIT 1),
+        'fairPlay', (
+          SELECT jsonb_build_object('matches', k.pj, 'yellow', k.yellow, 'red', k.red,
+            'club', jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url))
+          FROM club_cards k JOIN clubs c ON c.id = k.club_id
+          WHERE k.pj >= 3
+          ORDER BY (k.yellow + 3 * k.red)::numeric / k.pj, k.pj DESC, c.name, c.id
+          LIMIT 1),
+        'mostCards', (
+          SELECT jsonb_build_object('matches', k.pj, 'yellow', k.yellow, 'red', k.red,
+            'club', jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url))
+          FROM club_cards k JOIN clubs c ON c.id = k.club_id
+          WHERE k.yellow + k.red > 0
+          ORDER BY k.yellow + 3 * k.red DESC, k.red DESC, c.name, c.id
+          LIMIT 1)))
+    FROM se))
+$$;
+CALL api_expose('season_summary', 'PUBLIC');
+
 -- ---------- Canchas ----------
 
 CREATE OR REPLACE FUNCTION public.courts_page(p jsonb DEFAULT '{}'::jsonb)

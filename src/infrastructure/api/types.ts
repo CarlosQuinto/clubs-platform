@@ -2867,6 +2867,83 @@ export interface SearchClubsVariables {
   term: string;
 }
 
+export interface SeasonSummaryClub {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+}
+
+export interface SeasonSummaryPlayerAward {
+  playerName: string;
+  value: number;
+  player?: { id: string; imageUrl: string } | null;
+  club?: { id: string; name: string; logoUrl?: string | null } | null;
+}
+
+export interface SeasonSummaryKeeperAward {
+  playerName: string;
+  matches: number;
+  conceded: number;
+  saves: number;
+  player: { id: string; imageUrl: string };
+  club?: { id: string; name: string; logoUrl?: string | null } | null;
+}
+
+export interface SeasonSummaryMatch {
+  id: string;
+  matchDate?: DateString | null;
+  homeScore: number;
+  awayScore: number;
+  tournament: { name: string };
+  homeClub: SeasonSummaryClub;
+  awayClub: SeasonSummaryClub;
+}
+
+export interface SeasonSummaryData {
+  season: {
+    id: string;
+    name: string;
+    startDate?: DateString | null;
+    endDate?: DateString | null;
+    tournaments: ({
+      id: string;
+      name: string;
+      prize: string;
+      category?: { name: string } | null;
+      podium: ({ place: number; club: SeasonSummaryClub })[];
+    })[];
+    totals: {
+      tournaments: number;
+      clubs: number;
+      matches: number;
+      goals: number;
+      walkovers: number;
+      shootouts: number;
+      yellowCards: number;
+      redCards: number;
+    };
+    awards: {
+      scorers: SeasonSummaryPlayerAward[];
+      assists: SeasonSummaryPlayerAward[];
+      mvps: SeasonSummaryPlayerAward[];
+      keepers: SeasonSummaryKeeperAward[];
+    };
+    records: {
+      biggestWin?: SeasonSummaryMatch | null;
+      highestScoring?: SeasonSummaryMatch | null;
+      topAttack?: { matches: number; goals: number; club: SeasonSummaryClub } | null;
+      bestDefense?: { matches: number; conceded: number; club: SeasonSummaryClub } | null;
+      fairPlay?: { matches: number; yellow: number; red: number; club: SeasonSummaryClub } | null;
+      mostCards?: { matches: number; yellow: number; red: number; club: SeasonSummaryClub } | null;
+    };
+  } | null;
+}
+
+export interface SeasonSummaryVariables {
+  id: string;
+}
+
 export interface Season_Key {
   id: string;
   __typename?: 'Season_Key';

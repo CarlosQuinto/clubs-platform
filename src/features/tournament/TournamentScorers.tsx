@@ -58,6 +58,6 @@ export default function TournamentScorers({ scorers }: { scorers: ScorerRowView[
   );
 }
 
-function avatarFallback(name: string) {
+export function avatarFallback(name: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Jugador")}&background=121212&color=fff&size=80`;
 }

@@ -81,8 +81,9 @@ function mark(
   };
 }
 
-function toPodium(
-  places: TournamentScreenData["tournaments"][number]["tournamentPodiums_on_tournament"],
+/** Podio en el orden en que se pinta (subcampeón, campeón, tercero); también lo usa el resumen de temporada. */
+export function toPodium(
+  places: { place: number; club: { name: string; slug?: string | null; logoUrl?: string | null } }[],
 ): PodiumSlotView[] {
   return PODIUM_ORDER.map((place) => {
     const slot = places.find((item) => item.place === place);
