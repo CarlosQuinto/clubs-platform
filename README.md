@@ -91,7 +91,7 @@ Hay tres tipos de usuario:
 - **Inicio:** cumpleaños, portada (imágenes del héroe), récord del equipo, vitrina de trofeos, salón de la fama y galería por álbumes. Editar portada y galería requiere `canEditPortada`.
 - **Agenda:** entrenamientos, amistosos y partidos oficiales; asistencia, alineación, marcador, álbum y estadísticas del evento. Desde aquí se guarda la **disponibilidad semanal** del club, que se usa para sugerir fechas de partido.
 - **Jugadores:** plantilla, estadísticas, comparación y ficha con foto. «Baja temporal» lo deja fuera de las listas para pasar asistencia; **eliminar** lo saca de la plantilla y de los selectores, pero conserva su historial (ver Database).
-- **Finanzas:** resumen, movimientos (ingresos y gastos), metas con aportación por jugador. El Presidente y el Tesorero ven además la **cuenta con la liga** (`club_league_account`): lo que la liga le cobra al club, lo pagado y el saldo, solo lectura.
+- **Finanzas:** resumen, movimientos (ingresos y gastos), metas con aportación por jugador. El Presidente y el Tesorero ven además la **cuenta con la liga** (`club_league_account`): lo que la liga le cobra al club, lo pagado y el saldo, solo lectura. La tarjeta se titula «Cuenta con <nombre de la página>» (el del Header), muestra los 3 cobros más recientes con «Ver todos» para el resto y se filtra por año y mes del cobro.
 - **Inventario:** material por estado (`BUENO`, `MALO`, `PERDIDO`).
 - **Miembros:** modal en el encabezado del club para invitar, cambiar roles y cancelar invitaciones (solo Presidente o superadmin).
 
