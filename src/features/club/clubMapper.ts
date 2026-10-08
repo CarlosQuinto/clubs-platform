@@ -235,9 +235,11 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
       active: club.active,
       disabledReason: club.disabledReason || "",
     },
+    // Incluye a los eliminados (borrado lógico) marcados: el historial del club los necesita para nombrarlos
     players: club.players_on_club.map((player) => ({
       ...player,
       number: player.shirtNumber,
+      deleted: Boolean(player.deletedAt),
     })),
     events: club.clubEvents_on_club.map((event) => ({
       id: event.id,

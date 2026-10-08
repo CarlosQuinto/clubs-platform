@@ -661,7 +661,9 @@ END
 $$;
 CALL api_expose('activate_tournament', 'USER');
 
--- Tarjeta de la hoja de marcador; el minuto solo se guarda si está entre 1 y 150
+-- Tarjeta de la hoja de marcador; el minuto solo se guarda si está entre 1 y 150. El jugador y su nombre salen de
+-- players (del mismo club), así que volver a guardar la hoja no pierde el nombre de un jugador de baja o eliminado
+-- (la hoja se guarda borrando y volviendo a insertar); el nombre que manda el cliente es el respaldo.
 CREATE OR REPLACE FUNCTION public.insert_match_card(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -669,14 +671,18 @@ DECLARE
   v_club text := p ->> 'clubId';
   v_color text := p ->> 'color';
   v_minute int := (p ->> 'minute')::int;
+  v_player text;
+  v_name text;
   v_saved uuid;
 BEGIN
   IF NOT is_platform_admin() OR v_match IS NULL OR v_club IS NULL OR v_color IS NULL OR match_locked(v_match) THEN
     RETURN jsonb_build_object('card', NULL);
   END IF;
+  SELECT pl.id, pl.name INTO v_player, v_name
+  FROM players pl WHERE pl.id = NULLIF(p ->> 'playerId', '') AND pl.club_id = v_club;
   INSERT INTO match_cards (match_id, club_id, player_id, player_name, color, minute)
   VALUES (
-    v_match, v_club, NULLIF(p ->> 'playerId', ''), coalesce(p ->> 'playerName', ''), v_color::card_color,
+    v_match, v_club, v_player, coalesce(NULLIF(v_name, ''), p ->> 'playerName', ''), v_color::card_color,
     CASE WHEN v_minute BETWEEN 1 AND 150 THEN v_minute END
   )
   RETURNING id INTO v_saved;
@@ -738,6 +744,11 @@ DECLARE
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() OR v_id IS NULL OR v_match IS NULL OR v_club IS NULL OR match_locked(v_match) THEN
+    RETURN jsonb_build_object('goal', NULL, 'match', NULL);
+  END IF;
+  -- Un jugador eliminado (borrado lógico) no recibe goles nuevos; reintentar uno ya guardado sí pasa
+  IF EXISTS (SELECT 1 FROM players WHERE id IN (v_scorer, v_assist) AND deleted_at IS NOT NULL)
+     AND NOT EXISTS (SELECT 1 FROM match_goals WHERE id = v_id) THEN
     RETURN jsonb_build_object('goal', NULL, 'match', NULL);
   END IF;
   INSERT INTO match_goals (
@@ -814,6 +825,11 @@ DECLARE
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() OR v_id IS NULL OR v_match IS NULL OR v_club IS NULL OR match_locked(v_match) THEN
+    RETURN jsonb_build_object('card', NULL, 'match', NULL);
+  END IF;
+  -- Un jugador eliminado (borrado lógico) no recibe tarjetas nuevas; reintentar una ya guardada sí pasa
+  IF EXISTS (SELECT 1 FROM players WHERE id = v_player AND deleted_at IS NOT NULL)
+     AND NOT EXISTS (SELECT 1 FROM match_cards WHERE id = v_id) THEN
     RETURN jsonb_build_object('card', NULL, 'match', NULL);
   END IF;
   INSERT INTO match_cards (id, match_id, club_id, player_id, player_name, color, minute)

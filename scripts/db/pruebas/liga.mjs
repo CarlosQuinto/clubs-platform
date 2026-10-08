@@ -194,6 +194,36 @@ export async function run({ db, rpc, check }) {
   const sheetAfter = (await rpc("admin", "match_score_sheet", { matchId: sheetMatch })).data?.matches?.[0];
   check(!events.error && sheetAfter?.matchGoals_on_match.length === 0 && sheetAfter.matchCards_on_match.length === 0, "clear_match_events: superadmin borra goles y tarjetas", events.error ?? sheetAfter);
 
+  // ---------- Hoja de marcador con jugadores de baja o eliminados (0008_jugadores_borrado_logico.sql) ----------
+  await db.query(`INSERT INTO players (id, club_id, name, shirt_number, position) VALUES
+    ('prueba-liga-baja', 'dummy-club-union', 'Jugador Eliminado Uno', '50', 'Medio'),
+    ('prueba-liga-baja2', 'dummy-club-union', 'Jugador Sin Partido', '51', 'Medio')`);
+  const cardName = async () => (await db.query(
+    "SELECT player_id, player_name FROM match_cards WHERE match_id = $1 AND color = 'YELLOW' ORDER BY player_name", [sheetMatch])).rows;
+  const cardBase = { matchId: sheetMatch, clubId: "dummy-club-union", color: "YELLOW", minute: 20 };
+  await rpc("admin", "insert_match_card", { ...cardBase, playerId: "prueba-liga-baja", playerName: "" });
+  let named = await cardName();
+  check(named.length === 1 && named[0].player_id === "prueba-liga-baja" && named[0].player_name === "Jugador Eliminado Uno",
+    "insert_match_card: el nombre sale del jugador aunque el cliente no lo mande", named);
+  await rpc("admin", "insert_match_card", { ...cardBase, playerId: "dummy-club-halcones-p13", playerName: "Nombre Manual" });
+  named = await cardName();
+  check(named.some((c) => c.player_id === null && c.player_name === "Nombre Manual"), "insert_match_card: jugador de otro club -> sin enlace, con el nombre recibido", named);
+  await db.query("UPDATE players SET deleted_at = now(), active = false WHERE id IN ('prueba-liga-baja', 'prueba-liga-baja2')");
+  const sheetDel = (await rpc("admin", "match_score_sheet", { matchId: sheetMatch })).data?.matches?.[0];
+  const detailDel = (await rpc("anon", "match_detail", { id: sheetMatch })).data?.matches?.[0];
+  for (const [label, roster] of [["match_score_sheet", sheetDel?.awayClub?.players_on_club], ["match_detail", detailDel?.awayClub?.players_on_club]]) {
+    const ref = roster?.find((p) => p.id === "prueba-liga-baja");
+    check(ref?.active === false && ref.name === "Jugador Eliminado Uno" && !roster.some((p) => p.id === "prueba-liga-baja2")
+      && roster.filter((p) => p.active).length > 0,
+      `${label}: incluye al eliminado que aparece en el partido (active false) y no a los demás eliminados`, roster?.length);
+  }
+  await rpc("admin", "clear_match_events", { matchId: sheetMatch });
+  await rpc("admin", "insert_match_card", { ...cardBase, playerId: "prueba-liga-baja", playerName: "" });
+  named = await cardName();
+  check(named.length === 1 && named[0].player_id === "prueba-liga-baja" && named[0].player_name === "Jugador Eliminado Uno",
+    "volver a guardar la hoja conserva el jugador eliminado y su nombre", named);
+  await rpc("admin", "clear_match_events", { matchId: sheetMatch });
+
   // Activar el torneo por empezar al registrar su primer resultado
   await rpc("admin", "schedule_official_match", { id: "dummy-tour-femenil-j01-1", matchDate: "2026-11-08", startTime: "10:00", venue: "Campo Norte", courtId: "" });
   const activatePres = await rpc("presidente", "activate_tournament", { userId: ADMIN_UID, matchId: "dummy-tour-femenil-j01-1" });
@@ -207,6 +237,19 @@ export async function run({ db, rpc, check }) {
 
   const live0 = (await rpc("anon", "match_detail", { id: LIVE_MATCH })).data?.matches?.[0];
   check(live0?.status === "SCHEDULED" && live0.homeClub.id === "dummy-club-tiburones" && live0.awayClub.id === "dummy-club-bahia", "marcador en vivo: partido de hoy programado", live0);
+  // Un jugador eliminado no recibe goles ni tarjetas en vivo y no sale en la plantilla del partido
+  await db.query(`INSERT INTO players (id, club_id, name, position, deleted_at, active)
+    VALUES ('prueba-liga-vivo', 'dummy-club-tiburones', 'Jugador Vivo Eliminado', 'Medio', now(), false)`);
+  const goalDel = await rpc("admin", "add_live_match_goal", { id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0b", matchId: LIVE_MATCH,
+    clubId: "dummy-club-tiburones", scorerId: "prueba-liga-vivo", assistId: "", isPenalty: false, isOwnGoal: false, minute: 5 });
+  const cardDel = await rpc("admin", "add_live_match_card", { id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0c", matchId: LIVE_MATCH,
+    clubId: "dummy-club-tiburones", playerId: "prueba-liga-vivo", color: "YELLOW", minute: 6 });
+  const liveDel = (await rpc("anon", "match_detail", { id: LIVE_MATCH })).data?.matches?.[0];
+  check(goalDel.data?.match === null && cardDel.data?.match === null && liveDel?.homeScore === live0.homeScore
+    && liveDel.matchCards_on_match.length === live0.matchCards_on_match.length,
+    "en vivo: un eliminado no recibe goles ni tarjetas", { goalDel: goalDel.data, cardDel: cardDel.data });
+  check(!liveDel?.homeClub.players_on_club.some((p) => p.id === "prueba-liga-vivo") && liveDel.homeClub.players_on_club.every((p) => p.active),
+    "en vivo: la plantilla del partido no incluye al eliminado", liveDel?.homeClub.players_on_club.length);
   const liveGoal = { id: GOAL_1, matchId: LIVE_MATCH, clubId: "dummy-club-tiburones", scorerId: "dummy-club-tiburones-p16", assistId: "", isPenalty: false, isOwnGoal: false, minute: 12 };
   const liveGoalPres = await rpc("presidente", "add_live_match_goal", liveGoal);
   check(liveGoalPres.data?.match === null, "add_live_match_goal: presidente -> null", liveGoalPres);

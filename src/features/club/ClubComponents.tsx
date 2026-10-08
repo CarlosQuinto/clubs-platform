@@ -74,6 +74,12 @@ export const AttendanceModal = ({
   useModalLock(onClose);
 
   const isAttending = adminAttendees.includes(selectedPlayerId);
+  // Eliminados (borrado lógico) que ya estaban convocados: se pueden quitar, pero no cuentan como confirmados
+  const deletedIds = useMemo(
+    () => new Set(players.filter((p: any) => p.deleted).map((p: any) => p.id)),
+    [players],
+  );
+  const confirmedCount = adminAttendees.filter((id) => !deletedIds.has(id)).length;
 
   const allUniqueIds = useMemo(() => {
     const ids = activePlayers.map((p: any) => p.id);
@@ -202,7 +208,7 @@ export const AttendanceModal = ({
                     borderRadius: RADIUS.full,
                   }}
                 >
-                  {adminAttendees.length} Confirmados
+                  {confirmedCount} Confirmados
                 </span>
               </div>
 
@@ -265,6 +271,14 @@ export const AttendanceModal = ({
                             style={{ fontSize: "0.6rem", padding: "2px 6px" }}
                           >
                             Invitado
+                          </Badge>
+                        )}
+                        {deletedIds.has(id) && (
+                          <Badge
+                            color="gray"
+                            style={{ fontSize: "0.6rem", padding: "2px 6px" }}
+                          >
+                            Eliminado
                           </Badge>
                         )}
                       </span>
@@ -536,6 +550,8 @@ export const LineupModal = ({
       const normalizedBase: Record<string, string> = {};
       Object.entries(base.positions || {}).forEach(([pos, val]: any) => {
         const p = players.find((pl: any) => pl.name === val || pl.id === val);
+        // Un jugador eliminado (borrado lógico) no entra a una alineación nueva: su puesto queda libre
+        if (p?.deleted) return;
         normalizedBase[pos] = p
           ? p.id
           : val.startsWith("guest-")
@@ -680,7 +696,9 @@ export const LineupModal = ({
   });
 
   const benchPlayers = attendeesIds.filter(
-    (id: string) => !Object.values(positions).includes(id),
+    (id: string) =>
+      !Object.values(positions).includes(id) &&
+      !players.find((pl: any) => pl.id === id)?.deleted,
   );
 
   const currentFormationData = FORMATIONS[mode][formation];

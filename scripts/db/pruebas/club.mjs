@@ -55,6 +55,13 @@ export async function run({ db, rpc, check }) {
   check(borrarAjeno.data?.deleted === null, "delete_player: usuario sin rol -> null", borrarAjeno);
   const borrar = await rpc("dt", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
   check(borrar.data?.deleted === 1, "delete_player: DT borra", borrar);
+  check((await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND deleted_at IS NOT NULL AND NOT active`)) === 1,
+    "delete_player: borrado lógico (la fila queda con deleted_at e inactiva)");
+  const borrarOtraVez = await rpc("dt", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
+  check(borrarOtraVez.data?.deleted === null, "delete_player: eliminar dos veces -> null", borrarOtraVez);
+  const revivir = await rpc("dt", "save_player", { id: "prueba-p-1", clubId: HALCONES, name: "Revivido", shirtNumber: "7", position: "Medio", active: true, detail: {} });
+  check(revivir.data?.player === null && (await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND name = 'Jugador Editado' AND deleted_at IS NOT NULL`)) === 1,
+    "save_player: no revive ni sobrescribe a un eliminado", revivir);
   const borrarBahia = await rpc("presidente", "delete_player", { id: "prueba-p-4", clubId: BAHIA });
   check(borrarBahia.data?.deleted === null, "delete_player: otro club -> null", borrarBahia);
 
@@ -363,4 +370,65 @@ export async function run({ db, rpc, check }) {
     const r = await rpc("prensa", "save_club_portada", { ...portadaBase, ...cambio });
     check(r.data?.club === null, `save_club_portada: ${motivo} -> null`, r);
   }
+
+  // ---------- Borrado lógico de jugadores (0008_jugadores_borrado_logico.sql) ----------
+  const BAJA = "prueba-baja-1";
+  const alta = await rpc("dt", "save_player", { id: BAJA, clubId: HALCONES, name: "Jugador Historico", shirtNumber: "45", position: "Medio", detail: {} });
+  check(alta.data?.player?.id === BAJA, "borrado lógico: jugador nuevo", alta);
+  const evBaja = await rpc("dt", "save_club_event", {
+    id: "prueba-baja-ev", clubId: HALCONES, eventType: "PARTIDO", matchType: "AMISTOSO", title: "Amistoso de bajas",
+    eventDate: enDias(30), eventTime: "18:00", detail: { location: "Campo Prueba", routine: [] },
+  });
+  check(evBaja.data?.event?.id === "prueba-baja-ev", "borrado lógico: evento de prueba", evBaja);
+  const statsBaja = {
+    id: "prueba-baja-ev", clubId: HALCONES,
+    stats: { goals: [{ scorer: BAJA, assist: P01, isPenalty: false, isOwnGoal: false }], yellowCards: [BAJA], redCards: [],
+      goalkeepers: [{ id: BAJA, conceded: 0, saves: 3 }], mvp: BAJA },
+  };
+  await rpc("dt", "replace_club_event_attendees", { id: "prueba-baja-ev", clubId: HALCONES, labels: [P01, BAJA] });
+  await rpc("dt", "replace_club_event_stats", statsBaja);
+  await rpc("dt", "replace_match_attendees", { matchId: PARTIDO, clubId: HALCONES, labels: [P01, P03, BAJA] });
+  await rpc("tesorero", "save_financial_goal", { id: "prueba-baja-meta", clubId: HALCONES, title: "Meta de bajas", amount: 1000, quotaPerPlayer: 100 });
+  const aporteBaja = await rpc("tesorero", "set_goal_contribution", { goalId: "prueba-baja-meta", playerId: BAJA, amount: 120 });
+  check(aporteBaja.data?.contribution?.amount === 120, "borrado lógico: aportación del jugador", aporteBaja);
+  const historial = async () => ({
+    asistencia: await count(`SELECT count(*)::int AS n FROM club_event_attendees WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
+    gol: await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = 'prueba-baja-ev' AND scorer_id = '${BAJA}'`),
+    tarjeta: await count(`SELECT count(*)::int AS n FROM club_event_cards WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
+    portero: await count(`SELECT count(*)::int AS n FROM club_event_goalkeepers WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
+    mvp: await count(`SELECT count(*)::int AS n FROM club_events WHERE id = 'prueba-baja-ev' AND mvp_id = '${BAJA}'`),
+    partido: await count(`SELECT count(*)::int AS n FROM match_attendees WHERE match_id = '${PARTIDO}' AND player_id = '${BAJA}'`),
+    aporte: await count(`SELECT count(*)::int AS n FROM goal_contributions WHERE goal_id = 'prueba-baja-meta' AND player_id = '${BAJA}' AND amount = 120`),
+  });
+  const histAntes = await historial();
+  check(Object.values(histAntes).every((n) => n === 1), "borrado lógico: historial de prueba completo antes de eliminar", histAntes);
+  const eliminar = await rpc("dt", "delete_player", { id: BAJA, clubId: HALCONES });
+  check(eliminar.data?.deleted === 1, "borrado lógico: delete_player", eliminar);
+  const histDespues = await historial();
+  check(JSON.stringify(histDespues) === JSON.stringify(histAntes), "eliminar al jugador conserva asistencia, goles, tarjetas, portería, MVP y aportaciones", histDespues);
+  await rpc("dt", "replace_club_event_attendees", { id: "prueba-baja-ev", clubId: HALCONES, labels: [P01, BAJA] });
+  await rpc("dt", "replace_club_event_stats", statsBaja);
+  await rpc("dt", "replace_match_attendees", { matchId: PARTIDO, clubId: HALCONES, labels: [P01, P03, BAJA] });
+  const histReguardado = await historial();
+  check(JSON.stringify(histReguardado) === JSON.stringify(histAntes), "volver a guardar el evento y el partido conserva al jugador eliminado", histReguardado);
+  const aporteEliminado = await rpc("tesorero", "set_goal_contribution", { goalId: "prueba-baja-meta", playerId: BAJA, amount: 500 });
+  check(aporteEliminado.data?.contribution === null && (await historial()).aporte === 1, "set_goal_contribution: un eliminado no recibe aportaciones nuevas", aporteEliminado);
+  const aporteAjenoBaja = await rpc("tesorero", "set_goal_contribution", { goalId: "prueba-baja-meta", playerId: "dummy-club-bahia-p01", amount: 5 });
+  check(aporteAjenoBaja.data?.contribution === null, "set_goal_contribution: jugador de otro club -> null", aporteAjenoBaja);
+  const slug = (await db.query("SELECT slug FROM clubs WHERE id = $1", [HALCONES])).rows[0].slug;
+  const pantalla = await rpc("anon", "club_screen", { slug });
+  const plantilla = pantalla.data?.clubs?.[0]?.players_on_club ?? [];
+  const jugEliminado = plantilla.find((p) => p.id === BAJA);
+  check(typeof jugEliminado?.deletedAt === "string" && jugEliminado.active === false && plantilla.find((p) => p.id === P01)?.deletedAt === null,
+    "club_screen: trae al eliminado con deletedAt (para su historial) y a los demás con null", jugEliminado ?? pantalla.error);
+  let chk = null;
+  try {
+    await db.query(`UPDATE players SET active = true WHERE id = '${BAJA}'`);
+  } catch (err) {
+    chk = err.code;
+  }
+  check(chk === "23514", "un eliminado no puede quedar activo sin restaurarlo (CHECK)", chk);
+  await db.query(`UPDATE players SET deleted_at = NULL, active = true WHERE id = '${BAJA}'`);
+  const restaurado = (await rpc("anon", "club_screen", { slug })).data?.clubs?.[0]?.players_on_club?.find((p) => p.id === BAJA);
+  check(restaurado?.deletedAt === null && restaurado.active === true && (await historial()).gol === 1, "restaurar (SQL del README) lo devuelve con todo su historial", restaurado);
 }

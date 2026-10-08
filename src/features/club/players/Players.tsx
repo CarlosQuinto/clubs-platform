@@ -409,8 +409,10 @@ const MiniStat = ({ icon, label, value, color = C.navy900 }: any) => (
 
 // 👆 ========================================= 👆
 
-export default function Players({ players, events, perms, goals }: any) {
+export default function Players({ players: allPlayers, events, perms, goals }: any) {
   const { clubId } = useClub();
+  // Los eliminados (borrado lógico) no salen en la plantilla, ni siquiera en «Inactivos»
+  const players = useMemo(() => allPlayers.filter((p: any) => !p.deleted), [allPlayers]);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [playerNumber, setPlayerNumber] = useState("");
@@ -502,12 +504,15 @@ export default function Players({ players, events, perms, goals }: any) {
   const handleDelete = async (id: string) => {
     if (
       window.confirm(
-        "¿Seguro que deseas eliminar a este jugador? Perderás todo su historial.",
+        "¿Eliminar a este jugador? Saldrá de la plantilla, pero sus goles, tarjetas, asistencias y aportaciones se conservan.",
       )
     )
       try {
         const removed = await deletePlayer(dataConnect, { id, clubId });
         savedRow(removed.data.deleted);
+        // Si estaba abierto en el formulario o en su ficha, se cierra: ya no se puede editar
+        if (id === editingPlayerId) handleCancelEdit();
+        if (selectedPlayer?.id === id) setSelectedPlayer(null);
         requestClubRefresh();
       } catch (err) {
         console.error(err);
@@ -898,7 +903,7 @@ export default function Players({ players, events, perms, goals }: any) {
               />
             </div>
 
-            {players.length > 1 && (
+            {activePlayersCount > 1 && (
               <button
                 onClick={() => setShowCompareModal(true)}
                 style={{

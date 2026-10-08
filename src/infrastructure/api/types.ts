@@ -735,6 +735,8 @@ export interface ClubScreenData {
       imageUrl: string;
       isCoach: boolean;
       active: boolean;
+      /** Eliminado (borrado lógico): se manda para nombrar su historial; no sale en plantilla ni selectores. */
+      deletedAt?: TimestampString | null;
     } & Player_Key)[];
     clubEvents_on_club: ({
       id: string;
@@ -1840,6 +1842,8 @@ export interface MatchDetailData {
         position: string;
         imageUrl: string;
         isCoach: boolean;
+        /** false = de baja o eliminado; solo viene si aparece en el partido. */
+        active: boolean;
       } & Player_Key)[];
     } & Club_Key;
     awayClub: {
@@ -1854,6 +1858,8 @@ export interface MatchDetailData {
         position: string;
         imageUrl: string;
         isCoach: boolean;
+        /** false = de baja o eliminado; solo viene si aparece en el partido. */
+        active: boolean;
       } & Player_Key)[];
     } & Club_Key;
     matchClubReports_on_match: ({
@@ -1981,6 +1987,8 @@ export interface MatchScoreSheetData {
       players_on_club: ({
         id: string;
         name: string;
+        /** false = de baja o eliminado; solo viene si aparece en el partido. */
+        active: boolean;
       } & Player_Key)[];
     } & Club_Key;
     awayClub: {
@@ -1989,6 +1997,8 @@ export interface MatchScoreSheetData {
       players_on_club: ({
         id: string;
         name: string;
+        /** false = de baja o eliminado; solo viene si aparece en el partido. */
+        active: boolean;
       } & Player_Key)[];
     } & Club_Key;
     matchGoals_on_match: ({

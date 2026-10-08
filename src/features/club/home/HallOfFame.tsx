@@ -518,6 +518,8 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
                   {visiblePlayers.map((p: any) => {
                     const styles = getRankStyles(p.rank, cat.accent);
                     const isActive = p.active !== false; // 👈 NUEVA VALIDACIÓN
+                    // Un eliminado (borrado lógico) se queda como historia, con su propia etiqueta
+                    const isDeleted = p.deleted === true;
 
                     return (
                       <div
@@ -586,7 +588,7 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
                             {!isActive && (
                               <span
                                 style={{
-                                  backgroundColor: "#ef4444",
+                                  backgroundColor: isDeleted ? C.gray600 : "#ef4444",
                                   color: "white",
                                   fontSize: "0.55rem",
                                   padding: "1px 4px",
@@ -594,7 +596,7 @@ export default function HallOfFame({ stats }: HallOfFameProps) {
                                   fontWeight: "bold",
                                 }}
                               >
-                                BAJA
+                                {isDeleted ? "ELIMINADO" : "BAJA"}
                               </span>
                             )}
                           </p>

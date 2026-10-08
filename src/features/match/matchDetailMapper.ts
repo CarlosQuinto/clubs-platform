@@ -253,9 +253,11 @@ function lineupOf(
       left: side === "home" ? left : 100 - left,
     });
   }
+  // players_on_club trae a los activos y a los de baja o eliminados que ya aparecen en el partido (para nombrar
+  // su alineación, goles y convocatoria); la plantilla por defecto y el DT son solo los activos.
   const called = players.filter((player) => attendeeIds.has(player.id));
-  const pool = called.length > 0 ? called : players;
-  const coach = club.players_on_club.find((player) => player.isCoach && player.name.trim());
+  const pool = called.length > 0 ? called : players.filter((player) => player.active !== false);
+  const coach = club.players_on_club.find((player) => player.isCoach && player.active !== false && player.name.trim());
   return {
     side,
     name: club.name,
@@ -271,9 +273,10 @@ function lineupOf(
   };
 }
 
+// Plantilla para registrar en vivo: solo activos (un eliminado no recibe goles ni tarjetas nuevas)
 function rosterOf(club: ClubRow, attendeeIds: Set<string>): RosterPlayerView[] {
   return club.players_on_club
-    .filter((player) => !player.isCoach && player.name.trim())
+    .filter((player) => !player.isCoach && player.active !== false && player.name.trim())
     .map((player) => ({
       id: player.id,
       name: player.name,

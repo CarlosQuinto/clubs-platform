@@ -261,6 +261,15 @@ function noShowMessage(noShow: MatchNoShow | null, home: string, away: string) {
   return "";
 }
 
+/** Los selectores ofrecen a los activos y, si ya estaba elegido, al jugador de baja o eliminado. */
+function selectable(players: ScorePlayerView[], current: string) {
+  return players.filter((player) => player.active || player.id === current);
+}
+
+function playerLabel(player: ScorePlayerView) {
+  return player.active ? player.name : `${player.name} (baja)`;
+}
+
 function ScoreStepper({
   name,
   value,
@@ -338,9 +347,9 @@ function TeamBlock({
                   onChange={(event) => patch(index, { scorerId: event.target.value })}
                 >
                   <option value="">{row.isOwnGoal ? "Jugador rival" : "Goleador"}</option>
-                  {scorers.map((player) => (
+                  {selectable(scorers, row.scorerId).map((player) => (
                     <option key={player.id} value={player.id}>
-                      {player.name}
+                      {playerLabel(player)}
                     </option>
                   ))}
                 </FormSelect>
@@ -351,9 +360,9 @@ function TeamBlock({
                     onChange={(event) => patch(index, { assistId: event.target.value })}
                   >
                     <option value="">Asistencia (opcional)</option>
-                    {players.map((player) => (
+                    {selectable(players, row.assistId).map((player) => (
                       <option key={player.id} value={player.id}>
-                        {player.name}
+                        {playerLabel(player)}
                       </option>
                     ))}
                   </FormSelect>
@@ -418,9 +427,9 @@ function CardList({
             <div key={`${label}-${index}`} className="match-discipline__row">
               <FormSelect value={card.playerId} onChange={(event) => patch(index, { playerId: event.target.value })}>
                 <option value="">Jugador</option>
-                {players.map((player) => (
+                {selectable(players, card.playerId).map((player) => (
                   <option key={player.id} value={player.id}>
-                    {player.name}
+                    {playerLabel(player)}
                   </option>
                 ))}
               </FormSelect>

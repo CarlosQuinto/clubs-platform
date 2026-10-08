@@ -90,7 +90,7 @@ Hay tres tipos de usuario:
 
 - **Inicio:** cumpleaños, portada (imágenes del héroe), récord del equipo, vitrina de trofeos, salón de la fama y galería por álbumes. Editar portada y galería requiere `canEditPortada`.
 - **Agenda:** entrenamientos, amistosos y partidos oficiales; asistencia, alineación, marcador, álbum y estadísticas del evento. Desde aquí se guarda la **disponibilidad semanal** del club, que se usa para sugerir fechas de partido.
-- **Jugadores:** plantilla, estadísticas, comparación y ficha con foto.
+- **Jugadores:** plantilla, estadísticas, comparación y ficha con foto. «Baja temporal» lo deja fuera de las listas para pasar asistencia; **eliminar** lo saca de la plantilla y de los selectores, pero conserva su historial (ver Database).
 - **Finanzas:** resumen, movimientos (ingresos y gastos), metas con aportación por jugador. El Presidente y el Tesorero ven además la **cuenta con la liga** (`club_league_account`): lo que la liga le cobra al club, lo pagado y el saldo, solo lectura.
 - **Inventario:** material por estado (`BUENO`, `MALO`, `PERDIDO`).
 - **Miembros:** modal en el encabezado del club para invitar, cambiar roles y cancelar invitaciones (solo Presidente o superadmin).
@@ -270,7 +270,7 @@ npm run check:firebase  # falla si reaparece Firebase
 
 ### Cambiar el esquema o una operación
 
-- **Esquema:** añade una migración nueva `db/migrations/0005_*.sql` (las `0*` se aplican una sola vez y quedan anotadas en `public.schema_migrations`). No edites `0001_schema.sql` en una base que ya existe.
+- **Esquema:** añade una migración nueva con el siguiente número libre (`db/migrations/0009_*.sql` después de `0008`; las `0*` se aplican una sola vez y quedan anotadas en `public.schema_migrations`). No edites `0001_schema.sql` en una base que ya existe.
 - **Operaciones:** cada operación del cliente es una función `public.<nombre_en_snake>(p jsonb) RETURNS jsonb` en `db/migrations/1*.sql` (se vuelven a aplicar en cada `db:migrate` porque usan `CREATE OR REPLACE`). Su salida debe tener exactamente la forma de la interfaz `<Op>Data` de [`src/infrastructure/api/types.ts`](src/infrastructure/api/types.ts). Al crear una, añade su export en [`src/infrastructure/dataconnect.ts`](src/infrastructure/dataconnect.ts) y sus tipos, y una prueba en `scripts/db/pruebas/`.
 
 Reglas de las funciones SQL (detalladas en la cabecera de [`db/migrations/1010_fn_public.sql`](db/migrations/1010_fn_public.sql)):
@@ -304,6 +304,7 @@ clubs-platform/
 │   │   ├── 1012_fn_league.sql     # funciones RPC: competición y marcador en vivo
 │   │   ├── 0006_no_presentado.sql # matches.no_show y la tabla con «no se presentó ninguno»
 │   │   ├── 0007_finanzas_liga.sql # tarifas, cargos, pagos y gastos de la liga
+│   │   ├── 0008_jugadores_borrado_logico.sql # players.deleted_at (borrado lógico de jugadores)
 │   │   ├── 1013_fn_admin.sql      # funciones RPC: /admin
 │   │   ├── 1014_fn_api.sql        # funciones de la API de correo
 │   │   └── 1015_fn_finance.sql    # finanzas de la liga: triggers de cargos, resumen y RPC
@@ -442,6 +443,8 @@ Todo está en PostgreSQL, definido en [`db/migrations/0001_schema.sql`](db/migra
 | Anuncios y entrada | `ads`, `ad_placements`, `inquiries`, `team_applications` |
 
 **Eliminar un club es un borrado lógico** (`deleteClub`): se borran sus invitaciones pendientes y se marca `clubs.deleted_at` con `active = false`. Sus jugadores, partidos, podios y finanzas se conservan. Para restaurarlo: `UPDATE clubs SET deleted_at = NULL, active = true WHERE slug = '<slug>';` (desde Studio o `psql`).
+
+**Eliminar un jugador también es un borrado lógico** (`delete_player`): se marca `players.deleted_at` y queda con `active = false` (una restricción impide que un eliminado vuelva a estar activo sin restaurarlo). Se conservan sus goles, tarjetas, MVP, asistencias, alineaciones, estadísticas de portero, aportaciones a metas y movimientos; volver a guardar un evento o partido viejo no los borra. Deja de salir en la plantilla (también en «Inactivos»), en los selectores de asistencia, alineación, aportaciones y marcador en vivo, en la alineación base y en la cifra de jugadores de la portada (si ya estaba convocado a un evento, la asistencia lo muestra como «Eliminado», sin contarlo, para poder quitarlo). Sigue saliendo, atenuado y con «Eliminado», en el Salón de la Fama, y en la ficha y la hoja de marcador de los partidos donde aparece. `save_player` y `set_goal_contribution` lo rechazan. Para verlos: `SELECT id, name, deleted_at FROM players WHERE deleted_at IS NOT NULL AND club_id = (SELECT id FROM clubs WHERE slug = '<slug>');`. Para restaurarlo: `UPDATE players SET deleted_at = NULL, active = true WHERE id = '<id>';` (`active = false` lo devuelve como «Baja temporal»). Si el jugador regresa, restáuralo en vez de darlo de alta otra vez, o su historial quedará partido en dos.
 
 Desactivar un club (botón del ojo en `/admin`) pone `clubs.active = false` y exige un motivo en `clubs.disabled_reason` (de 5 a 100 caracteres); su página sigue abierta y muestra el motivo con un enlace a `/contacto`.
 

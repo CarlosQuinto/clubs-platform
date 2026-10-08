@@ -191,6 +191,7 @@ CALL api_expose('save_club_default_lineup', 'USER');
 
 -- Sustituye la asistencia de un evento (ADMIN o DT). Las etiquetas que coinciden con un id de
 -- jugador del club se enlazan; el resto se guarda como texto libre.
+-- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.replace_club_event_attendees(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -250,6 +251,7 @@ CALL api_expose('replace_club_event_album', 'USER');
 
 -- Sustituye goles, tarjetas, porteros y MVP de un amistoso (ADMIN o DT).
 -- Solo se enlazan jugadores del propio club; el resto se ignora (goles) o se descarta (tarjetas/porteros).
+-- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.replace_club_event_stats(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -316,6 +318,7 @@ CALL api_expose('replace_club_event_stats', 'USER');
 
 -- Alineación del club en un partido oficial en el que participa (ADMIN o DT). «mvpId» (opcional) nombra al
 -- jugador del partido por el club: tiene que ser de su plantilla; si no viene, se conserva el guardado.
+-- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.set_match_club_lineup(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -343,6 +346,7 @@ $$;
 CALL api_expose('set_match_club_lineup', 'USER');
 
 -- Sustituye los asistentes del club a un partido oficial (ADMIN o DT); solo jugadores del club
+-- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.replace_match_attendees(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -418,14 +422,17 @@ BEGIN
     image_url = EXCLUDED.image_url,
     is_coach = EXCLUDED.is_coach,
     active = EXCLUDED.active
-  WHERE players.club_id = EXCLUDED.club_id
+  -- Un jugador eliminado no se revive ni se sobrescribe desde el formulario (se restaura por SQL)
+  WHERE players.club_id = EXCLUDED.club_id AND players.deleted_at IS NULL
   RETURNING jsonb_build_object('id', id, 'name', name) INTO v_row;
   RETURN jsonb_build_object('player', v_row);
 END
 $$;
 CALL api_expose('save_player', 'USER');
 
--- Borra un jugador del club (ADMIN o DT)
+-- Elimina un jugador del club (ADMIN o DT) con borrado lógico (0008_jugadores_borrado_logico.sql): sale de la
+-- plantilla y de los selectores, pero sus goles, tarjetas, asistencias, estadísticas y aportaciones se conservan.
+-- Eliminarlo otra vez devuelve null.
 CREATE OR REPLACE FUNCTION public.delete_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -433,9 +440,11 @@ DECLARE
   v_club text := p ->> 'clubId';
   v_n integer;
 BEGIN
-  DELETE FROM players
+  UPDATE players
+  SET deleted_at = now(), active = false
   WHERE id = p ->> 'id'
     AND club_id = v_club
+    AND deleted_at IS NULL
     AND has_club_role(v_club, ARRAY['ADMIN', 'DT']);
   GET DIAGNOSTICS v_n = ROW_COUNT;
   RETURN jsonb_build_object('deleted', api_rows(v_n));
@@ -572,7 +581,8 @@ $$;
 CALL api_expose('delete_financial_goal', 'USER');
 
 -- Fija la aportación de un jugador a una meta (ADMIN o TESORERO del club de la meta); no negativa.
--- El club se toma de la meta, no del cliente.
+-- El club se toma de la meta, no del cliente. El jugador tiene que ser de ese club y no estar eliminado: las
+-- aportaciones de un eliminado quedan como historial.
 CREATE OR REPLACE FUNCTION public.set_goal_contribution(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -589,6 +599,7 @@ BEGIN
   WHERE g.id = p ->> 'goalId'
     AND v_amount >= 0
     AND has_club_role(g.club_id, ARRAY['ADMIN', 'TESORERO'])
+    AND EXISTS (SELECT 1 FROM players pl WHERE pl.id = p ->> 'playerId' AND pl.club_id = g.club_id AND pl.deleted_at IS NULL)
   ON CONFLICT (goal_id, player_id) DO UPDATE SET amount = EXCLUDED.amount
   RETURNING jsonb_build_object('goal_id', goal_id, 'player_id', player_id, 'amount', amount) INTO v_row;
   RETURN jsonb_build_object('contribution', v_row);

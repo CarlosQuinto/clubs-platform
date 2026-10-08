@@ -259,6 +259,23 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 CALL api_expose('matches_page', 'PUBLIC');
 
+-- Jugadores que ya aparecen en un partido (goles, asistencias, tarjetas, convocados, MVP y alineación), de ambos
+-- clubes. La ficha y la hoja de marcador los devuelven aunque estén de baja o eliminados, para que su historial
+-- conserve el nombre; los selectores solo ofrecen a los activos (campo active).
+CREATE OR REPLACE FUNCTION public.match_player_refs(p_match text)
+RETURNS SETOF text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT g.scorer_id FROM match_goals g WHERE g.match_id = p_match AND g.scorer_id IS NOT NULL
+  UNION SELECT g.assist_id FROM match_goals g WHERE g.match_id = p_match AND g.assist_id IS NOT NULL
+  UNION SELECT k.player_id FROM match_cards k WHERE k.match_id = p_match AND k.player_id IS NOT NULL
+  UNION SELECT a.player_id FROM match_attendees a WHERE a.match_id = p_match
+  UNION SELECT r.mvp_id FROM match_club_reports r WHERE r.match_id = p_match AND r.mvp_id IS NOT NULL
+  UNION SELECT pos.value FROM match_club_reports r
+    CROSS JOIN LATERAL jsonb_each_text(CASE WHEN jsonb_typeof(r.lineup -> 'positions') = 'object'
+      THEN r.lineup -> 'positions' ELSE '{}'::jsonb END) AS pos
+    WHERE r.match_id = p_match AND pos.value IS NOT NULL AND pos.value <> ''
+$$;
+REVOKE ALL ON FUNCTION public.match_player_refs(text) FROM PUBLIC, anon, authenticated;
+
 -- Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo.
 CREATE OR REPLACE FUNCTION public.match_detail(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -275,14 +292,22 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
         'players_on_club', (SELECT coalesce(jsonb_agg(pj ORDER BY name, id), '[]'::jsonb) FROM (
           SELECT pl.name, pl.id, jsonb_build_object('id', pl.id, 'name', pl.name, 'shirtNumber', pl.shirt_number,
-            'position', pl.position, 'imageUrl', pl.image_url, 'isCoach', pl.is_coach) AS pj
-          FROM players pl WHERE pl.club_id = c.id AND pl.active ORDER BY pl.name, pl.id LIMIT 80) s))
+            'position', pl.position, 'imageUrl', pl.image_url, 'isCoach', pl.is_coach,
+            'active', pl.active AND pl.deleted_at IS NULL) AS pj
+          FROM players pl WHERE pl.club_id = c.id
+            AND (pl.id IN (SELECT a.id FROM players a WHERE a.club_id = c.id AND a.active AND a.deleted_at IS NULL
+                           ORDER BY a.name, a.id LIMIT 80)
+              OR pl.id IN (SELECT ref FROM match_player_refs(m.id) AS ref))) s))
         FROM clubs c WHERE c.id = m.home_club_id),
       'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
         'players_on_club', (SELECT coalesce(jsonb_agg(pj ORDER BY name, id), '[]'::jsonb) FROM (
           SELECT pl.name, pl.id, jsonb_build_object('id', pl.id, 'name', pl.name, 'shirtNumber', pl.shirt_number,
-            'position', pl.position, 'imageUrl', pl.image_url, 'isCoach', pl.is_coach) AS pj
-          FROM players pl WHERE pl.club_id = c.id AND pl.active ORDER BY pl.name, pl.id LIMIT 80) s))
+            'position', pl.position, 'imageUrl', pl.image_url, 'isCoach', pl.is_coach,
+            'active', pl.active AND pl.deleted_at IS NULL) AS pj
+          FROM players pl WHERE pl.club_id = c.id
+            AND (pl.id IN (SELECT a.id FROM players a WHERE a.club_id = c.id AND a.active AND a.deleted_at IS NULL
+                           ORDER BY a.name, a.id LIMIT 80)
+              OR pl.id IN (SELECT ref FROM match_player_refs(m.id) AS ref))) s))
         FROM clubs c WHERE c.id = m.away_club_id),
       'matchClubReports_on_match', (
         SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', r.club_id), 'lineup', r.lineup,
@@ -347,12 +372,16 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     SELECT coalesce(jsonb_agg(jsonb_build_object(
       'homeScore', m.home_score, 'awayScore', m.away_score,
       'homeClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name,
-        'players_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name) ORDER BY pl.name, pl.id), '[]'::jsonb)
-          FROM players pl WHERE pl.club_id = c.id AND pl.active))
+        'players_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name,
+          'active', pl.active AND pl.deleted_at IS NULL) ORDER BY pl.name, pl.id), '[]'::jsonb)
+          FROM players pl WHERE pl.club_id = c.id
+            AND ((pl.active AND pl.deleted_at IS NULL) OR pl.id IN (SELECT ref FROM match_player_refs(m.id) AS ref))))
         FROM clubs c WHERE c.id = m.home_club_id),
       'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name,
-        'players_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name) ORDER BY pl.name, pl.id), '[]'::jsonb)
-          FROM players pl WHERE pl.club_id = c.id AND pl.active))
+        'players_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name,
+          'active', pl.active AND pl.deleted_at IS NULL) ORDER BY pl.name, pl.id), '[]'::jsonb)
+          FROM players pl WHERE pl.club_id = c.id
+            AND ((pl.active AND pl.deleted_at IS NULL) OR pl.id IN (SELECT ref FROM match_player_refs(m.id) AS ref))))
         FROM clubs c WHERE c.id = m.away_club_id),
       'matchGoals_on_match', (
         SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', g.club_id),
@@ -487,7 +516,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
           'positions', d.positions)), '[]'::jsonb) FROM club_default_lineups d WHERE d.club_id = c.id),
         'players_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('id', pl.id, 'name', pl.name, 'shirtNumber', pl.shirt_number,
           'position', pl.position, 'variant', pl.variant, 'birthDate', to_jsonb(pl.birth_date), 'imageUrl', pl.image_url,
-          'isCoach', pl.is_coach, 'active', pl.active) ORDER BY pl.name, pl.id), '[]'::jsonb)
+          'isCoach', pl.is_coach, 'active', pl.active, 'deletedAt', api_ts(pl.deleted_at)) ORDER BY pl.name, pl.id), '[]'::jsonb)
           FROM players pl WHERE pl.club_id = c.id),
         'clubEvents_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object(
           'id', e.id, 'eventType', to_jsonb(e.event_type), 'matchType', to_jsonb(e.match_type), 'title', e.title,

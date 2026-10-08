@@ -102,6 +102,8 @@ export interface TournamentScreenView {
 export interface ScorePlayerView {
   id: string;
   name: string;
+  /** false = de baja o eliminado: solo viene porque ya aparece en el partido; no se ofrece para nuevos registros. */
+  active: boolean;
 }
 
 export interface ScoreGoalView {

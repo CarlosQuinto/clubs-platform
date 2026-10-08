@@ -263,7 +263,7 @@ function playersOf(
 ) {
   return (club?.players_on_club ?? [])
     .filter((player) => player.name.trim())
-    .map((player) => ({ id: player.id, name: player.name }));
+    .map((player) => ({ id: player.id, name: player.name, active: player.active !== false }));
 }
 
 function goalsOf(
