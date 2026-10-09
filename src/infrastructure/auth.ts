@@ -46,10 +46,19 @@ function wrap(error: AuthError): Error & { code: string } {
   return Object.assign(new Error(message), { code: mapped });
 }
 
-/** Avisa con el estado inicial y en cada cambio de sesión (como onAuthStateChanged). */
+const sameUser = (a: User | null, b: User | null) =>
+  a === b || (a !== null && b !== null && a.uid === b.uid && a.email === b.email && a.displayName === b.displayName);
+
+/**
+ * Avisa con el estado inicial y en cada cambio de sesión (como onAuthStateChanged). Si la persona es la misma se
+ * entrega el mismo objeto: supabase-js repite SIGNED_IN cada vez que la pestaña vuelve a estar visible (y
+ * TOKEN_REFRESHED cada hora), y un objeto nuevo haría que todo lo que depende de `user` se recargue, por ejemplo
+ * /admin, que volvía al spinner y perdía el formulario a medio llenar.
+ */
 export function watchSession(listener: (user: User | null) => void) {
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    current = toUser(session?.user);
+    const next = toUser(session?.user);
+    if (!sameUser(current, next)) current = next;
     listener(current);
   });
   return () => data.subscription.unsubscribe();
