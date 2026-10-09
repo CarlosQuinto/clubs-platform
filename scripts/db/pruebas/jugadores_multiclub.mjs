@@ -73,7 +73,11 @@ export async function run({ db, rpc, check }) {
   check(!propios.data?.players?.some((p) => p.clubs_on_player.some((c) => c.id === HALCONES)), "search_players: no ofrece a los que ya están vivos en el club", propios.data ?? propios.error);
   const nombreBahia = (await db.query("SELECT name FROM players WHERE id = $1", [COMPARTIDO])).rows[0].name;
   const bahiaBusq = await rpc("dt", "search_players", { clubId: MULTI, q: nombreBahia });
-  check(bahiaBusq.data?.players?.find((p) => p.id === COMPARTIDO)?.clubs_on_player?.[0]?.id === BAHIA, "search_players: el DT del club de prueba encuentra al jugador de Bahía", bahiaBusq.data ?? bahiaBusq.error);
+  const bahiaHit = bahiaBusq.data?.players?.find((p) => p.id === COMPARTIDO);
+  check(bahiaHit?.clubs_on_player?.[0]?.id === BAHIA && bahiaHit.conflict === null, "search_players: el DT del club de prueba encuentra al jugador de Bahía, sin aviso (no comparten torneo)", bahiaBusq.data ?? bahiaBusq.error);
+  const bahiaDesdeHalcones = (await rpc("dt", "search_players", { clubId: HALCONES, q: nombreBahia })).data?.players?.find((p) => p.id === COMPARTIDO);
+  check(typeof bahiaDesdeHalcones?.conflict?.tournamentName === "string" && bahiaDesdeHalcones.conflict.clubName === bahiaHit.clubs_on_player[0].name,
+    "search_players: desde Halcones el mismo jugador trae el aviso del torneo que comparten", bahiaDesdeHalcones);
 
   // ---------- add_existing_player ----------
   const personasAntes = await statsPlayers();
@@ -86,14 +90,19 @@ export async function run({ db, rpc, check }) {
   const inexistente = await rpc("dt", "add_existing_player", { clubId: MULTI, playerId: "no-existe", shirtNumber: "10", position: "Medio" });
   check(dorsalMalo.data?.player === null && posMala.data?.player === null && inexistente.data?.player === null,
     "add_existing_player: dorsal 100, posición fuera de lista o jugador inexistente -> null", { dorsalMalo: dorsalMalo.data, posMala: posMala.data, inexistente: inexistente.data });
+  // Comparten torneo en curso: se ficha igual y llega el aviso; se le da de baja de Halcones para seguir con el club de prueba
   const conflicto = await rpc("presidente", "add_existing_player", { clubId: HALCONES, playerId: COMPARTIDO, shirtNumber: "10", position: "Medio" });
-  check(conflicto.data?.player === null && typeof conflicto.data?.conflict?.clubName === "string" && typeof conflicto.data.conflict.tournamentName === "string",
-    "add_existing_player: Halcones no ficha a un jugador de Bahía (comparten torneo en curso) -> conflict", conflicto);
+  check(conflicto.data?.player?.id === COMPARTIDO && typeof conflicto.data?.conflict?.clubName === "string" && typeof conflicto.data.conflict.tournamentName === "string"
+    && (await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1 AND club_id = $2 AND active", [COMPARTIDO, HALCONES])) === 1,
+    "add_existing_player: Halcones ficha a un jugador de Bahía aunque compartan torneo; conflict es solo aviso", conflicto);
+  const quitarHalcones = await rpc("presidente", "delete_player", { id: COMPARTIDO, clubId: HALCONES });
+  check(quitarHalcones.data?.deleted === 1, "delete_player: Halcones lo elimina de su plantilla", quitarHalcones);
   const fichado = await rpc("dt", "add_existing_player", { clubId: MULTI, playerId: COMPARTIDO, shirtNumber: "10", position: "Medio", variant: "Volante" });
-  check(fichado.data?.player?.id === COMPARTIDO && fichado.data.player.name === nombreBahia, "add_existing_player: el DT suma al jugador de Bahía al club de prueba", fichado);
+  check(fichado.data?.player?.id === COMPARTIDO && fichado.data.player.name === nombreBahia && fichado.data.conflict === null,
+    "add_existing_player: el DT suma al jugador de Bahía al club de prueba, sin aviso", fichado);
   const repetido = await rpc("dt", "add_existing_player", { clubId: MULTI, playerId: COMPARTIDO, shirtNumber: "11", position: "Medio" });
   check(repetido.data?.player === null && repetido.data?.reason === "ALREADY", "add_existing_player: ya está en el club -> reason ALREADY", repetido);
-  check((await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1", [COMPARTIDO])) === 2, "club_players: el jugador tiene una fila por club");
+  check((await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1 AND deleted_at IS NULL", [COMPARTIDO])) === 2, "club_players: el jugador tiene una fila viva por club");
   const enMulti = (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO);
   const enBahia = (await plantilla(BAHIA)).find((p) => p.id === COMPARTIDO);
   check(enMulti?.shirtNumber === "10" && enMulti.variant === "Volante" && enMulti.otherClubs_on_player?.[0]?.id === BAHIA
@@ -111,8 +120,8 @@ export async function run({ db, rpc, check }) {
     "nombre, nacimiento y foto se ven en Bahía; dorsal y posición siguen siendo de cada club", { bahiaTras, multiTras });
   const pisar = await rpc("presidente", "save_player", { id: COMPARTIDO, clubId: HALCONES, name: "Robado", shirtNumber: "1", position: "Portero" });
   check(pisar.data?.player === null && (await db.query("SELECT name FROM players WHERE id = $1", [COMPARTIDO])).rows[0].name === "Nombre Compartido"
-    && (await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1", [COMPARTIDO])) === 2,
-    "save_player: un club donde no está no lo edita ni se lo suma", pisar);
+    && (await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1 AND club_id = $2 AND deleted_at IS NOT NULL", [COMPARTIDO, HALCONES])) === 1,
+    "save_player: un club donde está eliminado no lo edita ni lo revive", pisar);
 
   // ---------- Baja y eliminación solo en un club ----------
   const baja = await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "12", position: "Defensa", active: false, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
@@ -128,27 +137,30 @@ export async function run({ db, rpc, check }) {
   check(restaurar.data?.player?.id === COMPARTIDO && (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO)?.deletedAt === null,
     "add_existing_player: restaura al eliminado del club de prueba", restaurar);
 
-  // ---------- Un club por torneo: inscripción y reactivación ----------
+  // ---------- Torneo compartido: se inscribe y se reactiva igual, con aviso ----------
   const torneo = (await db.query(`SELECT t.id FROM tournaments t JOIN tournament_clubs tc ON tc.tournament_id = t.id
     WHERE tc.club_id = $1 AND t.status <> 'FINISHED' ORDER BY (t.status = 'UPCOMING') DESC, t.id LIMIT 1`, [BAHIA])).rows[0].id;
   const inscribir = await rpc("admin", "add_tournament_club", { tournamentId: torneo, clubId: MULTI });
-  check(inscribir.data?.row === null && inscribir.data?.conflicts?.some((c) => c.playerName === "Nombre Compartido")
-    && (await count("SELECT count(*)::int AS n FROM tournament_clubs WHERE tournament_id = $1 AND club_id = $2", [torneo, MULTI])) === 0,
-    "add_tournament_club: no inscribe al club de prueba en un torneo donde su jugador ya juega con Bahía -> conflicts", inscribir);
+  check(inscribir.data?.row?.id === torneo && inscribir.data?.conflicts?.some((c) => c.playerName === "Nombre Compartido" && typeof c.clubName === "string")
+    && (await count("SELECT count(*)::int AS n FROM tournament_clubs WHERE tournament_id = $1 AND club_id = $2", [torneo, MULTI])) === 1,
+    "add_tournament_club: inscribe al club de prueba aunque su jugador ya juegue ese torneo con Bahía; conflicts es aviso", inscribir);
+  const reinscribir = await rpc("admin", "add_tournament_club", { tournamentId: torneo, clubId: MULTI });
+  check(reinscribir.data?.row?.id === torneo && reinscribir.data?.conflicts === null, "add_tournament_club: volver a inscribir a uno que ya está no avisa", reinscribir);
   await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "13", position: "Medio", active: false, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
-  const inscribirBaja = await rpc("admin", "add_tournament_club", { tournamentId: torneo, clubId: MULTI });
-  check(inscribirBaja.data?.row?.id === torneo, "add_tournament_club: con el jugador de baja sí se inscribe", inscribirBaja);
   const reactivar = await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "13", position: "Medio", active: true, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
-  check(reactivar.data?.player === null && reactivar.data?.conflict?.clubName && (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO)?.active === false,
-    "save_player: reactivarlo mientras ambos clubes comparten torneo -> conflict y sigue de baja", reactivar);
+  check(reactivar.data?.player?.id === COMPARTIDO && typeof reactivar.data?.conflict?.clubName === "string" && (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO)?.active === true,
+    "save_player: reactivarlo mientras ambos clubes comparten torneo lo reactiva y avisa", reactivar);
+  const editarActivo = await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "14", position: "Medio", active: true, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
+  check(editarActivo.data?.player?.id === COMPARTIDO && editarActivo.data?.conflict === null, "save_player: editar a uno ya activo no repite el aviso", editarActivo);
   const quitar = await rpc("admin", "remove_tournament_club", { tournamentId: torneo, clubId: MULTI });
   check(!quitar.error && (await count("SELECT count(*)::int AS n FROM tournament_clubs WHERE tournament_id = $1 AND club_id = $2", [torneo, MULTI])) === 0, "remove_tournament_club: el club de prueba sale del torneo", quitar);
-  // Un torneo terminado no bloquea
+  // Sin torneo en curso compartido (uno terminado no cuenta) no hay aviso
   const terminado = (await db.query(`SELECT t.id FROM tournaments t JOIN tournament_clubs tc ON tc.tournament_id = t.id WHERE tc.club_id = $1 AND t.status = 'FINISHED' LIMIT 1`, [BAHIA])).rows[0]?.id;
   if (terminado) await db.query("INSERT INTO tournament_clubs (tournament_id, club_id) VALUES ($1, $2)", [terminado, MULTI]);
+  await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "13", position: "Medio", active: false, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
   const reactivado = await rpc("dt", "save_player", { id: COMPARTIDO, clubId: MULTI, name: "Nombre Compartido", shirtNumber: "13", position: "Medio", active: true, detail: { birthDate: "1995-02-03", imageUrl: "https://a/foto.jpg" } });
-  check(reactivado.data?.player?.id === COMPARTIDO && (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO)?.active === true,
-    `save_player: sin torneo en curso compartido${terminado ? " (solo uno terminado)" : ""} se reactiva`, reactivado);
+  check(reactivado.data?.player?.id === COMPARTIDO && reactivado.data?.conflict === null && (await plantilla(MULTI)).find((p) => p.id === COMPARTIDO)?.active === true,
+    `save_player: sin torneo en curso compartido${terminado ? " (solo uno terminado)" : ""} se reactiva sin aviso`, reactivado);
 
   // ---------- Vista de aportaciones por jugador y club ----------
   check((await count(`SELECT count(*)::int AS n FROM player_contribution_totals v
@@ -158,7 +170,9 @@ export async function run({ db, rpc, check }) {
 
   // ---------- Limpieza: el club de prueba se va con sus filas; el jugador sigue en Bahía ----------
   await db.query("DELETE FROM clubs WHERE id = $1", [MULTI]);
-  check((await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1", [COMPARTIDO])) === 1
+  // Queda viva solo la fila de Bahía (la de Halcones sigue como eliminada, que es historial)
+  check((await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1 AND deleted_at IS NULL", [COMPARTIDO])) === 1
+    && (await count("SELECT count(*)::int AS n FROM club_players WHERE player_id = $1 AND club_id = $2", [COMPARTIDO, MULTI])) === 0
     && (await count("SELECT count(*)::int AS n FROM players WHERE id = 'prueba-multi-ana'")) === 1,
     "borrar el club de prueba quita sus pertenencias y conserva a las personas");
 }

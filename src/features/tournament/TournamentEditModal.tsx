@@ -149,13 +149,14 @@ export default function TournamentEditModal({
   const [lateEntry, setLateEntry] = useState<LateEntryChoice | null>(null);
   const [lateEntryHint, setLateEntryHint] = useState(false);
   const [errorOpen, setErrorOpen] = useState(false);
-  /** Motivo que se puede mostrar tal cual (un jugador ya juega el torneo con otro club); vacío = genérico. */
-  const [errorText, setErrorText] = useState("");
+  /** Avisos tras guardar (jugadores que ya juegan el torneo con otro club); se cierra el modal al aceptarlos. */
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeText, setNoticeText] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const hasTournament = Boolean(tournament);
 
-  useModalLock(saveOpen || errorOpen ? null : onClose);
+  useModalLock(saveOpen || errorOpen || noticeOpen ? null : onClose);
 
   useEffect(() => {
     if (!tournament) return;
@@ -279,14 +280,13 @@ export default function TournamentEditModal({
           await removeTournamentClub(dataConnect, { userId, tournamentId: tournament.id, clubId });
         }
       }
+      const warnings: string[] = [];
       for (const clubId of next) {
         if (!previous.has(clubId)) {
           const added = await addTournamentClub(dataConnect, { userId, tournamentId: tournament.id, clubId });
-          if (added.data.row == null) {
-            if (added.data.conflicts?.length) {
-              throw new EnrollmentConflictError(enrollmentConflictMessage(clubNames[clubId] || clubId, added.data.conflicts));
-            }
-            throw new Error("No se pudo guardar.");
+          if (added.data.row == null) throw new Error("No se pudo guardar.");
+          if (added.data.conflicts?.length) {
+            warnings.push(enrollmentConflictMessage(clubNames[clubId] || clubId, added.data.conflicts));
           }
         }
       }
@@ -346,12 +346,17 @@ export default function TournamentEditModal({
       notifyTournamentEnrollment(tournament.id, addedClubIds);
       setBusy(false);
       setSaveOpen(false);
+      // Con avisos, el modal se cierra al aceptarlos (onSaved lo desmonta)
+      if (warnings.length) {
+        setNoticeText(warnings.join(" "));
+        setNoticeOpen(true);
+        return;
+      }
       onSaved();
     } catch (err) {
       console.error(err);
       setBusy(false);
       setSaveOpen(false);
-      setErrorText(err instanceof EnrollmentConflictError ? err.message : "");
       setErrorOpen(true);
     }
   };
@@ -613,11 +618,25 @@ export default function TournamentEditModal({
         <ConfirmModal
           open={errorOpen}
           title="Los cambios no se pudieron guardar."
-          message={errorText || undefined}
           confirmLabel="Entendido"
           cancelLabel="Cerrar"
           onConfirm={() => setErrorOpen(false)}
           onCancel={() => setErrorOpen(false)}
+        />
+        <ConfirmModal
+          open={noticeOpen}
+          title="Guardado, con un aviso."
+          message={noticeText}
+          confirmLabel="Entendido"
+          cancelLabel="Cerrar"
+          onConfirm={() => {
+            setNoticeOpen(false);
+            onSaved();
+          }}
+          onCancel={() => {
+            setNoticeOpen(false);
+            onSaved();
+          }}
         />
       </div>
     </div>,
@@ -882,15 +901,13 @@ function LateEntryOption({
   );
 }
 
-/** Un jugador activo del club ya juega el torneo con otro club (0010): el motivo se muestra tal cual. */
-class EnrollmentConflictError extends Error {}
-
+/** Aviso (0010): el club quedó inscrito aunque alguno de sus jugadores ya juegue el torneo con otro club. */
 function enrollmentConflictMessage(
   clubName: string,
   conflicts: { playerName: string; clubName: string }[],
 ) {
   const who = conflicts.map((c) => `${c.playerName} (con ${c.clubName})`).join(", ");
-  return `${clubName} no se inscribió: ${who} ya ${conflicts.length > 1 ? "juegan" : "juega"} este torneo con otro club. Un jugador solo puede representar a un club por torneo.`;
+  return `${clubName} quedó inscrito, pero ${who} ya ${conflicts.length > 1 ? "juegan" : "juega"} este torneo con otro club; si anotan con los dos, cuenta para cada club.`;
 }
 
 function sameIdList(a: string[], b: string[]) {

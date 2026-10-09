@@ -210,7 +210,7 @@ export interface AddTournamentClubData {
     };
   };
   row?: unknown | null;
-  /** Solo cuando row es null porque un jugador activo del club ya juega en el torneo con otro club (0010). */
+  /** Aviso junto a row: jugadores activos del club que ya juegan este torneo con otro club (0010). */
   conflicts?: { playerName: string; clubName: string }[] | null;
 }
 
@@ -2814,7 +2814,10 @@ export interface SavePlatformSocialVariables {
   whatsapp: string;
 }
 
-/** Otro club con el que el jugador ya juega en un torneo en curso compartido (0010: un club por torneo). */
+/**
+ * Aviso (0010): otro club con el que el jugador ya juega un torneo en curso que comparte con este club. No bloquea
+ * nada; si anota con los dos, cuenta para cada club.
+ */
 export interface PlayerTournamentConflict {
   clubName: string;
   tournamentName: string;
@@ -2822,7 +2825,7 @@ export interface PlayerTournamentConflict {
 
 export interface SavePlayerData {
   player?: unknown | null;
-  /** Solo cuando player es null por reactivar a alguien que ya juega con otro club en el mismo torneo. */
+  /** Aviso al reactivar a alguien de baja; viene junto al jugador guardado. */
   conflict?: PlayerTournamentConflict | null;
 }
 
@@ -2830,6 +2833,7 @@ export interface AddExistingPlayerData {
   player?: unknown | null;
   /** 'ALREADY' si ya está vivo en la plantilla (player null). */
   reason?: "ALREADY" | null;
+  /** Aviso; viene junto al jugador fichado. */
   conflict?: PlayerTournamentConflict | null;
 }
 
@@ -2849,6 +2853,8 @@ export interface SearchPlayerHit {
   birthDate?: DateString | null;
   /** 'DELETED' si fue eliminado de este club: agregarlo lo restaura con su historial. */
   inThisClub?: "DELETED" | null;
+  /** Aviso antes de agregarlo: ya juega con otro club un torneo en curso de este club. */
+  conflict?: PlayerTournamentConflict | null;
   /** Clubes donde está hoy (no eliminado); active false = de baja temporal ahí. */
   clubs_on_player: {
     id: string;

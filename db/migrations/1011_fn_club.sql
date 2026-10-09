@@ -60,8 +60,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, p
 $$;
 REVOKE ALL ON FUNCTION public.is_club_player(text, text, boolean) FROM PUBLIC, anon, authenticated;
 
--- Un jugador representa a un solo club por torneo: devuelve {clubName, tournamentName} si ya juega activo con otro
--- club que comparte con p_club un torneo no terminado; NULL si puede fichar. El cuerpo técnico no cuenta.
+-- Aviso (no bloqueo): devuelve {clubName, tournamentName} si el jugador ya juega activo con otro club que comparte
+-- con p_club un torneo no terminado; NULL si no. Las funciones que fichan o reactivan lo devuelven junto al resultado
+-- para que la pantalla avise; si anota con los dos clubes, cuenta para cada uno. El cuerpo técnico no cuenta.
 CREATE OR REPLACE FUNCTION public.player_tournament_conflict(p_player text, p_club text)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT jsonb_build_object('clubName', c.name, 'tournamentName', t.name)
@@ -425,8 +426,8 @@ REVOKE ALL ON FUNCTION public.club_player_fields_error(text, text, text) FROM PU
 -- Nombre: solo letras, 3 a 50, en Title Case. Dorsal 1-99. Variante: letras, hasta 30.
 -- Nacimiento: opcional, desde 1940 y nunca futuro (un día de margen por la zona horaria).
 -- Un id que ya existe solo se edita desde un club donde el jugador esté (para sumarlo a otro club está
--- add_existing_player). Reactivar a uno de baja exige que no juegue con otro club en un torneo en curso del club:
--- si choca, devuelve player null y «conflict» {clubName, tournamentName}.
+-- add_existing_player). Al reactivar a uno de baja, «conflict» {clubName, tournamentName} avisa si ya juega con otro
+-- club en un torneo en curso del club; se guarda igual.
 CREATE OR REPLACE FUNCTION public.save_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -471,9 +472,6 @@ BEGIN
   END IF;
   IF v_active AND NOT v_coach AND NOT v_member_active THEN
     v_conflict := player_tournament_conflict(v_id, v_club);
-    IF v_conflict IS NOT NULL THEN
-      RETURN jsonb_build_object('player', NULL, 'conflict', v_conflict);
-    END IF;
   END IF;
   INSERT INTO players (id, name, birth_date, image_url, created_at)
   VALUES (v_id, initcap(v_name), NULLIF(v_birth, '')::date, COALESCE(p -> 'detail' ->> 'imageUrl', ''), CURRENT_TIMESTAMP)
@@ -490,14 +488,14 @@ BEGIN
     is_coach = EXCLUDED.is_coach,
     active = EXCLUDED.active
   RETURNING jsonb_build_object('id', player_id, 'name', initcap(v_name)) INTO v_row;
-  RETURN jsonb_build_object('player', v_row);
+  RETURN jsonb_build_object('player', v_row, 'conflict', v_conflict);
 END
 $$;
 CALL api_expose('save_player', 'USER');
 
 -- Suma a la plantilla del club (ADMIN o DT) un jugador que ya existe en la liga, con su dorsal, posición y variante
 -- en este club. Si estaba eliminado aquí, lo restaura con todo su historial. Si ya está (activo o de baja), devuelve
--- player null y reason 'ALREADY'; si juega con otro club en un torneo en curso del club, player null y «conflict».
+-- player null y reason 'ALREADY'. «conflict» avisa si juega con otro club en un torneo en curso del club; se ficha igual.
 CREATE OR REPLACE FUNCTION public.add_existing_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -518,9 +516,6 @@ BEGIN
     RETURN jsonb_build_object('player', NULL, 'reason', 'ALREADY');
   END IF;
   v_conflict := player_tournament_conflict(v_player, v_club);
-  IF v_conflict IS NOT NULL THEN
-    RETURN jsonb_build_object('player', NULL, 'conflict', v_conflict);
-  END IF;
   INSERT INTO club_players (club_id, player_id, shirt_number, position, variant, is_coach, active, created_at)
   VALUES (v_club, v_player, p ->> 'shirtNumber', p ->> 'position', v_variant, false, true, CURRENT_TIMESTAMP)
   ON CONFLICT (club_id, player_id) DO UPDATE SET
@@ -531,7 +526,7 @@ BEGIN
     active = true,
     deleted_at = NULL
   RETURNING jsonb_build_object('id', player_id, 'name', (SELECT name FROM players WHERE id = player_id)) INTO v_row;
-  RETURN jsonb_build_object('player', v_row);
+  RETURN jsonb_build_object('player', v_row, 'conflict', v_conflict);
 END
 $$;
 CALL api_expose('add_existing_player', 'USER');
@@ -539,7 +534,8 @@ CALL api_expose('add_existing_player', 'USER');
 -- Busca jugadores de toda la liga por nombre (ADMIN o DT del club, 42501 si no) para sumarlos a la plantilla.
 -- «q»: letras, 3 a 50; acentos y mayúsculas no importan. Hasta 20, sin los que ya están vivos en el club; los que
 -- fueron eliminados aquí vienen con inThisClub 'DELETED' (agregarlos los restaura). clubs_on_player: clubes donde
--- está hoy (no eliminados), con active por si está de baja.
+-- está hoy (no eliminados), con active por si está de baja. conflict: aviso si ya juega con otro club un torneo en
+-- curso de este club (ver player_tournament_conflict).
 CREATE OR REPLACE FUNCTION public.search_players(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -560,6 +556,7 @@ BEGIN
       SELECT pl.name, pl.id, jsonb_build_object(
         'id', pl.id, 'name', pl.name, 'imageUrl', pl.image_url, 'birthDate', to_jsonb(pl.birth_date),
         'inThisClub', CASE WHEN is_club_player(pl.id, v_club) THEN 'DELETED' END,
+        'conflict', player_tournament_conflict(pl.id, v_club),
         'clubs_on_player', (
           SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
             'active', cp.active) ORDER BY c.name), '[]'::jsonb)

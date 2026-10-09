@@ -16,8 +16,9 @@ export const ALREADY_IN_CLUB_MESSAGE = "Ese jugador ya está en la plantilla.";
 /** Error con un motivo que se puede mostrar tal cual al usuario (el resto se traduce a un mensaje genérico). */
 export class PlayerCommandError extends Error {}
 
+/** Aviso, no error: ya juega ese torneo con otro club; se guardó igual. */
 export function tournamentConflictMessage(conflict: PlayerTournamentConflict) {
-  return `Ya juega con ${conflict.clubName} en ${conflict.tournamentName}; un jugador solo puede representar a un club por torneo.`;
+  return `Ojo: ya juega con ${conflict.clubName} en ${conflict.tournamentName}. Si anota con los dos equipos, cuenta para cada club.`;
 }
 
 /** Mensaje para el formulario: el motivo si lo conocemos, si no el genérico recibido. */
@@ -30,12 +31,13 @@ export async function findPlayers(clubId: string, q: string): Promise<SearchPlay
   return result.data.players ?? [];
 }
 
-export async function addExistingPlayer(vars: AddExistingPlayerVariables) {
+/** Devuelve el aviso de torneo compartido si lo hay; lanza si no se pudo fichar. */
+export async function addExistingPlayer(vars: AddExistingPlayerVariables): Promise<PlayerTournamentConflict | null> {
   const result = await addExistingPlayerOp(dataConnect, vars);
   if (!result.data.player) {
-    if (result.data.conflict) throw new PlayerCommandError(tournamentConflictMessage(result.data.conflict));
     if (result.data.reason === "ALREADY") throw new PlayerCommandError(ALREADY_IN_CLUB_MESSAGE);
     throw new PlayerCommandError(DATA_REVIEW_MESSAGE);
   }
   savedRow(result.data.player);
+  return result.data.conflict ?? null;
 }

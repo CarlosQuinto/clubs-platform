@@ -128,6 +128,11 @@ function HitRow({ hit, onPick }: { hit: SearchPlayerHit; onPick: () => void }) {
           <span style={{ fontWeight: 700, fontSize: "0.85rem", color: C.navy900 }}>{hit.name}</span>
           {age !== "" && <span style={{ fontSize: "0.72rem", color: C.gray500 }}>{age} años</span>}
           {restoring && <Badge color="amber">Estuvo en este club</Badge>}
+          {hit.conflict && (
+            <Badge color="amber" style={{ textTransform: "none", letterSpacing: 0 }}>
+              Juega {hit.conflict.tournamentName} con {hit.conflict.clubName}
+            </Badge>
+          )}
         </div>
         <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
           {hit.clubs_on_player.length === 0 && (

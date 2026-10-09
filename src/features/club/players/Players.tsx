@@ -12,12 +12,17 @@ import {
   TrendingUp,
   Star,
 } from "lucide-react";
-import { dataConnect, deletePlayer, savePlayer, type SearchPlayerHit } from "../../../infrastructure/dataconnect";
+import {
+  dataConnect,
+  deletePlayer,
+  savePlayer,
+  type PlayerTournamentConflict,
+  type SearchPlayerHit,
+} from "../../../infrastructure/dataconnect";
 import {
   addExistingPlayer,
   playerErrorMessage,
   tournamentConflictMessage,
-  PlayerCommandError,
 } from "../../../domains/players/playerCommands";
 import { requestClubRefresh } from "../useClubScreen";
 import { savedRow } from "../../../shared/saved";
@@ -429,6 +434,8 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
   const [playerImageUrl, setPlayerImageUrl] = useState("");
   const [playerActive, setPlayerActive] = useState(true);
   const [playerError, setPlayerError] = useState("");
+  // Aviso tras guardar (p. ej. ya juega ese torneo con otro club); no impide nada
+  const [playerNotice, setPlayerNotice] = useState("");
   const [savingPlayer, setSavingPlayer] = useState(false);
   const savingPlayerRef = useRef(false);
   // Jugador de la liga elegido en el buscador (0010): el formulario solo pide dorsal, posición y variante
@@ -457,9 +464,10 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
     savingPlayerRef.current = true;
     setSavingPlayer(true);
     try {
+      let conflict: PlayerTournamentConflict | null = null;
       if (linkedPlayer) {
         // Ya existe en la liga: solo se guarda lo suyo en este club (y se restaura si estuvo aquí)
-        await addExistingPlayer({
+        conflict = await addExistingPlayer({
           clubId,
           playerId: linkedPlayer.id,
           shirtNumber: playerNumber,
@@ -481,13 +489,12 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
             imageUrl: playerImageUrl.trim(),
           },
         });
-        if (!saved.data.player && saved.data.conflict) {
-          throw new PlayerCommandError(tournamentConflictMessage(saved.data.conflict));
-        }
         savedRow(saved.data.player);
+        conflict = saved.data.conflict ?? null;
       }
       requestClubRefresh();
       handleCancelEdit();
+      setPlayerNotice(conflict ? tournamentConflictMessage(conflict) : "");
       return true;
     } catch (err) {
       console.error(err);
@@ -873,6 +880,34 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
           </div>
         </div>
       </SectionCard>
+
+      {canEditAll && playerNotice && (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "0.5rem",
+            padding: "0.6rem 0.75rem",
+            borderRadius: RADIUS.md,
+            backgroundColor: C.amberLight,
+            color: C.amber,
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            lineHeight: 1.4,
+          }}
+        >
+          <span style={{ flex: 1 }}>{playerNotice}</span>
+          <button
+            type="button"
+            onClick={() => setPlayerNotice("")}
+            aria-label="Cerrar aviso"
+            style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", padding: 0, display: "flex" }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {canEditAll && !editingPlayerId && !linkedPlayer && (
         <ExistingPlayerSearch clubId={clubId} onPick={handlePickExisting} />

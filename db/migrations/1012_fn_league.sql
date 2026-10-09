@@ -308,9 +308,9 @@ END
 $$;
 CALL api_expose('update_tournament_settings', 'USER');
 
--- Inscribe un club (superadmin). Un jugador representa a un solo club por torneo: si algún jugador activo del club
--- ya juega activo con otro club inscrito, no se inscribe y devuelve «conflicts» [{playerName, clubName}]. Volver a
--- inscribir a uno que ya está no se revisa (idempotente).
+-- Inscribe un club (superadmin); siempre que no esté bloqueado el torneo, se inscribe. «conflicts»
+-- [{playerName, clubName}] es un aviso: jugadores activos del club que ya juegan ese torneo activos con otro club
+-- inscrito (si anotan con los dos, cuenta para cada uno). Volver a inscribir a uno que ya está no se revisa.
 CREATE OR REPLACE FUNCTION public.add_tournament_club(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -332,15 +332,13 @@ BEGIN
     JOIN tournament_clubs tc ON tc.club_id = other.club_id AND tc.tournament_id = v_tournament
     JOIN clubs c ON c.id = other.club_id
     WHERE mine.club_id = v_club AND mine.active AND mine.deleted_at IS NULL AND NOT mine.is_coach;
-    IF v_conflicts IS NOT NULL THEN
-      RETURN jsonb_build_object('row', NULL, 'conflicts', v_conflicts);
-    END IF;
   END IF;
   INSERT INTO tournament_clubs (tournament_id, club_id, created_at)
   VALUES (v_tournament, v_club, now())
   ON CONFLICT (tournament_id, club_id) DO UPDATE SET tournament_id = EXCLUDED.tournament_id
   RETURNING tournament_id INTO v_saved;
-  RETURN jsonb_build_object('row', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('id', v_saved) END);
+  RETURN jsonb_build_object('row', CASE WHEN v_saved IS NULL THEN NULL ELSE jsonb_build_object('id', v_saved) END,
+    'conflicts', v_conflicts);
 END
 $$;
 CALL api_expose('add_tournament_club', 'USER');
