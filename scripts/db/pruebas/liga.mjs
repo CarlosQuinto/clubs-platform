@@ -163,6 +163,28 @@ export async function run({ db, rpc, check }) {
   const busyAfter = (await rpc("admin", "court_busy_on_date", { date: "2026-10-12" })).data?.courtHolds ?? [];
   check(!clear.error && !busyAfter.some((x) => x.match?.id === toSchedule), "clear_match_court_holds: superadmin borra la reserva", clear.error ?? busyAfter);
 
+  // Sede escrita a mano (sin canchas o con el módulo apagado): opcional, 3 a 60 caracteres, charset de courtLocation
+  const typedVars = { ...scheduleVars, courtId: "" };
+  for (const [venue, label] of [["Campo <x>", "caracteres inválidos"], ["A".repeat(61), "61 caracteres"], ["Ab", "2 caracteres"]]) {
+    const bad = await rpc("admin", "schedule_official_match", { ...typedVars, venue });
+    check(bad.data?.match === null, `schedule_official_match: sede con ${label} -> null`, bad);
+  }
+  await rpc("admin", "schedule_official_match", { ...typedVars, venue: "  Unidad Deportiva Norte, Campo 2  " });
+  const typed = (await rpc("anon", "match_detail", { id: toSchedule })).data?.matches?.[0];
+  check(typed?.venue === "Unidad Deportiva Norte, Campo 2" && typed.court === null, "schedule_official_match: sede escrita, recortada y sin cancha", typed);
+  const noVenue = await rpc("admin", "schedule_official_match", { ...typedVars, venue: "" });
+  const untyped = (await rpc("anon", "match_detail", { id: toSchedule })).data?.matches?.[0];
+  check(noVenue.data?.match?.id === toSchedule && untyped?.venue === "", "schedule_official_match: sin sede también se guarda", untyped);
+
+  const hintsVars = { homeId: "dummy-club-halcones", awayId: "dummy-club-union", from: "2026-10-01", until: "2026-10-31" };
+  const courtsOn = (await db.query("SELECT courts_enabled FROM platform_settings WHERE id = 'config'")).rows[0]?.courts_enabled;
+  await db.query("UPDATE platform_settings SET courts_enabled = true WHERE id = 'config'");
+  const hintsOn = (await rpc("admin", "match_slot_hints", hintsVars)).data;
+  await db.query("UPDATE platform_settings SET courts_enabled = false WHERE id = 'config'");
+  const hintsOff = (await rpc("admin", "match_slot_hints", hintsVars)).data;
+  await db.query("UPDATE platform_settings SET courts_enabled = $1 WHERE id = 'config'", [courtsOn ?? false]);
+  check(hintsOn?.courts.length > 0 && hintsOff?.courts.length === 0, "match_slot_hints: sin canchas con el módulo apagado", [hintsOn?.courts.length, hintsOff?.courts.length]);
+
   // ---------- Hoja de marcador ----------
 
   const sheetMatch = "dummy-tour-apertura-j09-1"; // Halcones vs Unión, SCHEDULED

@@ -72,7 +72,9 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     'courts', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'location', c.location, 'sortOrder', c.sort_order)
         ORDER BY c.sort_order, c.name, c.id), '[]'::jsonb)
-      FROM courts c WHERE c.active AND c.football),
+      -- Con el módulo Canchas apagado no se ofrecen canchas: el formulario pide la sede escrita a mano
+      FROM courts c WHERE c.active AND c.football
+        AND EXISTS (SELECT 1 FROM platform_settings ps WHERE ps.id = 'config' AND ps.courts_enabled)),
     'clubs', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id,
         'clubAvailabilityWindows_on_club', (
@@ -553,20 +555,27 @@ CALL api_expose('set_match_round', 'USER');
 
 -- Programa fecha, hora, sede y cancha de un partido no jugado. La fecha no puede ser anterior al inicio
 -- del torneo (o de su temporada, si el torneo no tiene fecha propia); el formulario pone el mismo «min».
+-- La sede es el nombre de la cancha o, sin canchas, el lugar escrito a mano: opcional, 3 a 60 caracteres,
+-- las mismas reglas que la ubicación de una cancha (courtLocation en textLimits.ts).
 CREATE OR REPLACE FUNCTION public.schedule_official_match(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_id text := p ->> 'id';
   v_date date := (p ->> 'matchDate')::date;
+  v_venue text := btrim(coalesce(p ->> 'venue', ''));
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() OR v_date IS NULL THEN
     RETURN jsonb_build_object('match', NULL);
   END IF;
+  IF v_venue <> '' AND (char_length(v_venue) NOT BETWEEN 3 AND 60
+      OR v_venue !~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)*$') THEN
+    RETURN jsonb_build_object('match', NULL);
+  END IF;
   UPDATE matches m
   SET match_date = v_date,
       start_time = p ->> 'startTime',
-      venue = p ->> 'venue',
+      venue = v_venue,
       court_id = NULLIF(p ->> 'courtId', ''),
       status = 'SCHEDULED'::match_status
   WHERE m.id = v_id

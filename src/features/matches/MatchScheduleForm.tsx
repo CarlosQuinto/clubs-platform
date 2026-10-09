@@ -3,6 +3,7 @@ import { C, FormInput, FormSelect, PrimaryButton, SecondaryButton } from "../../
 import { courtPlaceLabel, shortSlotLabel } from "../../domains/courts/courts";
 import { freeCourtsAt, saveMatchSchedule } from "../../domains/matches/matchCommands";
 import { loadSlotHints } from "../tournament/tournamentQueries";
+import { courtLocation, isCourtLocation } from "../../shared/textLimits";
 import type { Court, CourtSlotMinutes, TimeWindow } from "../../shared/types";
 
 /** Lo que el formulario necesita del partido; lo comparten el calendario del torneo, la portada y /partidos. */
@@ -18,7 +19,10 @@ export interface ScheduleTarget {
   awayClubId: string;
 }
 
-/** Programa o reprograma un partido: sugiere horarios, lista solo canchas libres, aparta la cancha y avisa. */
+/**
+ * Programa o reprograma un partido: sugiere horarios, lista solo canchas libres, aparta la cancha y avisa. Sin canchas
+ * (o con el módulo Canchas apagado, que match_slot_hints devuelve sin canchas) la sede se escribe a mano.
+ */
 export default function MatchScheduleForm({
   match,
   durationMinutes,
@@ -35,6 +39,8 @@ export default function MatchScheduleForm({
   const [date, setDate] = useState(match.isoDate);
   const [time, setTime] = useState(match.time);
   const [courtId, setCourtId] = useState(match.courtId);
+  // Con cancha ligada, venue es el nombre de esa cancha: no se ofrece como sede escrita
+  const [venue, setVenue] = useState(match.courtId ? "" : courtLocation(match.venue));
   const [courts, setCourts] = useState<Court[] | null>(null);
   const [openWindows, setOpenWindows] = useState<TimeWindow[]>([]);
   const [slotMinutes, setSlotMinutes] = useState<CourtSlotMinutes>(60);
@@ -104,9 +110,15 @@ export default function MatchScheduleForm({
     return all.filter((court) => freeIds.includes(court.id));
   }, [courts, date, time, freeIds]);
 
+  const manualVenue = courts !== null && courts.length === 0;
+
   const save = async () => {
     if (!date || !time) {
       setError("Elige fecha y hora.");
+      return;
+    }
+    if (manualVenue && !isCourtLocation(venue)) {
+      setError("La sede debe tener de 3 a 60 caracteres: letras, números y . , # / -");
       return;
     }
     const court = courts?.find((item) => item.id === courtId);
@@ -118,8 +130,8 @@ export default function MatchScheduleForm({
         date,
         time,
         startDate,
-        venue: court?.name || (courtId ? match.venue : ""),
-        courtId,
+        venue: manualVenue ? venue.trim() : court?.name || (courtId ? match.venue : ""),
+        courtId: manualVenue ? "" : courtId,
         durationMinutes,
         courts: courts || [],
         openWindows,
@@ -172,21 +184,34 @@ export default function MatchScheduleForm({
           <FormInput type="time" value={time} aria-label="Hora" onChange={(event) => setTime(event.target.value)} />
         </label>
       </div>
-      <label style={field}>
-        <span style={fieldLabel}>Cancha</span>
-        <FormSelect
-          aria-label="Cancha"
-          value={courtId}
-          onChange={(event) => setCourtId(event.target.value)}
-        >
-          <option value="">Sin cancha</option>
-          {listedCourts.map((court) => (
-            <option key={court.id} value={court.id}>
-              {courtPlaceLabel(court.location, court.name)}
-            </option>
-          ))}
-        </FormSelect>
-      </label>
+      {manualVenue ? (
+        <label style={field}>
+          <span style={fieldLabel}>Sede</span>
+          <FormInput
+            value={venue}
+            maxLength={60}
+            aria-label="Sede"
+            placeholder="Ej. Unidad Deportiva Norte, Campo 2"
+            onChange={(event) => setVenue(courtLocation(event.target.value))}
+          />
+        </label>
+      ) : (
+        <label style={field}>
+          <span style={fieldLabel}>Cancha</span>
+          <FormSelect
+            aria-label="Cancha"
+            value={courtId}
+            onChange={(event) => setCourtId(event.target.value)}
+          >
+            <option value="">Sin cancha</option>
+            {listedCourts.map((court) => (
+              <option key={court.id} value={court.id}>
+                {courtPlaceLabel(court.location, court.name)}
+              </option>
+            ))}
+          </FormSelect>
+        </label>
+      )}
       {error ? <p style={{ margin: 0, color: C.red, fontSize: "0.78rem" }}>{error}</p> : null}
       <div className="match-edit-actions">
         {onCancel ? (

@@ -403,8 +403,9 @@ Al rechazar, la app ejecuta `rejectTeamApplication` y la API manda el correo de 
 ### Programar un partido y la tabla
 
 - La ficha del torneo, la portada y `/partidos` usan el mismo formulario (`features/matches/MatchScheduleForm.tsx`). Ofrece las canchas con `football` y `active` verdaderos, libres en la apertura y sin un apartado que se cruce. Las tres fechas sugeridas salen de la disponibilidad de ambos clubes, la apertura y los partidos que ya tienen.
+- Sin canchas registradas, o con el módulo Canchas apagado (`match_slot_hints` no devuelve canchas), el formulario pide la **sede escrita a mano** en lugar del select: opcional, 3 a 60 caracteres, las mismas reglas que la ubicación de una cancha. Se guarda en `matches.venue` sin cancha ligada ni apartado.
 - Al guardar, si la cancha ya no está libre, no se guarda y se muestra «Esa cancha no está disponible en esa fecha y hora».
-- Después de programar, la app llama a `sendMatchScheduleNotice`. La API compara fecha, hora y cancha con `matches.schedule_notice_key`; solo si cambiaron, avisa a los Presidentes de ambos clubes y actualiza la llave.
+- Después de programar, la app llama a `sendMatchScheduleNotice`. La API compara fecha, hora y cancha (o la sede escrita, guardada como `@sede`) con `matches.schedule_notice_key`; solo si cambiaron, avisa a los Presidentes de ambos clubes y actualiza la llave.
 - Al sumar equipos a un torneo, la app llama a `sendTournamentEnrollmentNotice`. La API inserta en `tournament_notices` y solo manda el correo si la fila es nueva.
 - La tabla de posiciones y los goleadores no se guardan: son vistas SQL (`tournament_standings`, `tournament_scorers`) sobre los partidos `PLAYED`. Victoria 3, empate 1; desempate por puntos, diferencia, goles a favor e ID de club. Un partido con `no_show = 'BOTH'` cuenta como derrota sin puntos para los dos.
 

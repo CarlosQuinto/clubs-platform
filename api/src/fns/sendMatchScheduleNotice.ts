@@ -53,19 +53,18 @@ export const sendMatchScheduleNotice: FnHandler = async ({ auth, data }) => {
     return reason ? await notifyUnscheduled(matchId, match, result.courts, reason) : { mailed: false };
   }
 
-  const courtId = match.court?.id || "";
-  const nextKey = `${date}|${time}|${courtId}`;
+  const venue = match.venue || match.court?.name || "";
+  const nextKey = `${date}|${time}|${placeKey(match.court?.id || "", match.venue)}`;
   const previousKey = match.scheduleNoticeKey || "";
   if (nextKey === previousKey) return { mailed: false };
   await markMatchScheduleNotice(matchId, nextKey);
 
-  const [previousDate = "", previousTime = "", previousCourt = ""] = previousKey.split("|");
-  const previousVenue = result.courts.find((court) => court.id === previousCourt)?.name || "";
+  const [previousDate = "", previousTime = "", previousPlace = ""] = previousKey.split("|");
+  const previousVenue = venueOfPlaceKey(previousPlace, result.courts);
   const previous =
     previousDate && previousTime
       ? `${friendlyWhen(previousDate, previousTime)}${previousVenue ? ` · ${previousVenue}` : ""}`
       : undefined;
-  const venue = match.venue || match.court?.name || "";
   const when = friendlyWhen(date, time);
   const homeName = match.homeClub.name || "Local";
   const awayName = match.awayClub.name || "Visitante";
@@ -109,6 +108,21 @@ export const sendMatchScheduleNotice: FnHandler = async ({ auth, data }) => {
 
 type NoticeResult = Awaited<ReturnType<typeof matchScheduleNotice>>;
 
+/**
+ * Lugar dentro de schedule_notice_key (varchar 80): el id de la cancha o, sin cancha, «@» + la sede escrita a mano
+ * (máx. 60, sin «|»), para que cambiar solo la sede también se avise.
+ */
+function placeKey(courtId: string, venue: string) {
+  if (courtId) return courtId;
+  const typed = venue.trim().slice(0, 60);
+  return typed ? `@${typed}` : "";
+}
+
+function venueOfPlaceKey(place: string, courts: NoticeResult["courts"]) {
+  if (place.startsWith("@")) return place.slice(1);
+  return courts.find((court) => court.id === place)?.name || "";
+}
+
 /** El partido perdió su fecha: se avisa la que tenía y se borra la llave para que la próxima se avise como nueva. */
 async function notifyUnscheduled(
   matchId: string,
@@ -119,9 +133,9 @@ async function notifyUnscheduled(
   const previousKey = match.scheduleNoticeKey || "";
   if (!previousKey) return { mailed: false };
   await markMatchScheduleNotice(matchId, "");
-  const [previousDate = "", previousTime = "", previousCourt = ""] = previousKey.split("|");
+  const [previousDate = "", previousTime = "", previousPlace = ""] = previousKey.split("|");
   if (!previousDate || !previousTime) return { mailed: false };
-  const previousVenue = courts.find((court) => court.id === previousCourt)?.name || "";
+  const previousVenue = venueOfPlaceKey(previousPlace, courts);
   const previous = `${friendlyWhen(previousDate, previousTime)}${previousVenue ? ` · ${previousVenue}` : ""}`;
   const homeName = match.homeClub.name || "Local";
   const awayName = match.awayClub.name || "Visitante";
