@@ -45,6 +45,7 @@ import {
 import ConfirmModal from "../../shared/ConfirmModal";
 import { isTournamentPrize, tournamentPrize } from "../../shared/textLimits";
 import Field from "../admin/Field";
+import RegisterClubModal from "../teams/RegisterClubModal";
 import {
   C,
   FormInput,
@@ -154,9 +155,12 @@ export default function TournamentEditModal({
   const [noticeText, setNoticeText] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  /** Alta de un club que todavía no está registrado; al crearlo queda inscrito en el borrador. */
+  const [registerName, setRegisterName] = useState<string | null>(null);
   const hasTournament = Boolean(tournament);
+  const stacked = saveOpen || errorOpen || noticeOpen || registerName !== null;
 
-  useModalLock(saveOpen || errorOpen || noticeOpen ? null : onClose);
+  useModalLock(stacked ? null : onClose);
 
   useEffect(() => {
     if (!tournament) return;
@@ -366,7 +370,7 @@ export default function TournamentEditModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="tournament-edit-title"
-      onClick={saveOpen || errorOpen ? undefined : onClose}
+      onClick={stacked ? undefined : onClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -462,7 +466,23 @@ export default function TournamentEditModal({
           lockedIds={lockedClubIds}
           onAdd={addClub}
           onRemove={removeClub}
+          onRegister={setRegisterName}
         />
+        {registerName !== null ? (
+          <RegisterClubModal
+            embedded
+            initialName={registerName}
+            onClose={() => setRegisterName(null)}
+            onCreated={(club) => {
+              setModel((prev) =>
+                prev && !prev.clubs.some((c) => c.id === club.id)
+                  ? { ...prev, clubs: [...prev.clubs, { id: club.id, slug: club.id, name: club.name, active: true }] }
+                  : prev,
+              );
+              setDraftClubIds((prev) => (prev.includes(club.id) ? prev : [...prev, club.id]));
+            }}
+          />
+        ) : null}
 
         <div className="tournament-edit-settings">
           <Field label="Tipo de fútbol">
@@ -650,18 +670,29 @@ function ClubEnrollPicker({
   lockedIds,
   onAdd,
   onRemove,
+  onRegister,
 }: {
   enrolled: ClubSummary[];
   addable: ClubSummary[];
   lockedIds: Set<string>;
   onAdd: (id: string) => void;
   onRemove: (id: string) => void;
+  /** Abre el alta de club con el texto buscado como nombre sugerido. */
+  onRegister: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState("");
   const [panel, setPanel] = useState({ maxHeight: 200, above: false });
   const boxRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const query = fold(term);
+  const matches = query ? addable.filter((c) => fold(c.name).includes(query)) : addable;
+
+  // El término se borra al cerrar el panel; al agregar un club se conserva para sumar varios seguidos
+  useEffect(() => {
+    if (!open) setTerm("");
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -691,8 +722,9 @@ function ClubEnrollPicker({
       const topLimit = modalRect.top + 12;
       const below = bottomLimit - boxRect.bottom - 6;
       const above = boxRect.top - topLimit - 6;
-      const aboveFits = below < 140 && above > below;
-      const room = Math.min(220, Math.max(0, aboveFits ? above : below));
+      // El buscador y el botón de alta ocupan alto fijo: la lista necesita algo más que antes
+      const aboveFits = below < 200 && above > below;
+      const room = Math.min(300, Math.max(0, aboveFits ? above : below));
       setPanel({ maxHeight: room, above: aboveFits });
     };
     fit();
@@ -779,10 +811,11 @@ function ClubEnrollPicker({
                 ? { bottom: "calc(100% + 6px)" }
                 : { top: "calc(100% + 6px)" }),
               right: 0,
-              width: "min(280px, 100%)",
+              width: "min(300px, 100%)",
               maxHeight: panel.maxHeight,
-              overflowX: "hidden",
-              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
               boxSizing: "border-box",
               padding: "0.65rem 0.75rem",
               backgroundColor: C.white,
@@ -802,17 +835,34 @@ function ClubEnrollPicker({
             >
               Equipos disponibles
             </div>
-            {addable.length === 0 ? (
-              <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray400 }}>
-                No hay clubes activos por inscribir en esta categoría.
+            <div style={{ marginBottom: "0.5rem", flexShrink: 0 }}>
+              <FormInput
+                type="search"
+                value={term}
+                autoFocus
+                maxLength={30}
+                placeholder="Buscar equipo…"
+                aria-label="Buscar equipo"
+                onChange={(e) => setTerm(e.target.value)}
+              />
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto" }}>
+            {matches.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.75rem", color: C.gray400, overflowWrap: "anywhere" }}>
+                {query
+                  ? `No hay equipos que coincidan con «${term.trim()}».`
+                  : "No hay clubes activos por inscribir en esta categoría."}
               </p>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                {addable.map((c) => (
+                {matches.map((c) => (
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => onAdd(c.id)}
+                    onClick={() => {
+                      onAdd(c.id);
+                      panelRef.current?.querySelector("input")?.focus();
+                    }}
                     style={{
                       maxWidth: "100%",
                       border: `1px solid ${C.gray300}`,
@@ -831,6 +881,36 @@ function ClubEnrollPicker({
                 ))}
               </div>
             )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const name = query && matches.length === 0 ? term.trim() : "";
+                setOpen(false);
+                onRegister(name);
+              }}
+              style={{
+                flexShrink: 0,
+                marginTop: "0.55rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.3rem",
+                width: "100%",
+                border: `1px dashed ${C.amber}`,
+                backgroundColor: C.white,
+                color: C.navy900,
+                borderRadius: RADIUS.full,
+                padding: "0.35rem 0.65rem",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                overflowWrap: "anywhere",
+              }}
+            >
+              <Plus size={14} color={C.amber} />
+              {query && matches.length === 0 ? `Registrar «${term.trim()}»` : "Registrar equipo nuevo"}
+            </button>
           </div>
         )}
       </div>
@@ -908,6 +988,15 @@ function enrollmentConflictMessage(
 ) {
   const who = conflicts.map((c) => `${c.playerName} (con ${c.clubName})`).join(", ");
   return `${clubName} quedó inscrito, pero ${who} ya ${conflicts.length > 1 ? "juegan" : "juega"} este torneo con otro club; si anotan con los dos, cuenta para cada club.`;
+}
+
+/** Para buscar sin distinguir mayúsculas ni acentos. */
+function fold(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function sameIdList(a: string[], b: string[]) {

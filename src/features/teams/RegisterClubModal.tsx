@@ -14,20 +14,28 @@ import { useModalLock } from "../../shared/useModalLock";
 type Option = { id: string; name: string };
 type Created = { slug: string; email: string };
 
-/** Alta de club desde /equipos (solo superadmin). Mismas reglas que «Nuevo club» en /admin. */
+/**
+ * Alta de club desde /equipos (solo superadmin). Mismas reglas que «Nuevo club» en /admin.
+ * `embedded`: abierto desde otro modal (Editar torneo): queda encima, sin «Ver club» y, sin correo
+ * del presidente que compartir, se cierra solo al crear.
+ */
 export default function RegisterClubModal({
   onClose,
   onCreated,
+  initialName = "",
+  embedded = false,
 }: {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (club: { id: string; name: string }) => void;
+  initialName?: string;
+  embedded?: boolean;
 }) {
   const [localities, setLocalities] = useState<Option[]>([]);
   const [slugs, setSlugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const [name, setName] = useState(() => clubName(initialName));
+  const [slug, setSlug] = useState(() => normalizeSlug(clubName(initialName)));
   const [localityId, setLocalityId] = useState("");
   const [location, setLocation] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
@@ -108,7 +116,7 @@ export default function RegisterClubModal({
     setBusy(true);
     setError("");
     try {
-      await addClub({
+      const id = await addClub({
         slug: checked.slug,
         name: checked.name,
         localityId: checked.localityId,
@@ -118,8 +126,13 @@ export default function RegisterClubModal({
         heroUrl: DEFAULT_HERO_IMAGE,
         adminEmail: checked.adminEmail,
       });
+      onCreated({ id, name: checked.name });
+      if (embedded && !checked.adminEmail) {
+        creating.current = false;
+        onClose();
+        return;
+      }
       setCreated({ slug: checked.slug, email: checked.adminEmail });
-      onCreated();
     } catch (err) {
       console.error(err);
       setError(
@@ -141,6 +154,8 @@ export default function RegisterClubModal({
       aria-modal="true"
       aria-labelledby="club-form-title"
       onClick={close}
+      // Por encima del modal que lo abre (Editar torneo usa 90; .court-form, 80)
+      style={embedded ? { zIndex: 100 } : undefined}
     >
       <form
         className="court-form__panel"
@@ -294,9 +309,11 @@ export default function RegisterClubModal({
           <span />
           {created ? (
             <div className="court-form__actions">
-              <Link to={`/${created.slug}`} className="court-form__ghost club-form__link">
-                Ver club
-              </Link>
+              {embedded ? null : (
+                <Link to={`/${created.slug}`} className="court-form__ghost club-form__link">
+                  Ver club
+                </Link>
+              )}
               <PrimaryButton type="button" onClick={onClose}>
                 Cerrar
               </PrimaryButton>
