@@ -12,7 +12,13 @@ import {
   TrendingUp,
   Star,
 } from "lucide-react";
-import { dataConnect, deletePlayer, savePlayer } from "../../../infrastructure/dataconnect";
+import { dataConnect, deletePlayer, savePlayer, type SearchPlayerHit } from "../../../infrastructure/dataconnect";
+import {
+  addExistingPlayer,
+  playerErrorMessage,
+  tournamentConflictMessage,
+  PlayerCommandError,
+} from "../../../domains/players/playerCommands";
 import { requestClubRefresh } from "../useClubScreen";
 import { savedRow } from "../../../shared/saved";
 import { useClub } from "../../../domains/clubs/ClubContext";
@@ -21,6 +27,7 @@ import { C, RADIUS, SHADOWS, SectionCard, FormInput } from "../../../shared/ui";
 import { CompareModal } from "../ClubComponents";
 
 import PlayerForm, { playerFormError } from "./PlayerForm";
+import ExistingPlayerSearch from "./ExistingPlayerSearch";
 import { titleCase } from "../../../shared/textLimits";
 import PlayerRow from "./PlayerRow";
 import PlayerModal from "./PlayerModal";
@@ -424,6 +431,8 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
   const [playerError, setPlayerError] = useState("");
   const [savingPlayer, setSavingPlayer] = useState(false);
   const savingPlayerRef = useRef(false);
+  // Jugador de la liga elegido en el buscador (0010): el formulario solo pide dorsal, posición y variante
+  const [linkedPlayer, setLinkedPlayer] = useState<SearchPlayerHit | null>(null);
 
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [showCompareModal, setShowCompareModal] = useState(false);
@@ -445,31 +454,44 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
     setPlayerError(problem);
     if (problem) return false;
 
-    const payload = {
-      id: editingPlayerId || crypto.randomUUID(),
-      clubId,
-      name: titleCase(playerName),
-      shirtNumber: playerNumber,
-      position: playerPosition,
-      isCoach: false,
-      active: playerActive,
-      detail: {
-        variant: playerVariant.trim(),
-        birthDate: playerBirthDate || "",
-        imageUrl: playerImageUrl.trim(),
-      },
-    };
     savingPlayerRef.current = true;
     setSavingPlayer(true);
     try {
-      const saved = await savePlayer(dataConnect, payload);
-      savedRow(saved.data.player);
+      if (linkedPlayer) {
+        // Ya existe en la liga: solo se guarda lo suyo en este club (y se restaura si estuvo aquí)
+        await addExistingPlayer({
+          clubId,
+          playerId: linkedPlayer.id,
+          shirtNumber: playerNumber,
+          position: playerPosition,
+          variant: playerVariant.trim(),
+        });
+      } else {
+        const saved = await savePlayer(dataConnect, {
+          id: editingPlayerId || crypto.randomUUID(),
+          clubId,
+          name: titleCase(playerName),
+          shirtNumber: playerNumber,
+          position: playerPosition,
+          isCoach: false,
+          active: playerActive,
+          detail: {
+            variant: playerVariant.trim(),
+            birthDate: playerBirthDate || "",
+            imageUrl: playerImageUrl.trim(),
+          },
+        });
+        if (!saved.data.player && saved.data.conflict) {
+          throw new PlayerCommandError(tournamentConflictMessage(saved.data.conflict));
+        }
+        savedRow(saved.data.player);
+      }
       requestClubRefresh();
       handleCancelEdit();
       return true;
     } catch (err) {
       console.error(err);
-      setPlayerError("No se pudo guardar. Revisa los datos e inténtalo de nuevo.");
+      setPlayerError(playerErrorMessage(err, "No se pudo guardar. Revisa los datos e inténtalo de nuevo."));
       return false;
     } finally {
       savingPlayerRef.current = false;
@@ -480,6 +502,7 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
   const handleCancelEdit = () => {
     setPlayerError("");
     setEditingPlayerId(null);
+    setLinkedPlayer(null);
     setPlayerName("");
     setPlayerNumber("");
     setPlayerPosition("Delantero");
@@ -489,7 +512,18 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
     setPlayerActive(true);
   };
 
+  /** Elegido en el buscador: la persona viene hecha; aquí se le pone dorsal, posición y variante de este club. */
+  const handlePickExisting = (hit: SearchPlayerHit) => {
+    handleCancelEdit();
+    setLinkedPlayer(hit);
+    setPlayerName(hit.name);
+    setPlayerBirthDate(hit.birthDate || "");
+    setPlayerImageUrl(hit.imageUrl || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleEdit = (p: any) => {
+    setLinkedPlayer(null);
     setEditingPlayerId(p.id);
     setPlayerName(p.name);
     setPlayerNumber(p.number === "S/N" ? "" : p.number);
@@ -840,10 +874,20 @@ export default function Players({ players: allPlayers, events, perms, goals }: a
         </div>
       </SectionCard>
 
+      {canEditAll && !editingPlayerId && !linkedPlayer && (
+        <ExistingPlayerSearch clubId={clubId} onPick={handlePickExisting} />
+      )}
+
       {(canEditAll || (isPressOnly && editingPlayerId)) && (
         <PlayerForm
           isPressOnly={isPressOnly}
           editingPlayerId={editingPlayerId}
+          linkedPlayer={linkedPlayer ? { restoring: linkedPlayer.inThisClub === "DELETED" } : null}
+          sharedWith={
+            editingPlayerId
+              ? (allPlayers.find((p: any) => p.id === editingPlayerId)?.otherClubs_on_player ?? []).map((c: any) => c.name)
+              : []
+          }
           playerName={playerName}
           setPlayerName={setPlayerName}
           playerNumber={playerNumber}

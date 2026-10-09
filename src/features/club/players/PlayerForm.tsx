@@ -99,6 +99,10 @@ interface PlayerFormProps {
   /** Motivo por el que no se pudo guardar (vacío si no hay). */
   error: string;
   saving: boolean;
+  /** Jugador que ya existe en la liga (0010): solo se eligen dorsal, posición y variante; restoring = estuvo aquí. */
+  linkedPlayer?: { restoring: boolean } | null;
+  /** Otros clubes del jugador que se edita: nombre, foto y nacimiento se ven también ahí. */
+  sharedWith?: string[];
 }
 
 export default function PlayerForm({
@@ -122,12 +126,21 @@ export default function PlayerForm({
   onCancel,
   error,
   saving,
+  linkedPlayer = null,
+  sharedWith = [],
 }: PlayerFormProps) {
-  const title = editingPlayerId
-    ? isPressOnly
-      ? "Actualizar Foto"
-      : "Editar Jugador"
-    : "Fichar Jugador";
+  const title = linkedPlayer
+    ? linkedPlayer.restoring
+      ? "Restaurar en la Plantilla"
+      : "Agregar a la Plantilla"
+    : editingPlayerId
+      ? isPressOnly
+        ? "Actualizar Foto"
+        : "Editar Jugador"
+      : "Fichar Jugador";
+  // Los datos de la persona (nombre, nacimiento, foto) no se tocan al sumar a alguien que ya existe
+  const personLocked = isPressOnly || Boolean(linkedPlayer);
+  const photoLocked = Boolean(linkedPlayer);
 
   const { storagePath } = useClub();
   const [isUploading, setIsUploading] = useState(false);
@@ -221,7 +234,7 @@ export default function PlayerForm({
       >
         <FormInput
           required
-          disabled={isPressOnly}
+          disabled={personLocked}
           value={playerName}
           maxLength={50}
           onChange={(e) => setPlayerName(playerFullName(e.target.value))}
@@ -262,7 +275,7 @@ export default function PlayerForm({
           />
           <FormInput
             type="date"
-            disabled={isPressOnly}
+            disabled={personLocked}
             min={BIRTH_MIN}
             max={isoDate()}
             value={playerBirthDate}
@@ -313,8 +326,8 @@ export default function PlayerForm({
             <label
               className="player-photo-row__upload"
               style={{
-                cursor: isUploading ? "not-allowed" : "pointer",
-                opacity: isUploading ? 0.7 : 1,
+                cursor: isUploading || photoLocked ? "not-allowed" : "pointer",
+                opacity: isUploading || photoLocked ? 0.7 : 1,
               }}
             >
               <UploadCloud size={14} color={C.amber} />
@@ -322,7 +335,7 @@ export default function PlayerForm({
               <input
                 type="file"
                 accept="image/*"
-                disabled={isUploading}
+                disabled={isUploading || photoLocked}
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     handlePhotoUpload(e.target.files[0]);
@@ -337,6 +350,7 @@ export default function PlayerForm({
               <input
                 type="url"
                 value={playerImageUrl}
+                disabled={photoLocked}
                 onChange={(e) => setPlayerImageUrl(e.target.value)}
                 placeholder="O pega un enlace…"
                 style={{
@@ -354,6 +368,14 @@ export default function PlayerForm({
             </div>
           </div>
         </div>
+
+        {(linkedPlayer || sharedWith.length > 0) && (
+          <p style={{ margin: 0, fontSize: "0.72rem", color: C.gray500, lineHeight: 1.4 }}>
+            {linkedPlayer
+              ? "Nombre, foto y nacimiento son de la persona y se ven en todos sus clubes; aquí solo eliges su dorsal, posición y variante."
+              : `Nombre, foto y nacimiento se ven también en ${sharedWith.join(", ")}.`}
+          </p>
+        )}
 
         {/* ── AJUSTES DEL JUGADOR (SLIDERS) ── */}
         <div
@@ -426,12 +448,16 @@ export default function PlayerForm({
               ? "Cargando..."
               : saving
                 ? "Guardando…"
-                : editingPlayerId
-                ? "Guardar Cambios"
-                : "Confirmar Fichaje"}
+                : linkedPlayer
+                  ? linkedPlayer.restoring
+                    ? "Restaurar"
+                    : "Agregar a la Plantilla"
+                  : editingPlayerId
+                    ? "Guardar Cambios"
+                    : "Confirmar Fichaje"}
           </PrimaryButton>
 
-          {editingPlayerId && (
+          {(editingPlayerId || linkedPlayer) && (
             <SecondaryButton
               type="button"
               onClick={handleCancelWithCleanup}

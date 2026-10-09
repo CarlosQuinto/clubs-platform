@@ -308,15 +308,33 @@ END
 $$;
 CALL api_expose('update_tournament_settings', 'USER');
 
+-- Inscribe un club (superadmin). Un jugador representa a un solo club por torneo: si algún jugador activo del club
+-- ya juega activo con otro club inscrito, no se inscribe y devuelve «conflicts» [{playerName, clubName}]. Volver a
+-- inscribir a uno que ya está no se revisa (idempotente).
 CREATE OR REPLACE FUNCTION public.add_tournament_club(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_tournament text := p ->> 'tournamentId';
   v_club text := p ->> 'clubId';
+  v_conflicts jsonb;
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() OR v_tournament IS NULL OR v_club IS NULL OR tournament_locked(v_tournament) THEN
     RETURN jsonb_build_object('row', NULL);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM tournament_clubs WHERE tournament_id = v_tournament AND club_id = v_club) THEN
+    SELECT jsonb_agg(jsonb_build_object('playerName', pl.name, 'clubName', c.name) ORDER BY pl.name, c.name)
+    INTO v_conflicts
+    FROM club_players mine
+    JOIN players pl ON pl.id = mine.player_id
+    JOIN club_players other ON other.player_id = mine.player_id AND other.club_id <> v_club
+      AND other.active AND other.deleted_at IS NULL AND NOT other.is_coach
+    JOIN tournament_clubs tc ON tc.club_id = other.club_id AND tc.tournament_id = v_tournament
+    JOIN clubs c ON c.id = other.club_id
+    WHERE mine.club_id = v_club AND mine.active AND mine.deleted_at IS NULL AND NOT mine.is_coach;
+    IF v_conflicts IS NOT NULL THEN
+      RETURN jsonb_build_object('row', NULL, 'conflicts', v_conflicts);
+    END IF;
   END IF;
   INSERT INTO tournament_clubs (tournament_id, club_id, created_at)
   VALUES (v_tournament, v_club, now())
@@ -679,7 +697,7 @@ BEGIN
     RETURN jsonb_build_object('card', NULL);
   END IF;
   SELECT pl.id, pl.name INTO v_player, v_name
-  FROM players pl WHERE pl.id = NULLIF(p ->> 'playerId', '') AND pl.club_id = v_club;
+  FROM players pl WHERE pl.id = NULLIF(p ->> 'playerId', '') AND is_club_player(pl.id, v_club);
   INSERT INTO match_cards (match_id, club_id, player_id, player_name, color, minute)
   VALUES (
     v_match, v_club, v_player, coalesce(NULLIF(v_name, ''), p ->> 'playerName', ''), v_color::card_color,
@@ -746,8 +764,10 @@ BEGIN
   IF NOT is_platform_admin() OR v_id IS NULL OR v_match IS NULL OR v_club IS NULL OR match_locked(v_match) THEN
     RETURN jsonb_build_object('goal', NULL, 'match', NULL);
   END IF;
-  -- Un jugador eliminado (borrado lógico) no recibe goles nuevos; reintentar uno ya guardado sí pasa
-  IF EXISTS (SELECT 1 FROM players WHERE id IN (v_scorer, v_assist) AND deleted_at IS NOT NULL)
+  -- Un jugador eliminado de todos sus clubes (borrado lógico) no recibe goles nuevos; reintentar uno ya guardado sí
+  -- pasa. No se exige que sea del club: en un autogol el goleador es del rival.
+  IF EXISTS (SELECT 1 FROM players pl WHERE pl.id IN (v_scorer, v_assist)
+               AND NOT EXISTS (SELECT 1 FROM club_players cp WHERE cp.player_id = pl.id AND cp.deleted_at IS NULL))
      AND NOT EXISTS (SELECT 1 FROM match_goals WHERE id = v_id) THEN
     RETURN jsonb_build_object('goal', NULL, 'match', NULL);
   END IF;
@@ -827,8 +847,9 @@ BEGIN
   IF NOT is_platform_admin() OR v_id IS NULL OR v_match IS NULL OR v_club IS NULL OR match_locked(v_match) THEN
     RETURN jsonb_build_object('card', NULL, 'match', NULL);
   END IF;
-  -- Un jugador eliminado (borrado lógico) no recibe tarjetas nuevas; reintentar una ya guardada sí pasa
-  IF EXISTS (SELECT 1 FROM players WHERE id = v_player AND deleted_at IS NOT NULL)
+  -- Un jugador eliminado de todos sus clubes (borrado lógico) no recibe tarjetas nuevas; reintentar una ya guardada sí pasa
+  IF EXISTS (SELECT 1 FROM players pl WHERE pl.id = v_player
+               AND NOT EXISTS (SELECT 1 FROM club_players cp WHERE cp.player_id = pl.id AND cp.deleted_at IS NULL))
      AND NOT EXISTS (SELECT 1 FROM match_cards WHERE id = v_id) THEN
     RETURN jsonb_build_object('card', NULL, 'match', NULL);
   END IF;

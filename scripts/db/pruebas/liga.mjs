@@ -195,9 +195,10 @@ export async function run({ db, rpc, check }) {
   check(!events.error && sheetAfter?.matchGoals_on_match.length === 0 && sheetAfter.matchCards_on_match.length === 0, "clear_match_events: superadmin borra goles y tarjetas", events.error ?? sheetAfter);
 
   // ---------- Hoja de marcador con jugadores de baja o eliminados (0008_jugadores_borrado_logico.sql) ----------
-  await db.query(`INSERT INTO players (id, club_id, name, shirt_number, position) VALUES
-    ('prueba-liga-baja', 'dummy-club-union', 'Jugador Eliminado Uno', '50', 'Medio'),
-    ('prueba-liga-baja2', 'dummy-club-union', 'Jugador Sin Partido', '51', 'Medio')`);
+  await db.query(`INSERT INTO players (id, name) VALUES
+    ('prueba-liga-baja', 'Jugador Eliminado Uno'), ('prueba-liga-baja2', 'Jugador Sin Partido')`);
+  await db.query(`INSERT INTO club_players (club_id, player_id, shirt_number, position) VALUES
+    ('dummy-club-union', 'prueba-liga-baja', '50', 'Medio'), ('dummy-club-union', 'prueba-liga-baja2', '51', 'Medio')`);
   const cardName = async () => (await db.query(
     "SELECT player_id, player_name FROM match_cards WHERE match_id = $1 AND color = 'YELLOW' ORDER BY player_name", [sheetMatch])).rows;
   const cardBase = { matchId: sheetMatch, clubId: "dummy-club-union", color: "YELLOW", minute: 20 };
@@ -208,7 +209,7 @@ export async function run({ db, rpc, check }) {
   await rpc("admin", "insert_match_card", { ...cardBase, playerId: "dummy-club-halcones-p13", playerName: "Nombre Manual" });
   named = await cardName();
   check(named.some((c) => c.player_id === null && c.player_name === "Nombre Manual"), "insert_match_card: jugador de otro club -> sin enlace, con el nombre recibido", named);
-  await db.query("UPDATE players SET deleted_at = now(), active = false WHERE id IN ('prueba-liga-baja', 'prueba-liga-baja2')");
+  await db.query("UPDATE club_players SET deleted_at = now(), active = false WHERE player_id IN ('prueba-liga-baja', 'prueba-liga-baja2')");
   const sheetDel = (await rpc("admin", "match_score_sheet", { matchId: sheetMatch })).data?.matches?.[0];
   const detailDel = (await rpc("anon", "match_detail", { id: sheetMatch })).data?.matches?.[0];
   for (const [label, roster] of [["match_score_sheet", sheetDel?.awayClub?.players_on_club], ["match_detail", detailDel?.awayClub?.players_on_club]]) {
@@ -238,8 +239,9 @@ export async function run({ db, rpc, check }) {
   const live0 = (await rpc("anon", "match_detail", { id: LIVE_MATCH })).data?.matches?.[0];
   check(live0?.status === "SCHEDULED" && live0.homeClub.id === "dummy-club-tiburones" && live0.awayClub.id === "dummy-club-bahia", "marcador en vivo: partido de hoy programado", live0);
   // Un jugador eliminado no recibe goles ni tarjetas en vivo y no sale en la plantilla del partido
-  await db.query(`INSERT INTO players (id, club_id, name, position, deleted_at, active)
-    VALUES ('prueba-liga-vivo', 'dummy-club-tiburones', 'Jugador Vivo Eliminado', 'Medio', now(), false)`);
+  await db.query(`INSERT INTO players (id, name) VALUES ('prueba-liga-vivo', 'Jugador Vivo Eliminado')`);
+  await db.query(`INSERT INTO club_players (club_id, player_id, position, deleted_at, active)
+    VALUES ('dummy-club-tiburones', 'prueba-liga-vivo', 'Medio', now(), false)`);
   const goalDel = await rpc("admin", "add_live_match_goal", { id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0b", matchId: LIVE_MATCH,
     clubId: "dummy-club-tiburones", scorerId: "prueba-liga-vivo", assistId: "", isPenalty: false, isOwnGoal: false, minute: 5 });
   const cardDel = await rpc("admin", "add_live_match_card", { id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0c", matchId: LIVE_MATCH,

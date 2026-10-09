@@ -293,6 +293,8 @@ export const savePlatformSocial = mutation<T.SavePlatformSocialVariables, T.Save
 // ---- mutations.gql ----
 /** mutation SavePlayer (USER) */
 export const savePlayer = mutation<T.SavePlayerVariables, T.SavePlayerData>("save_player");
+/** mutation AddExistingPlayer (USER): suma a la plantilla un jugador que ya existe en la liga (0010) */
+export const addExistingPlayer = mutation<T.AddExistingPlayerVariables, T.AddExistingPlayerData>("add_existing_player");
 // ---- admin.gql ----
 /** mutation SaveSignupInvite (USER) */
 export const saveSignupInvite = mutation<T.SaveSignupInviteVariables, T.SaveSignupInviteData>("save_signup_invite");
@@ -307,6 +309,8 @@ export const searchAdminClubs = query<T.SearchAdminClubsVariables, T.SearchAdmin
 // ---- queries.gql ----
 /** query SearchClubs (PUBLIC) */
 export const searchClubs = query<T.SearchClubsVariables, T.SearchClubsData>("search_clubs");
+/** query SearchPlayers (USER): jugadores de la liga por nombre, para la plantilla (0010) */
+export const searchPlayers = query<T.SearchPlayersVariables, T.SearchPlayersData>("search_players");
 /** query SeasonSummary (PUBLIC) — solo temporadas cerradas; si no, season = null */
 export const seasonSummary = query<T.SeasonSummaryVariables, T.SeasonSummaryData>("season_summary");
 // ---- admin.gql ----

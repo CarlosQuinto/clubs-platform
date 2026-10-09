@@ -295,6 +295,21 @@ export default function PlayerModal({
                 </span>
               </>
             )}
+
+            {player.otherClubs_on_player?.length > 0 && (
+              <>
+                <span style={{ color: C.gray300 }}>•</span>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: "600",
+                    color: C.gray500,
+                  }}
+                >
+                  También en {player.otherClubs_on_player.map((c: any) => c.name).join(", ")}
+                </span>
+              </>
+            )}
           </div>
         </div>
 

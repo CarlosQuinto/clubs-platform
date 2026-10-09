@@ -44,7 +44,8 @@ export async function run({ db, rpc, check }) {
   check(nuevo.data?.player?.id === "prueba-p-1" && nuevo.data.player.name === "Nuevo Jugador", "save_player: DT crea jugador", nuevo);
   const editado = await rpc("presidente", "save_player", { id: "prueba-p-1", clubId: HALCONES, name: "Jugador Editado", shirtNumber: "98", position: "Medio", isCoach: false, active: true, detail: { birthDate: "" } });
   check(editado.data?.player?.name === "Jugador Editado", "save_player: presidente edita (upsert)", editado);
-  check((await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND shirt_number = '98' AND birth_date IS NULL`)) === 1, "save_player: cambios persistidos");
+  check((await count(`SELECT count(*)::int AS n FROM club_players cp JOIN players pl ON pl.id = cp.player_id
+    WHERE pl.id = 'prueba-p-1' AND cp.club_id = '${HALCONES}' AND cp.shirt_number = '98' AND pl.birth_date IS NULL`)) === 1, "save_player: cambios persistidos");
   const prensaJugador = await rpc("prensa", "save_player", { id: "prueba-p-2", clubId: HALCONES, name: "No", shirtNumber: "1", position: "Portero" });
   check(prensaJugador.data?.player === null, "save_player: prensa no puede", prensaJugador);
   const otroClub = await rpc("presidente", "save_player", { id: "prueba-p-3", clubId: BAHIA, name: "No", shirtNumber: "1", position: "Portero" });
@@ -55,12 +56,13 @@ export async function run({ db, rpc, check }) {
   check(borrarAjeno.data?.deleted === null, "delete_player: usuario sin rol -> null", borrarAjeno);
   const borrar = await rpc("dt", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
   check(borrar.data?.deleted === 1, "delete_player: DT borra", borrar);
-  check((await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND deleted_at IS NOT NULL AND NOT active`)) === 1,
+  check((await count(`SELECT count(*)::int AS n FROM club_players WHERE player_id = 'prueba-p-1' AND deleted_at IS NOT NULL AND NOT active`)) === 1,
     "delete_player: borrado lógico (la fila queda con deleted_at e inactiva)");
   const borrarOtraVez = await rpc("dt", "delete_player", { id: "prueba-p-1", clubId: HALCONES });
   check(borrarOtraVez.data?.deleted === null, "delete_player: eliminar dos veces -> null", borrarOtraVez);
   const revivir = await rpc("dt", "save_player", { id: "prueba-p-1", clubId: HALCONES, name: "Revivido", shirtNumber: "7", position: "Medio", active: true, detail: {} });
-  check(revivir.data?.player === null && (await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-p-1' AND name = 'Jugador Editado' AND deleted_at IS NOT NULL`)) === 1,
+  check(revivir.data?.player === null && (await count(`SELECT count(*)::int AS n FROM club_players cp JOIN players pl ON pl.id = cp.player_id
+    WHERE pl.id = 'prueba-p-1' AND pl.name = 'Jugador Editado' AND cp.deleted_at IS NOT NULL`)) === 1,
     "save_player: no revive ni sobrescribe a un eliminado", revivir);
   const borrarBahia = await rpc("presidente", "delete_player", { id: "prueba-p-4", clubId: BAHIA });
   check(borrarBahia.data?.deleted === null, "delete_player: otro club -> null", borrarBahia);
@@ -288,7 +290,9 @@ export async function run({ db, rpc, check }) {
     check(r.data?.player === null, `save_player: ${motivo} -> null`, r);
   }
   const jugadorOtroClub = await rpc("admin", "save_player", { ...jugadorBase, clubId: BAHIA, name: "Robado" });
-  check(jugadorOtroClub.data?.player === null && (await count(`SELECT count(*)::int AS n FROM players WHERE id = 'prueba-val-p' AND club_id = '${HALCONES}'`)) === 1, "save_player: el id de otro club no se pisa", jugadorOtroClub);
+  check(jugadorOtroClub.data?.player === null && (await count(`SELECT count(*)::int AS n FROM club_players cp JOIN players pl ON pl.id = cp.player_id
+    WHERE pl.id = 'prueba-val-p' AND cp.club_id = '${HALCONES}' AND pl.name = 'Ana María López'`)) === 1
+    && (await count(`SELECT count(*)::int AS n FROM club_players WHERE player_id = 'prueba-val-p'`)) === 1, "save_player: el id de otro club no se pisa ni se le suma", jugadorOtroClub);
 
   const eventoBase = { id: "prueba-val-ev", clubId: HALCONES, eventType: "PARTIDO", matchType: "AMISTOSO", title: "Vs  Leones FC", eventDate: enDias(3), eventTime: "18:00", detail: { location: "Campo Norte", routine: [] } };
   const eventoOk = await rpc("dt", "save_club_event", eventoBase);
@@ -423,12 +427,18 @@ export async function run({ db, rpc, check }) {
     "club_screen: trae al eliminado con deletedAt (para su historial) y a los demás con null", jugEliminado ?? pantalla.error);
   let chk = null;
   try {
-    await db.query(`UPDATE players SET active = true WHERE id = '${BAJA}'`);
+    await db.query(`UPDATE club_players SET active = true WHERE player_id = '${BAJA}'`);
   } catch (err) {
     chk = err.code;
   }
   check(chk === "23514", "un eliminado no puede quedar activo sin restaurarlo (CHECK)", chk);
-  await db.query(`UPDATE players SET deleted_at = NULL, active = true WHERE id = '${BAJA}'`);
+  // Restaurar desde la búsqueda (add_existing_player, 0010): vuelve con su historial, con el dorsal nuevo
+  const busqueda = await rpc("dt", "search_players", { clubId: HALCONES, q: "historico" });
+  const hallado = busqueda.data?.players?.find((p) => p.id === BAJA);
+  check(hallado?.inThisClub === "DELETED" && hallado.clubs_on_player.length === 0, "search_players: el eliminado del club sale marcado para restaurarlo", busqueda.data ?? busqueda.error);
+  const restaurar = await rpc("dt", "add_existing_player", { clubId: HALCONES, playerId: BAJA, shirtNumber: "46", position: "Medio", variant: "" });
+  check(restaurar.data?.player?.id === BAJA, "add_existing_player: restaura al eliminado", restaurar);
   const restaurado = (await rpc("anon", "club_screen", { slug })).data?.clubs?.[0]?.players_on_club?.find((p) => p.id === BAJA);
-  check(restaurado?.deletedAt === null && restaurado.active === true && (await historial()).gol === 1, "restaurar (SQL del README) lo devuelve con todo su historial", restaurado);
+  check(restaurado?.deletedAt === null && restaurado.active === true && restaurado.shirtNumber === "46" && (await historial()).gol === 1,
+    "restaurar lo devuelve con todo su historial", restaurado);
 }

@@ -48,6 +48,34 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT upper(left(p_value, 1)) || substr(p_value, 2)
 $$;
 
+-- ---------- Plantilla: helpers internos (sin api_expose ni EXECUTE para el navegador) ----------
+
+-- true si el jugador pertenece (o perteneció) al club: la fila de club_players existe. Con p_only_live, además no
+-- está eliminado en ese club. Las funciones que guardan eventos viejos no exigen vivo: no borran su historial.
+CREATE OR REPLACE FUNCTION public.is_club_player(p_player text, p_club text, p_only_live boolean DEFAULT false)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM club_players cp
+    WHERE cp.player_id = p_player AND cp.club_id = p_club AND (NOT p_only_live OR cp.deleted_at IS NULL))
+$$;
+REVOKE ALL ON FUNCTION public.is_club_player(text, text, boolean) FROM PUBLIC, anon, authenticated;
+
+-- Un jugador representa a un solo club por torneo: devuelve {clubName, tournamentName} si ya juega activo con otro
+-- club que comparte con p_club un torneo no terminado; NULL si puede fichar. El cuerpo técnico no cuenta.
+CREATE OR REPLACE FUNCTION public.player_tournament_conflict(p_player text, p_club text)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT jsonb_build_object('clubName', c.name, 'tournamentName', t.name)
+  FROM club_players cp
+  JOIN clubs c ON c.id = cp.club_id
+  JOIN tournament_clubs tc ON tc.club_id = cp.club_id
+  JOIN tournaments t ON t.id = tc.tournament_id AND t.status <> 'FINISHED'::tournament_status
+  JOIN tournament_clubs mine ON mine.tournament_id = t.id AND mine.club_id = p_club
+  WHERE cp.player_id = p_player AND cp.club_id <> p_club AND cp.active AND cp.deleted_at IS NULL AND NOT cp.is_coach
+  ORDER BY t.start_date DESC NULLS LAST, t.name, c.name
+  LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION public.player_tournament_conflict(text, text) FROM PUBLIC, anon, authenticated;
+
 -- ---------- Agenda: eventos del club ----------
 
 -- Crea o actualiza un evento (ADMIN o DT). location y routine llegan dentro de detail.
@@ -209,7 +237,7 @@ BEGIN
     GET DIAGNOSTICS v_cleared = ROW_COUNT;
     INSERT INTO club_event_attendees (event_id, player_id, raw_label)
     SELECT v_id,
-      (SELECT pl.id FROM players pl WHERE pl.id = elem AND pl.club_id = v_club),
+      CASE WHEN is_club_player(elem, v_club) THEN elem END,
       elem
     FROM jsonb_array_elements_text(v_labels) AS elem
     WHERE elem <> '';
@@ -278,34 +306,34 @@ BEGIN
     INSERT INTO club_event_goals (event_id, sort_order, scorer_id, assist_id, is_penalty, is_own_goal)
     SELECT v_id,
       (ord - 1)::int,
-      (SELECT pl.id FROM players pl WHERE pl.id = goal ->> 'scorer' AND pl.club_id = v_club),
-      (SELECT pl.id FROM players pl WHERE pl.id = goal ->> 'assist' AND pl.club_id = v_club),
+      CASE WHEN is_club_player(goal ->> 'scorer', v_club) THEN goal ->> 'scorer' END,
+      CASE WHEN is_club_player(goal ->> 'assist', v_club) THEN goal ->> 'assist' END,
       COALESCE((goal ->> 'isPenalty')::boolean, false),
       COALESCE((goal ->> 'isOwnGoal')::boolean, false)
     FROM jsonb_array_elements(api_list(v_stats -> 'goals')) WITH ORDINALITY AS g(goal, ord);
     GET DIAGNOSTICS v_n = ROW_COUNT; v_added := v_added + v_n;
 
     INSERT INTO club_event_cards (event_id, player_id, color)
-    SELECT v_id, pl.id, 'YELLOW'::card_color
+    SELECT v_id, cp.player_id, 'YELLOW'::card_color
     FROM jsonb_array_elements_text(api_list(v_stats -> 'yellowCards')) AS card(pid)
-    JOIN players pl ON pl.id = card.pid AND pl.club_id = v_club;
+    JOIN club_players cp ON cp.player_id = card.pid AND cp.club_id = v_club;
     GET DIAGNOSTICS v_n = ROW_COUNT; v_added := v_added + v_n;
 
     INSERT INTO club_event_cards (event_id, player_id, color)
-    SELECT v_id, pl.id, 'RED'::card_color
+    SELECT v_id, cp.player_id, 'RED'::card_color
     FROM jsonb_array_elements_text(api_list(v_stats -> 'redCards')) AS card(pid)
-    JOIN players pl ON pl.id = card.pid AND pl.club_id = v_club;
+    JOIN club_players cp ON cp.player_id = card.pid AND cp.club_id = v_club;
     GET DIAGNOSTICS v_n = ROW_COUNT; v_added := v_added + v_n;
 
     INSERT INTO club_event_goalkeepers (event_id, player_id, conceded, saves)
-    SELECT v_id, pl.id, COALESCE((gk ->> 'conceded')::int, 0), COALESCE((gk ->> 'saves')::int, 0)
+    SELECT v_id, cp.player_id, COALESCE((gk ->> 'conceded')::int, 0), COALESCE((gk ->> 'saves')::int, 0)
     FROM jsonb_array_elements(api_list(v_stats -> 'goalkeepers')) AS k(gk)
-    JOIN players pl ON pl.id = gk ->> 'id' AND pl.club_id = v_club;
+    JOIN club_players cp ON cp.player_id = gk ->> 'id' AND cp.club_id = v_club;
     GET DIAGNOSTICS v_n = ROW_COUNT; v_added := v_added + v_n;
 
     -- event: MVP (solo si es jugador del club)
     UPDATE club_events e
-    SET mvp_id = (SELECT pl.id FROM players pl WHERE pl.id = v_stats ->> 'mvp' AND pl.club_id = v_club)
+    SET mvp_id = CASE WHEN is_club_player(v_stats ->> 'mvp', v_club) THEN v_stats ->> 'mvp' END
     WHERE e.id = v_id
     RETURNING jsonb_build_object('id', e.id) INTO v_row;
   END IF;
@@ -327,7 +355,7 @@ DECLARE
   v_mvp text := NULLIF(coalesce(p ->> 'mvpId', ''), '');
   v_row jsonb;
 BEGIN
-  IF v_mvp IS NOT NULL AND NOT EXISTS (SELECT 1 FROM players WHERE id = v_mvp AND club_id = v_club) THEN
+  IF v_mvp IS NOT NULL AND NOT is_club_player(v_mvp, v_club) THEN
     RETURN jsonb_build_object('report', NULL);
   END IF;
   INSERT INTO match_club_reports (match_id, club_id, lineup, mvp_id)
@@ -363,10 +391,10 @@ BEGIN
     DELETE FROM match_attendees WHERE match_id = v_match AND club_id = v_club;
     GET DIAGNOSTICS v_cleared = ROW_COUNT;
     INSERT INTO match_attendees (match_id, club_id, player_id, created_at)
-    SELECT v_match, v_club, pl.id, CURRENT_TIMESTAMP
-    FROM players pl
-    WHERE pl.club_id = v_club
-      AND pl.id IN (SELECT jsonb_array_elements_text(v_labels));
+    SELECT v_match, v_club, cp.player_id, CURRENT_TIMESTAMP
+    FROM club_players cp
+    WHERE cp.club_id = v_club
+      AND cp.player_id IN (SELECT jsonb_array_elements_text(v_labels));
     GET DIAGNOSTICS v_added = ROW_COUNT;
     v_row := jsonb_build_object('match_id', v_match);
   END IF;
@@ -377,62 +405,178 @@ CALL api_expose('replace_match_attendees', 'USER');
 
 -- ---------- Plantilla ----------
 
--- Crea o actualiza un jugador (ADMIN o DT). variant, birthDate e imageUrl llegan dentro de detail.
+-- Un jugador es una persona (players: nombre, nacimiento, foto) que puede estar en varios clubes; lo que es de
+-- cada club (dorsal, posición, variante, cuerpo técnico, activo, baja) vive en club_players (0010). Los datos de la
+-- persona los edita ADMIN o DT de cualquiera de sus clubes y se ven en todos.
+
+-- Dorsal 1-99, posición de la lista y variante de letras hasta 30; vacío si cumple, el nombre del fallo si no
+CREATE OR REPLACE FUNCTION public.club_player_fields_error(p_shirt text, p_position text, p_variant text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN coalesce(p_shirt, '') !~ '^[1-9][0-9]?$' THEN 'shirtNumber'
+    WHEN p_position IS NULL OR p_position NOT IN ('Portero', 'Defensa', 'Medio', 'Delantero') THEN 'position'
+    WHEN p_variant <> '' AND (char_length(p_variant) > 30 OR p_variant !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$') THEN 'variant'
+    ELSE ''
+  END
+$$;
+REVOKE ALL ON FUNCTION public.club_player_fields_error(text, text, text) FROM PUBLIC, anon, authenticated;
+
+-- Crea o actualiza un jugador del club (ADMIN o DT). variant, birthDate e imageUrl llegan dentro de detail.
 -- Nombre: solo letras, 3 a 50, en Title Case. Dorsal 1-99. Variante: letras, hasta 30.
 -- Nacimiento: opcional, desde 1940 y nunca futuro (un día de margen por la zona horaria).
+-- Un id que ya existe solo se edita desde un club donde el jugador esté (para sumarlo a otro club está
+-- add_existing_player). Reactivar a uno de baja exige que no juegue con otro club en un torneo en curso del club:
+-- si choca, devuelve player null y «conflict» {clubName, tournamentName}.
 CREATE OR REPLACE FUNCTION public.save_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
+  v_id text := p ->> 'id';
   v_club text := p ->> 'clubId';
   v_name text := api_clean_text(p ->> 'name');
   v_variant text := api_clean_text(p -> 'detail' ->> 'variant');
   v_birth text := coalesce(p -> 'detail' ->> 'birthDate', '');
+  v_coach boolean := COALESCE((p ->> 'isCoach')::boolean, false);
+  v_active boolean := COALESCE((p ->> 'active')::boolean, true);
+  v_member boolean := false;
+  v_member_active boolean := false;
+  v_member_deleted timestamptz;
+  v_conflict jsonb;
   v_row jsonb;
 BEGIN
   IF NOT api_required(p, ARRAY['id', 'clubId', 'name', 'shirtNumber', 'position'])
      OR char_length(v_name) NOT BETWEEN 3 AND 50
      OR v_name !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'
-     OR coalesce(p ->> 'shirtNumber', '') !~ '^[1-9][0-9]?$'
-     OR p ->> 'position' NOT IN ('Portero', 'Defensa', 'Medio', 'Delantero')
-     OR (v_variant <> '' AND (char_length(v_variant) > 30 OR v_variant !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'))
-     OR (v_birth <> '' AND v_birth !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') THEN
+     OR club_player_fields_error(p ->> 'shirtNumber', p ->> 'position', v_variant) <> ''
+     OR (v_birth <> '' AND v_birth !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+     OR NOT has_club_role(v_club, ARRAY['ADMIN', 'DT']) THEN
     RETURN jsonb_build_object('player', NULL);
   END IF;
   -- El cast va aparte: dentro del mismo IF el planificador podría evaluarlo antes que el formato
   IF v_birth <> '' AND v_birth::date NOT BETWEEN DATE '1940-01-01' AND CURRENT_DATE + 1 THEN
     RETURN jsonb_build_object('player', NULL);
   END IF;
-  INSERT INTO players (
-    id, club_id, name, shirt_number, position, variant,
-    birth_date, image_url, is_coach, active, created_at
-  )
-  SELECT p ->> 'id', v_club, initcap(v_name), p ->> 'shirtNumber', p ->> 'position',
-    v_variant,
-    NULLIF(v_birth, '')::date,
-    COALESCE(p -> 'detail' ->> 'imageUrl', ''),
-    COALESCE((p ->> 'isCoach')::boolean, false), COALESCE((p ->> 'active')::boolean, true), CURRENT_TIMESTAMP
-  WHERE has_club_role(v_club, ARRAY['ADMIN', 'DT'])
+  -- Sin fila, SELECT INTO deja NULL en los tres: de ahí los COALESCE
+  SELECT true, cp.active, cp.deleted_at INTO v_member, v_member_active, v_member_deleted
+  FROM club_players cp WHERE cp.club_id = v_club AND cp.player_id = v_id;
+  v_member := COALESCE(v_member, false);
+  v_member_active := COALESCE(v_member_active, false);
+  -- La persona existe pero no es de este club: no se pisa desde aquí
+  IF NOT v_member AND EXISTS (SELECT 1 FROM players WHERE id = v_id) THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  -- Un eliminado no se revive ni se sobrescribe desde el formulario (se restaura desde la búsqueda)
+  IF v_member_deleted IS NOT NULL THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  IF v_active AND NOT v_coach AND NOT v_member_active THEN
+    v_conflict := player_tournament_conflict(v_id, v_club);
+    IF v_conflict IS NOT NULL THEN
+      RETURN jsonb_build_object('player', NULL, 'conflict', v_conflict);
+    END IF;
+  END IF;
+  INSERT INTO players (id, name, birth_date, image_url, created_at)
+  VALUES (v_id, initcap(v_name), NULLIF(v_birth, '')::date, COALESCE(p -> 'detail' ->> 'imageUrl', ''), CURRENT_TIMESTAMP)
   ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
+    birth_date = EXCLUDED.birth_date,
+    image_url = EXCLUDED.image_url;
+  INSERT INTO club_players (club_id, player_id, shirt_number, position, variant, is_coach, active, created_at)
+  VALUES (v_club, v_id, p ->> 'shirtNumber', p ->> 'position', v_variant, v_coach, v_active, CURRENT_TIMESTAMP)
+  ON CONFLICT (club_id, player_id) DO UPDATE SET
     shirt_number = EXCLUDED.shirt_number,
     position = EXCLUDED.position,
     variant = EXCLUDED.variant,
-    birth_date = EXCLUDED.birth_date,
-    image_url = EXCLUDED.image_url,
     is_coach = EXCLUDED.is_coach,
     active = EXCLUDED.active
-  -- Un jugador eliminado no se revive ni se sobrescribe desde el formulario (se restaura por SQL)
-  WHERE players.club_id = EXCLUDED.club_id AND players.deleted_at IS NULL
-  RETURNING jsonb_build_object('id', id, 'name', name) INTO v_row;
+  RETURNING jsonb_build_object('id', player_id, 'name', initcap(v_name)) INTO v_row;
   RETURN jsonb_build_object('player', v_row);
 END
 $$;
 CALL api_expose('save_player', 'USER');
 
--- Elimina un jugador del club (ADMIN o DT) con borrado lógico (0008_jugadores_borrado_logico.sql): sale de la
--- plantilla y de los selectores, pero sus goles, tarjetas, asistencias, estadísticas y aportaciones se conservan.
--- Eliminarlo otra vez devuelve null.
+-- Suma a la plantilla del club (ADMIN o DT) un jugador que ya existe en la liga, con su dorsal, posición y variante
+-- en este club. Si estaba eliminado aquí, lo restaura con todo su historial. Si ya está (activo o de baja), devuelve
+-- player null y reason 'ALREADY'; si juega con otro club en un torneo en curso del club, player null y «conflict».
+CREATE OR REPLACE FUNCTION public.add_existing_player(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid text := require_uid();
+  v_club text := p ->> 'clubId';
+  v_player text := p ->> 'playerId';
+  v_variant text := api_clean_text(p ->> 'variant');
+  v_conflict jsonb;
+  v_row jsonb;
+BEGIN
+  IF NOT api_required(p, ARRAY['clubId', 'playerId', 'shirtNumber', 'position'])
+     OR club_player_fields_error(p ->> 'shirtNumber', p ->> 'position', v_variant) <> ''
+     OR NOT has_club_role(v_club, ARRAY['ADMIN', 'DT'])
+     OR NOT EXISTS (SELECT 1 FROM players WHERE id = v_player) THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  IF is_club_player(v_player, v_club, true) THEN
+    RETURN jsonb_build_object('player', NULL, 'reason', 'ALREADY');
+  END IF;
+  v_conflict := player_tournament_conflict(v_player, v_club);
+  IF v_conflict IS NOT NULL THEN
+    RETURN jsonb_build_object('player', NULL, 'conflict', v_conflict);
+  END IF;
+  INSERT INTO club_players (club_id, player_id, shirt_number, position, variant, is_coach, active, created_at)
+  VALUES (v_club, v_player, p ->> 'shirtNumber', p ->> 'position', v_variant, false, true, CURRENT_TIMESTAMP)
+  ON CONFLICT (club_id, player_id) DO UPDATE SET
+    shirt_number = EXCLUDED.shirt_number,
+    position = EXCLUDED.position,
+    variant = EXCLUDED.variant,
+    is_coach = false,
+    active = true,
+    deleted_at = NULL
+  RETURNING jsonb_build_object('id', player_id, 'name', (SELECT name FROM players WHERE id = player_id)) INTO v_row;
+  RETURN jsonb_build_object('player', v_row);
+END
+$$;
+CALL api_expose('add_existing_player', 'USER');
+
+-- Busca jugadores de toda la liga por nombre (ADMIN o DT del club, 42501 si no) para sumarlos a la plantilla.
+-- «q»: letras, 3 a 50; acentos y mayúsculas no importan. Hasta 20, sin los que ya están vivos en el club; los que
+-- fueron eliminados aquí vienen con inThisClub 'DELETED' (agregarlos los restaura). clubs_on_player: clubes donde
+-- está hoy (no eliminados), con active por si está de baja.
+CREATE OR REPLACE FUNCTION public.search_players(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid text := require_uid();
+  v_club text := p ->> 'clubId';
+  v_q text := api_clean_text(p ->> 'q');
+  v_term text;
+BEGIN
+  IF NOT has_club_role(v_club, ARRAY['ADMIN', 'DT']) THEN
+    RAISE EXCEPTION 'No autorizado.' USING ERRCODE = '42501';
+  END IF;
+  IF char_length(v_q) NOT BETWEEN 3 AND 50 OR v_q !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$' THEN
+    RETURN jsonb_build_object('players', '[]'::jsonb);
+  END IF;
+  v_term := '%' || translate(lower(v_q), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%';
+  RETURN jsonb_build_object('players', (
+    SELECT coalesce(jsonb_agg(s.pj ORDER BY s.name, s.id), '[]'::jsonb) FROM (
+      SELECT pl.name, pl.id, jsonb_build_object(
+        'id', pl.id, 'name', pl.name, 'imageUrl', pl.image_url, 'birthDate', to_jsonb(pl.birth_date),
+        'inThisClub', CASE WHEN is_club_player(pl.id, v_club) THEN 'DELETED' END,
+        'clubs_on_player', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
+            'active', cp.active) ORDER BY c.name), '[]'::jsonb)
+          FROM club_players cp JOIN clubs c ON c.id = cp.club_id
+          WHERE cp.player_id = pl.id AND cp.deleted_at IS NULL AND c.deleted_at IS NULL)) AS pj
+      FROM players pl
+      WHERE translate(lower(pl.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') LIKE v_term
+        AND NOT is_club_player(pl.id, v_club, true)
+      ORDER BY pl.name, pl.id
+      LIMIT 20) s));
+END
+$$;
+CALL api_expose('search_players', 'USER');
+
+-- Elimina un jugador de la plantilla del club (ADMIN o DT) con borrado lógico (0008): sale de la plantilla y de los
+-- selectores de este club, pero sus goles, tarjetas, asistencias, estadísticas y aportaciones se conservan, y sigue
+-- en sus otros clubes. Eliminarlo otra vez devuelve null.
 CREATE OR REPLACE FUNCTION public.delete_player(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -440,9 +584,9 @@ DECLARE
   v_club text := p ->> 'clubId';
   v_n integer;
 BEGIN
-  UPDATE players
+  UPDATE club_players
   SET deleted_at = now(), active = false
-  WHERE id = p ->> 'id'
+  WHERE player_id = p ->> 'id'
     AND club_id = v_club
     AND deleted_at IS NULL
     AND has_club_role(v_club, ARRAY['ADMIN', 'DT']);
@@ -599,7 +743,7 @@ BEGIN
   WHERE g.id = p ->> 'goalId'
     AND v_amount >= 0
     AND has_club_role(g.club_id, ARRAY['ADMIN', 'TESORERO'])
-    AND EXISTS (SELECT 1 FROM players pl WHERE pl.id = p ->> 'playerId' AND pl.club_id = g.club_id AND pl.deleted_at IS NULL)
+    AND is_club_player(p ->> 'playerId', g.club_id, true)
   ON CONFLICT (goal_id, player_id) DO UPDATE SET amount = EXCLUDED.amount
   RETURNING jsonb_build_object('goal_id', goal_id, 'player_id', player_id, 'amount', amount) INTO v_row;
   RETURN jsonb_build_object('contribution', v_row);

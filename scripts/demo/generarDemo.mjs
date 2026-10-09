@@ -483,7 +483,7 @@ function playMatch(t, match, home, away) {
 // ---------- vida de cada club ----------
 
 const club_rows = {
-  clubs: [], club_hero_images: [], club_availability_windows: [], club_default_lineups: [], players: [],
+  clubs: [], club_hero_images: [], club_availability_windows: [], club_default_lineups: [], players: [], club_players: [],
   club_events: [], club_event_attendees: [], club_event_goals: [], club_event_cards: [], club_event_goalkeepers: [], club_event_photos: [],
   transactions: [], financial_goals: [], goal_contributions: [], inventory_items: [], albums: [], gallery_photos: [],
 };
@@ -518,15 +518,22 @@ CLUBS.forEach((club, ci) => {
     club_id: club.id, mode: "Fut-11", formation: "4-4-2", positions: buildLineup(club, "FUT_11", 0).lineup,
   });
 
+  // La persona va en players y su pertenencia al club (dorsal, posición, cuerpo técnico) en club_players (0010).
+  // Ningún jugador demo está en dos clubes: todos comparten el Apertura activo y un jugador representa a un solo
+  // club por torneo; ese caso se prueba en scripts/db/pruebas/jugadores_multiclub.mjs.
   for (const p of club.players) {
-    club_rows.players.push({
-      id: p.id, club_id: club.id, name: p.name, shirt_number: p.shirt, position: p.position, variant: p.variant,
-      birth_date: p.birth, image_url: "", is_coach: false, active: true, created_at: stamp(-190),
+    club_rows.players.push({ id: p.id, name: p.name, birth_date: p.birth, image_url: "", created_at: stamp(-190) });
+    club_rows.club_players.push({
+      club_id: club.id, player_id: p.id, shirt_number: p.shirt, position: p.position, variant: p.variant,
+      is_coach: false, active: true, deleted_at: null, created_at: stamp(-190),
     });
   }
   club_rows.players.push({
-    id: club.coach.id, club_id: club.id, name: club.coach.name, shirt_number: "S/N", position: "Medio", variant: "",
-    birth_date: `${int(1965, 1980)}-0${int(1, 9)}-1${int(0, 9)}`, image_url: "", is_coach: true, active: true, created_at: stamp(-190),
+    id: club.coach.id, name: club.coach.name, birth_date: `${int(1965, 1980)}-0${int(1, 9)}-1${int(0, 9)}`, image_url: "", created_at: stamp(-190),
+  });
+  club_rows.club_players.push({
+    club_id: club.id, player_id: club.coach.id, shirt_number: "S/N", position: "Medio", variant: "",
+    is_coach: true, active: true, deleted_at: null, created_at: stamp(-190),
   });
 
   // Entrenamientos: dos pasados (con asistencia) y dos próximos.
@@ -693,7 +700,8 @@ const cleanup = [
     "club_members", "club_invites", "signup_invites", "email_outbox"].map((t) => `DELETE FROM ${t} WHERE ${like("club_id")};`),
   `DELETE FROM team_applications WHERE ${like("id")};`,
   `UPDATE team_applications SET club_id = NULL WHERE ${like("club_id")};`,
-  `DELETE FROM players WHERE ${like("club_id")};`,
+  `DELETE FROM club_players WHERE ${like("club_id")};`,
+  `DELETE FROM players WHERE ${like("id")};`,
   `DELETE FROM league_charges WHERE ${like("club_id")};`,
   `DELETE FROM clubs WHERE ${like("id")};`,
   `-- Plataforma`,
@@ -713,7 +721,7 @@ statements.push(
     `  FROM (VALUES ${OPEN_WINDOWS.map((w) => `(${quote(w.id)}, ${w.weekday})`).join(", ")}) AS w(id, weekday)\n` +
     `  WHERE NOT EXISTS (SELECT 1 FROM court_open_windows);`,
 );
-for (const table of ["clubs", "club_hero_images", "club_availability_windows", "club_default_lineups", "players"]) insert(table, club_rows[table]);
+for (const table of ["clubs", "club_hero_images", "club_availability_windows", "club_default_lineups", "players", "club_players"]) insert(table, club_rows[table]);
 for (const table of ["tournament_groups", "tournaments", "tournament_clubs", "tournament_podium", "matches", "match_club_reports",
   "match_goals", "match_cards", "match_goalkeepers", "court_holds"]) insert(table, rows[table]);
 insert("court_holds", platform.manualHolds);

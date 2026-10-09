@@ -210,6 +210,8 @@ export interface AddTournamentClubData {
     };
   };
   row?: unknown | null;
+  /** Solo cuando row es null porque un jugador activo del club ya juega en el torneo con otro club (0010). */
+  conflicts?: { playerName: string; clubName: string }[] | null;
 }
 
 export interface AddTournamentClubVariables {
@@ -749,6 +751,12 @@ export interface ClubScreenData {
       active: boolean;
       /** Eliminado (borrado lógico): se manda para nombrar su historial; no sale en plantilla ni selectores. */
       deletedAt?: TimestampString | null;
+      /** Sus otros clubes actuales (0010): nombre, foto y nacimiento se comparten con ellos. */
+      otherClubs_on_player: {
+        id: string;
+        name: string;
+        slug: string;
+      }[];
     } & Player_Key)[];
     clubEvents_on_club: ({
       id: string;
@@ -2806,8 +2814,58 @@ export interface SavePlatformSocialVariables {
   whatsapp: string;
 }
 
+/** Otro club con el que el jugador ya juega en un torneo en curso compartido (0010: un club por torneo). */
+export interface PlayerTournamentConflict {
+  clubName: string;
+  tournamentName: string;
+}
+
 export interface SavePlayerData {
   player?: unknown | null;
+  /** Solo cuando player es null por reactivar a alguien que ya juega con otro club en el mismo torneo. */
+  conflict?: PlayerTournamentConflict | null;
+}
+
+export interface AddExistingPlayerData {
+  player?: unknown | null;
+  /** 'ALREADY' si ya está vivo en la plantilla (player null). */
+  reason?: "ALREADY" | null;
+  conflict?: PlayerTournamentConflict | null;
+}
+
+export interface AddExistingPlayerVariables {
+  clubId: string;
+  playerId: string;
+  shirtNumber: string;
+  position: string;
+  variant?: string | null;
+}
+
+/** Jugador de la liga encontrado por nombre para sumarlo a la plantilla (search_players). */
+export interface SearchPlayerHit {
+  id: string;
+  name: string;
+  imageUrl: string;
+  birthDate?: DateString | null;
+  /** 'DELETED' si fue eliminado de este club: agregarlo lo restaura con su historial. */
+  inThisClub?: "DELETED" | null;
+  /** Clubes donde está hoy (no eliminado); active false = de baja temporal ahí. */
+  clubs_on_player: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    active: boolean;
+  }[];
+}
+
+export interface SearchPlayersData {
+  players: SearchPlayerHit[];
+}
+
+export interface SearchPlayersVariables {
+  clubId: string;
+  q: string;
 }
 
 export interface SavePlayerVariables {

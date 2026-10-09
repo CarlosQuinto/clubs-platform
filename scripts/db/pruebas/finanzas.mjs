@@ -155,8 +155,8 @@ export async function run({ db, rpc, check }) {
     && mc.filter((c) => c.kind === "MATCH_COURT").length === 2, "jugar un partido registra arbitraje y uso de cancha", mc);
   await rpc("admin", "save_match_score", { id: match.id, homeScore: 3, awayScore: 1, walkover: false });
   check((await charges("c.match_id = $1", [match.id])).length === 4, "guardar otra vez el marcador no duplica");
-  const homePlayer = await one("SELECT id, name FROM players WHERE club_id = $1 ORDER BY id LIMIT 1", [match.home_club_id]);
-  const awayPlayer = await one("SELECT id, name FROM players WHERE club_id = $1 ORDER BY id LIMIT 1", [match.away_club_id]);
+  const homePlayer = await one("SELECT pl.id, pl.name FROM club_players cp JOIN players pl ON pl.id = cp.player_id WHERE cp.club_id = $1 ORDER BY pl.id LIMIT 1", [match.home_club_id]);
+  const awayPlayer = await one("SELECT pl.id, pl.name FROM club_players cp JOIN players pl ON pl.id = cp.player_id WHERE cp.club_id = $1 ORDER BY pl.id LIMIT 1", [match.away_club_id]);
   await db.query(`INSERT INTO match_cards (match_id, club_id, player_id, player_name, color, minute) VALUES
     ($1, $2, $3, $4, 'YELLOW', 10), ($1, $5, $6, $7, 'RED', 50)`,
     [match.id, match.home_club_id, homePlayer.id, homePlayer.name, match.away_club_id, awayPlayer.id, awayPlayer.name]);

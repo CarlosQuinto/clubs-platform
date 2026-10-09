@@ -149,6 +149,8 @@ export default function TournamentEditModal({
   const [lateEntry, setLateEntry] = useState<LateEntryChoice | null>(null);
   const [lateEntryHint, setLateEntryHint] = useState(false);
   const [errorOpen, setErrorOpen] = useState(false);
+  /** Motivo que se puede mostrar tal cual (un jugador ya juega el torneo con otro club); vacío = genérico. */
+  const [errorText, setErrorText] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const hasTournament = Boolean(tournament);
@@ -280,7 +282,12 @@ export default function TournamentEditModal({
       for (const clubId of next) {
         if (!previous.has(clubId)) {
           const added = await addTournamentClub(dataConnect, { userId, tournamentId: tournament.id, clubId });
-          if (added.data.row == null) throw new Error("No se pudo guardar.");
+          if (added.data.row == null) {
+            if (added.data.conflicts?.length) {
+              throw new EnrollmentConflictError(enrollmentConflictMessage(clubNames[clubId] || clubId, added.data.conflicts));
+            }
+            throw new Error("No se pudo guardar.");
+          }
         }
       }
       const updated: Tournament = {
@@ -344,6 +351,7 @@ export default function TournamentEditModal({
       console.error(err);
       setBusy(false);
       setSaveOpen(false);
+      setErrorText(err instanceof EnrollmentConflictError ? err.message : "");
       setErrorOpen(true);
     }
   };
@@ -605,6 +613,7 @@ export default function TournamentEditModal({
         <ConfirmModal
           open={errorOpen}
           title="Los cambios no se pudieron guardar."
+          message={errorText || undefined}
           confirmLabel="Entendido"
           cancelLabel="Cerrar"
           onConfirm={() => setErrorOpen(false)}
@@ -871,6 +880,17 @@ function LateEntryOption({
       </span>
     </button>
   );
+}
+
+/** Un jugador activo del club ya juega el torneo con otro club (0010): el motivo se muestra tal cual. */
+class EnrollmentConflictError extends Error {}
+
+function enrollmentConflictMessage(
+  clubName: string,
+  conflicts: { playerName: string; clubName: string }[],
+) {
+  const who = conflicts.map((c) => `${c.playerName} (con ${c.clubName})`).join(", ");
+  return `${clubName} no se inscribió: ${who} ya ${conflicts.length > 1 ? "juegan" : "juega"} este torneo con otro club. Un jugador solo puede representar a un club por torneo.`;
 }
 
 function sameIdList(a: string[], b: string[]) {
