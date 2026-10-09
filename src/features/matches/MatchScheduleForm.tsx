@@ -23,6 +23,9 @@ export interface ScheduleTarget {
 /** Valor del select para escribir la sede a mano en lugar de elegir una cancha. */
 const OTHER = "@otra";
 
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+const MINUTES = ["00", "30"];
+
 /**
  * Programa o reprograma un partido: sugiere horarios, lista solo canchas libres, aparta la cancha y avisa. La sede es una
  * cancha de la liga u «Otra sede», escrita a mano (cancha prestada, partido de visita). Sin canchas (o con el módulo
@@ -120,6 +123,10 @@ export default function MatchScheduleForm({
     return all.filter((court) => freeIds.includes(court.id));
   }, [courts, date, time, freeIds]);
 
+  const [hour = "", minute = ""] = time ? time.split(":") : [];
+  // Solo en punto y y media; un partido guardado con otros minutos (de antes, o de un horario de cancha) los conserva
+  const minuteOptions = minute && !MINUTES.includes(minute) ? [...MINUTES, minute].sort() : MINUTES;
+
   // Sin canchas solo se puede escribir la sede
   const typing = courtId === OTHER || (courts !== null && courts.length === 0);
 
@@ -190,10 +197,36 @@ export default function MatchScheduleForm({
             onChange={(event) => setDate(event.target.value)}
           />
         </label>
-        <label style={field}>
+        <div style={field} role="group" aria-label="Hora">
           <span style={fieldLabel}>Hora</span>
-          <FormInput type="time" value={time} aria-label="Hora" onChange={(event) => setTime(event.target.value)} />
-        </label>
+          <div style={timeRow}>
+            <FormSelect
+              aria-label="Hora"
+              value={hour}
+              onChange={(event) => setTime(event.target.value ? `${event.target.value}:${minute || "00"}` : "")}
+            >
+              <option value="">--</option>
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </FormSelect>
+            <span style={{ fontWeight: 800, color: C.gray500 }}>:</span>
+            <FormSelect
+              aria-label="Minutos"
+              value={minute || "00"}
+              disabled={!hour}
+              onChange={(event) => setTime(`${hour}:${event.target.value}`)}
+            >
+              {minuteOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+        </div>
       </div>
       {courts && courts.length > 0 ? (
         <label style={field}>
@@ -247,6 +280,13 @@ const fieldLabel = {
   letterSpacing: "0.04em",
   textTransform: "uppercase",
   color: C.gray500,
+} as const;
+
+const timeRow = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "0.3rem",
 } as const;
 
 const suggestionButton = {
