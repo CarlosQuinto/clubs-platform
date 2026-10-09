@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Cabecera de sección «Carbón y Oro»: icono dorado, título en mayúsculas y subtítulo (portada y ficha de torneo). */
+/** Cabecera de sección «Carbón y Oro»: icono dorado, título en mayúsculas y subtítulo opcional (portada y ficha de torneo). */
 export default function SectionHead({
   icon,
   title,
@@ -10,7 +10,7 @@ export default function SectionHead({
 }: {
   icon: ReactNode;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   live?: boolean;
   action?: ReactNode;
 }) {
@@ -25,7 +25,7 @@ export default function SectionHead({
             {live ? <span className="home-live-dot" aria-hidden /> : null}
             {title}
           </h2>
-          <p>{subtitle}</p>
+          {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>
       {action ? <div className="home-section__action">{action}</div> : null}

@@ -518,7 +518,7 @@ export default function TournamentEditModal({
               onChange={(e) => setDraftStartDate(e.target.value)}
             />
           </Field>
-          <Field label="Premio al campeón" hint={`Solo para ${catLabel}. Vacío = sin premio.`}>
+          <Field label="Premio al campeón">
             <FormInput
               value={draftPrize}
               maxLength={60}

@@ -4,6 +4,11 @@ import { todayIso } from "../../domains/courts/courts";
 import { asCourtSlot } from "../../shared/types";
 import { toCourtsPage } from "./courtsMapper";
 
+function readClock() {
+  const now = new Date();
+  return { today: todayIso(), nowMinutes: now.getHours() * 60 + now.getMinutes() };
+}
+
 export function useCourtsPage() {
   const [date, setDate] = useState(todayIso);
   const [courtId, setCourtId] = useState<string | null>(null);
@@ -12,7 +17,14 @@ export function useCourtsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Awaited<ReturnType<typeof courtsPage>>["data"] | null>(null);
+  const [clock, setClock] = useState(readClock);
   const request = useRef(0);
+
+  // Con la página abierta, los horarios de hoy se retiran conforme pasa la hora.
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(readClock()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const load = useCallback(() => {
     const ticket = request.current + 1;
@@ -40,8 +52,8 @@ export function useCourtsPage() {
   }, [load]);
 
   const view = useMemo(
-    () => (data ? toCourtsPage(data, { date, courtId, start, duration }) : null),
-    [data, date, courtId, start, duration],
+    () => (data ? toCourtsPage(data, { date, courtId, start, duration, ...clock }) : null),
+    [data, date, courtId, start, duration, clock],
   );
 
   const slot = asCourtSlot(data?.platformSettings?.courtSlotMinutes);

@@ -244,54 +244,48 @@ export default function PlatformLayout({
         {isSuperAdmin && (
           <div className="platform-sidebar__group">
             <div className="platform-sidebar__label">Administración</div>
-            <div className="platform-sidebar__section">
-              <div className="platform-sidebar__section-label">Operación</div>
-              {navLink(
-                "/admin",
-                "Solicitudes",
-                <Inbox size={16} />,
-                pathname === "/admin" && adminTab === "inbox",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=players",
-                "Jugadores",
-                <Users size={16} />,
-                pathname === "/admin" && adminTab === "players",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=courts",
-                "Canchas",
-                <MapPin size={16} />,
-                pathname === "/admin" && adminTab === "courts",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=finances",
-                "Finanzas",
-                <Wallet size={16} />,
-                pathname === "/admin" && adminTab === "finances",
-                true,
-              )}
-            </div>
-            <div className="platform-sidebar__section">
-              <div className="platform-sidebar__section-label">Plataforma</div>
-              {navLink(
-                "/admin?tab=content",
-                "Contenido",
-                <ImageIcon size={16} />,
-                pathname === "/admin" && adminTab === "content",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=admins",
-                "Administradores",
-                <Crown size={16} />,
-                pathname === "/admin" && adminTab === "admins",
-                true,
-              )}
-            </div>
+            {navLink(
+              "/admin",
+              "Solicitudes",
+              <Inbox size={16} />,
+              pathname === "/admin" && adminTab === "inbox",
+              true,
+            )}
+            {navLink(
+              "/admin?tab=players",
+              "Jugadores",
+              <Users size={16} />,
+              pathname === "/admin" && adminTab === "players",
+              true,
+            )}
+            {navLink(
+              "/admin?tab=courts",
+              "Canchas",
+              <MapPin size={16} />,
+              pathname === "/admin" && adminTab === "courts",
+              true,
+            )}
+            {navLink(
+              "/admin?tab=finances",
+              "Finanzas",
+              <Wallet size={16} />,
+              pathname === "/admin" && adminTab === "finances",
+              true,
+            )}
+            {navLink(
+              "/admin?tab=content",
+              "Contenido",
+              <ImageIcon size={16} />,
+              pathname === "/admin" && adminTab === "content",
+              true,
+            )}
+            {navLink(
+              "/admin?tab=admins",
+              "Administradores",
+              <Crown size={16} />,
+              pathname === "/admin" && adminTab === "admins",
+              true,
+            )}
           </div>
         )}
       </nav>

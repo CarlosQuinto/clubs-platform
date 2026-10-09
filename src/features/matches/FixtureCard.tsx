@@ -46,20 +46,25 @@ export default function FixtureCard({
             </strong>
             <span title={match.venue || undefined}>{match.venue || "Sede por definir"}</span>
           </div>
-          {match.categoryName ? (
-            <span className="home-chip" title={match.categoryName}>
-              {match.categoryName}
-            </span>
-          ) : null}
         </div>
         <div className="home-fixture__teams">
           <FixtureTeam name={match.homeName} logo={match.homeLogo} role="Local" />
           <FixtureTeam name={match.awayName} logo={match.awayLogo} role="Visita" />
         </div>
-        {match.tournamentName ? (
+        {match.tournamentName || match.categoryName ? (
           <div className="home-card__foot">
-            <Trophy size={14} aria-hidden />
-            <span>{match.tournamentName}</span>
+            {match.tournamentName ? (
+              <>
+                <Trophy size={14} aria-hidden />
+                <span title={match.tournamentName}>{match.tournamentName}</span>
+              </>
+            ) : null}
+            {match.categoryName ? (
+              <span className="home-fixture__category" title={match.categoryName}>
+                {match.tournamentName ? "· " : null}
+                {match.categoryName}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </Link>

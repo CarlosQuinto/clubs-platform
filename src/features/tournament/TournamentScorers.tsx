@@ -14,7 +14,6 @@ export default function TournamentScorers({ scorers }: { scorers: ScorerRowView[
       <TeamsEmpty
         icon={<Goal size={20} />}
         title="Sin goles registrados todavía."
-        hint="Los goleadores aparecerán aquí al cargar los marcadores."
       />
     );
   }
@@ -50,11 +49,6 @@ export default function TournamentScorers({ scorers }: { scorers: ScorerRowView[
           </li>
         ))}
       </ol>
-      {scorers.length > TOP ? (
-        <p className="tour-scorers__note">
-          Top {TOP} de {scorers.length} jugadores con gol o asistencia.
-        </p>
-      ) : null}
     </div>
   );
 }

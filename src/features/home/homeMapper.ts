@@ -89,7 +89,6 @@ function toTournamentCard(
     id: tournament.id,
     href: `/torneos/${tournament.id}`,
     name: tournament.name,
-    phase,
     playedMatches: clubCount(tournament.matches_on_tournament),
     categoryName: tournament.category.name,
     meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType]]
@@ -116,22 +115,8 @@ function toStats(row: HomePageData["platformStats"][number] | undefined): HomeSt
   return [
     { value: tournaments, label: plural(tournaments, "Torneo", "Torneos") },
     { value: clubs, label: plural(clubs, "Equipo", "Equipos") },
-    { value: players, label: plural(players, "Jugador registrado", "Jugadores registrados") },
+    { value: players, label: plural(players, "Jugador", "Jugadores") },
   ].filter((stat) => stat.value > 0);
-}
-
-/** Temporada más repetida entre los torneos vigentes, con cuántos están en curso. */
-function seasonLabel(active: TournamentRow[], upcoming: TournamentRow[]): string | null {
-  const pool = active.length > 0 ? active : upcoming;
-  const counts = new Map<string, number>();
-  for (const tournament of pool) {
-    const name = tournament.season.name.trim();
-    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-  const season = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  if (!season) return null;
-  if (active.length === 0) return `Temporada ${season} · Próximos torneos`;
-  return `Temporada ${season} · ${active.length} ${plural(active.length, "torneo en curso", "torneos en curso")}`;
 }
 
 function toMatch(
@@ -201,16 +186,12 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
   const joinBase = settings?.whatsapp?.trim() || "";
   const active: HomeTournamentCard[] = [];
   const upcoming: HomeTournamentCard[] = [];
-  const activeRows: TournamentRow[] = [];
-  const upcomingRows: TournamentRow[] = [];
   for (const tournament of data.tournaments) {
     const phase = phaseOf(tournament, today);
     if (phase === "upcoming") {
       upcoming.push(toTournamentCard(tournament, joinBase, phase));
-      upcomingRows.push(tournament);
     } else if (phase === "active") {
       active.push(toTournamentCard(tournament, joinBase, phase));
-      activeRows.push(tournament);
     }
   }
   const courtsEnabled = settings?.courtsEnabled === true;
@@ -231,7 +212,6 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
       headline: settings?.headline.trim() || PLATFORM_HEADLINE,
       tagline: settings?.tagline.trim() || PLATFORM_DESCRIPTION,
       courtsEnabled,
-      seasonLabel: seasonLabel(activeRows, upcomingRows),
       stats: toStats(data.platformStats?.[0]),
     },
     ads: toAds(data.adPlacements, today),

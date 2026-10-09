@@ -88,7 +88,6 @@ export default function HomePageView() {
     headline: PLATFORM_HEADLINE,
     tagline: PLATFORM_DESCRIPTION,
     courtsEnabled: false,
-    seasonLabel: null,
     stats: [],
   };
   const matches = home.view?.matches ?? [];
@@ -144,7 +143,6 @@ export default function HomePageView() {
           tone="card"
           icon={<CalendarDays size={22} />}
           title="Próximos partidos"
-          subtitle="Rol de juegos y sedes"
           action={<SeeAll to="/partidos" />}
         >
           {unclaimed && user ? (
@@ -238,12 +236,6 @@ function HomeHero({ hero, editable }: { hero: HomeHeroView; editable: boolean })
       ) : null}
       <div className="home-inner home-hero__inner">
         <div className="home-hero__content">
-          {hero.seasonLabel ? (
-            <span className="home-hero__pill">
-              <span className="home-hero__pill-dot" aria-hidden />
-              {hero.seasonLabel}
-            </span>
-          ) : null}
           <h1>{hero.headline}</h1>
           <p>{hero.tagline}</p>
           <div className="home-hero__actions">
@@ -283,7 +275,6 @@ function Section({
   tone,
   icon,
   title,
-  subtitle,
   live,
   action,
   children,
@@ -292,7 +283,6 @@ function Section({
   tone: "card" | "low";
   icon: ReactNode;
   title: string;
-  subtitle: string;
   live?: boolean;
   action?: ReactNode;
   children: ReactNode;
@@ -300,7 +290,7 @@ function Section({
   return (
     <section id={id} className={`home-section home-section--${tone}`}>
       <div className="home-inner">
-        <SectionHead icon={icon} title={title} subtitle={subtitle} live={live} action={action} />
+        <SectionHead icon={icon} title={title} live={live} action={action} />
         {children}
       </div>
     </section>
@@ -324,7 +314,6 @@ function LiveSection({ matches }: { matches: LiveMatchView[] }) {
       tone="low"
       icon={<Radio size={22} />}
       title={playing ? "En vivo" : "Resultados de hoy"}
-      subtitle={playing ? "Marcadores oficiales en tiempo real" : "Marcadores de la jornada"}
       live={playing}
     >
       <div className="home-grid">
@@ -496,7 +485,6 @@ function TournamentsSection({
       tone="low"
       icon={<Trophy size={22} />}
       title="Torneos"
-      subtitle="Ligas y copas vigentes"
       action={
         <>
           {tabs}

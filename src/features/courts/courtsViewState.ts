@@ -31,14 +31,18 @@ export interface BookingSummaryView {
 
 export type CourtsAvailability = "ready" | "disabled" | "no-hours" | "no-courts";
 
+/** Por qué no hay horarios que mostrar: día pasado, cerrado, ya sin horarios hoy u ocupado. */
+export type CourtsNoSlots = "past" | "closed" | "over" | "booked";
+
 export interface CourtsPageView {
   availability: CourtsAvailability;
   whatsappMissing: boolean;
   courts: CourtCardView[];
   date: string;
+  /** Hoy: no se aparta en días pasados. */
+  minDate: string;
   slots: TimeSlotView[];
-  dayClosed: boolean;
-  fullyBooked: boolean;
+  noSlots: CourtsNoSlots | null;
   durations: DurationOptionView[];
   duration: string;
   summary: BookingSummaryView | null;

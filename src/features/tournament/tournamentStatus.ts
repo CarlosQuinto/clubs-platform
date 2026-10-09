@@ -1,4 +1,4 @@
-/** Insignia `home-status` según la fase del torneo (tarjetas de torneo y ficha). */
+/** Insignia `home-status` según la fase del torneo (ficha del torneo). */
 export const TOURNAMENT_STATUS = {
   active: { className: "is-active", label: "En curso" },
   upcoming: { className: "is-soon", label: "Próximamente" },

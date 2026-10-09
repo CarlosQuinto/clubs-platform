@@ -30,7 +30,7 @@ export function TeamsEmpty({
 }: {
   icon: ReactNode;
   title: string;
-  hint: string;
+  hint?: string;
   loading?: boolean;
 }) {
   return (
@@ -40,7 +40,7 @@ export function TeamsEmpty({
       </span>
       <div>
         <strong>{title}</strong>
-        <p>{hint}</p>
+        {hint ? <p>{hint}</p> : null}
       </div>
     </div>
   );
@@ -68,7 +68,7 @@ export function Ranking({
   hasMore?: boolean;
   onMore?: () => void;
   emptyTitle: string;
-  emptyHint: string;
+  emptyHint?: string;
 }) {
   if (rows.length === 0) {
     return <TeamsEmpty icon={<ListFilter size={20} />} title={emptyTitle} hint={emptyHint} />;

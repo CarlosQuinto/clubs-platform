@@ -3,6 +3,7 @@ import { tournamentPhase } from "../../domains/competition/tournamentPhase";
 import { todayIso } from "../../domains/platform/ads";
 import { whatsappUrl } from "../../domains/platform/social";
 import { formatCalendarDate } from "./tournamentMapper";
+import type { TournamentPhase } from "./tournamentStatus";
 import type {
   TournamentArchiveView,
   TournamentTileView,
@@ -40,7 +41,7 @@ function phaseOf(tournament: TournamentRow, today: string) {
 function toCard(
   tournament: TournamentRow,
   joinBase: string,
-  phase: TournamentTileView["phase"],
+  phase: TournamentPhase,
 ): TournamentTileView {
   const clubs = clubCount(tournament.tournamentClubs_on_tournament);
   const begins = formatCalendarDate(tournament.startDate || tournament.season.startDate);
@@ -55,7 +56,6 @@ function toCard(
     id: tournament.id,
     href: `/torneos/${tournament.id}`,
     name: tournament.name,
-    phase,
     playedMatches: clubCount(tournament.matches_on_tournament),
     categoryName: tournament.category.name,
     meta: [tournament.season.name, FOOTBALL_LABEL[tournament.footballType]]

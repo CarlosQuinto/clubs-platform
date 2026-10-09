@@ -3,7 +3,6 @@ export interface TournamentTileView {
   id: string;
   href: string;
   name: string;
-  phase: "active" | "upcoming" | "finished";
   playedMatches: number;
   categoryName: string;
   meta: string;

@@ -238,7 +238,7 @@ export default function InboxAdmin() {
         </SectionCard>
       )}
       <SectionCard
-        title={`Equipos pendientes (${pending.length})`}
+        title={`Solicitudes de equipos (${pending.length})`}
         icon={<UserPlus size={16} color={C.amber} />}
       >
         {pending.length === 0 ? (

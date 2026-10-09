@@ -848,14 +848,7 @@ function CourtFormModal({
               />
             </svg>
           </span>
-          <div>
-            <h3 id="court-form-title">{editing ? "Editar cancha" : "Nueva cancha"}</h3>
-            <p>
-              {editing
-                ? "Actualiza la información de esta cancha."
-                : "Completa la información para registrar una nueva cancha."}
-            </p>
-          </div>
+          <h3 id="court-form-title">{editing ? "Editar cancha" : "Nueva cancha"}</h3>
           <button type="button" className="court-form__close" aria-label="Cerrar" onClick={onCancel}>
             <X size={18} />
           </button>
@@ -891,22 +884,6 @@ function CourtFormModal({
             </span>
           </label>
           <label className="court-form__label">
-            Ubicación
-            <span className="court-form__field">
-              <MapPin size={16} aria-hidden="true" />
-              <FormInput
-                value={location}
-                disabled={busy}
-                maxLength={COURT_LOCATION_LIMIT}
-                placeholder="Col. Centro, Calle 5 #12"
-                onChange={(event) => onLocation(courtLocation(event.target.value))}
-              />
-            </span>
-            <small className="court-form__help">
-              Opcional. Se muestra antes del nombre de la cancha en los partidos y en la renta.
-            </small>
-          </label>
-          <label className="court-form__label">
             Costo por hora
             <span className="court-form__field">
               <CircleDollarSign size={16} aria-hidden="true" />
@@ -921,16 +898,8 @@ function CourtFormModal({
               />
             </span>
           </label>
-
           <div className={`court-form__football${football ? " is-on" : ""}`}>
-            <span>
-              <strong>Apta para torneos de fútbol</strong>
-              <small>
-                {football
-                  ? "Se programa en el calendario de partidos."
-                  : "Solo renta. No entra por tamaño o condiciones."}
-              </small>
-            </span>
+            <strong>Apta para torneos de fútbol</strong>
             <button
               type="button"
               role="switch"
@@ -943,9 +912,26 @@ function CourtFormModal({
               <span />
             </button>
           </div>
+          <label className="court-form__label">
+            <span>
+              Ubicación <span className="court-form__optional">(opcional)</span>
+            </span>
+            <span className="court-form__field">
+              <MapPin size={16} aria-hidden="true" />
+              <FormInput
+                value={location}
+                disabled={busy}
+                maxLength={COURT_LOCATION_LIMIT}
+                placeholder="Col. Centro, Calle 5 #12"
+                onChange={(event) => onLocation(courtLocation(event.target.value))}
+              />
+            </span>
+          </label>
 
           <div className="court-form__label">
-            Foto
+            <span>
+              Foto <span className="court-form__optional">(opcional)</span>
+            </span>
             <div className="court-form__photo">
               {preview ? (
                 <img src={preview} alt="" />
@@ -964,7 +950,6 @@ function CourtFormModal({
                   <Upload size={15} />
                   Elegir archivo
                 </button>
-                <p>Opcional. JPG, PNG o WEBP de hasta 5 MB. Sin foto se muestra la cancha por defecto.</p>
                 {photoError ? (
                   <p style={{ color: C.red }} role="alert">
                     {photoError}

@@ -17,6 +17,9 @@ export interface CourtsSelection {
   courtId: string | null;
   start: number | null;
   duration: number;
+  /** Fecha de hoy (YYYY-MM-DD) y minuto del día actual, en hora local. */
+  today: string;
+  nowMinutes: number;
 }
 
 function money(value: number) {
@@ -58,32 +61,41 @@ export function toCourtsPage(data: CourtsPageData, selection: CourtsSelection): 
   const courts = data.courts;
   const selected = courts.find((court) => court.id === selection.courtId) || courts[0] || null;
   const day = weekdayOf(selection.date);
+  const past = selection.date < selection.today;
   const starts = day ? daySlotStarts(windows, day, slot) : [];
+  // Hoy solo se ofrecen los horarios que aún no empiezan; un día pasado no ofrece ninguno.
+  const upcoming = past
+    ? []
+    : selection.date === selection.today
+      ? starts.filter((minutes) => minutes > selection.nowMinutes)
+      : starts;
   const freeStarts = selected
-    ? starts.filter((minutes) => !slotOccupied(holds, selected.id, selection.date, minutes, slot))
+    ? upcoming.filter((minutes) => !slotOccupied(holds, selected.id, selection.date, minutes, slot))
     : [];
+  // Un horario elegido que ya pasó (o se ocupó al recargar) deja de contar.
+  const start = selection.start != null && freeStarts.includes(selection.start) ? selection.start : null;
   const maxMinutes =
-    selected == null || selection.start == null
+    selected == null || start == null
       ? 0
       : maxFreeMinutes({
           holds,
           courtId: selected.id,
           date: selection.date,
-          start: selection.start,
+          start,
           slotMinutes: slot,
           openWindows: windows,
         });
   const durations: number[] = [];
   for (let minutes = slot; minutes <= maxMinutes; minutes += slot) durations.push(minutes);
   const chosen = durations.includes(selection.duration) ? selection.duration : durations[0] || 0;
-  const end = selection.start == null || !chosen ? null : selection.start + chosen;
+  const end = start == null || !chosen ? null : start + chosen;
   const cost = selected == null || end == null ? null : (selected.hourlyRate * chosen) / 60;
   const whatsappHref =
-    selected == null || end == null || selection.start == null
+    selected == null || end == null || start == null
       ? null
       : whatsappUrl(
           whatsapp,
-          `Hola, quiero apartar ${selected.name} el ${formatFriendlyDate(selection.date)} de ${formatFriendlyTime(fromMinutes(selection.start))} a ${formatFriendlyTime(fromMinutes(end))} (${formatDuration(chosen)}).`,
+          `Hola, quiero apartar ${selected.name} el ${formatFriendlyDate(selection.date)} de ${formatFriendlyTime(fromMinutes(start))} a ${formatFriendlyTime(fromMinutes(end))} (${formatDuration(chosen)}).`,
         ) || null;
 
   let availability: CourtsPageView["availability"] = "ready";
@@ -105,26 +117,34 @@ export function toCourtsPage(data: CourtsPageData, selection: CourtsSelection): 
       selected: court.id === selected?.id,
     })),
     date: selection.date,
+    minDate: selection.today,
     slots: freeStarts.map((minutes) => ({
       minutes,
       label: formatFriendlyTime(fromMinutes(minutes)),
-      selected: minutes === selection.start,
+      selected: minutes === start,
     })),
-    dayClosed: starts.length === 0,
-    fullyBooked: starts.length > 0 && freeStarts.length === 0,
+    noSlots: past
+      ? "past"
+      : starts.length === 0
+        ? "closed"
+        : upcoming.length === 0
+          ? "over"
+          : freeStarts.length === 0
+            ? "booked"
+            : null,
     durations: durations.map((minutes) => ({
       minutes,
       label: formatDuration(minutes),
     })),
     duration: durations.length === 0 ? "" : String(chosen),
     summary:
-      availability === "ready" && selected && end != null && cost != null && selection.start != null
+      availability === "ready" && selected && end != null && cost != null && start != null
         ? {
             imageUrl: selected.imageUrl?.trim() || null,
             name: selected.name,
             dateLabel: formatFriendlyDate(selection.date),
-            rangeLabel: `${formatFriendlyTime(fromMinutes(selection.start))} – ${formatFriendlyTime(fromMinutes(end))} · ${formatDuration(chosen)}`,
-            priceLabel: `$${money(cost)} estimados`,
+            rangeLabel: `${formatFriendlyTime(fromMinutes(start))} – ${formatFriendlyTime(fromMinutes(end))} · ${formatDuration(chosen)}`,
+            priceLabel: `Total: $${money(cost)}`,
             whatsappHref,
           }
         : null,

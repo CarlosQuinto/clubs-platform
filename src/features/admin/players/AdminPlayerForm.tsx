@@ -24,7 +24,7 @@ export interface AdminPlayerFormInitial {
 
 /**
  * Alta o edición de un jugador desde /admin. Al crear, el club es opcional (sin él queda libre y los clubes lo
- * encuentran con «¿Ya juega en otro club?»); al editar solo cambian nombre, nacimiento y foto, que se ven en todos
+ * encuentran con «Agregar un jugador de otro club»); al editar solo cambian nombre, nacimiento y foto, que se ven en todos
  * sus clubes. Avisa si ya hay alguien con un nombre parecido para no crear duplicados.
  */
 export default function AdminPlayerForm({

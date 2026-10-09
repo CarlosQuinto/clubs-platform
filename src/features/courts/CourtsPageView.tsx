@@ -6,7 +6,14 @@ import PlatformLayout from "../shell/PlatformLayout";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { FormInput, FormSelect } from "../../shared/ui";
 import { useCourtsPage } from "./useCourtsPage";
-import type { CourtCardView } from "./courtsViewState";
+import type { CourtCardView, CourtsNoSlots } from "./courtsViewState";
+
+const NO_SLOTS_TEXT: Record<CourtsNoSlots, string> = {
+  past: "Esa fecha ya pasó: elige hoy o un día próximo.",
+  closed: "Este día la cancha está cerrada.",
+  over: "Ya no quedan horarios para hoy: elige otro día.",
+  booked: "No hay horarios libres este día.",
+};
 
 export default function CourtsPageView() {
   const { isSuperAdmin: warnMissingWhatsapp } = useAuth();
@@ -38,7 +45,7 @@ export default function CourtsPageView() {
           <p className="rent-warn">Falta el WhatsApp de la portada para que la gente pueda apartar.</p>
         ) : null}
         <section className="rent-block">
-          <BlockTitle icon={<MapPin size={18} />} title="Canchas" hint="Selecciona la cancha que deseas rentar" />
+          <BlockTitle icon={<MapPin size={18} />} title="Canchas" />
           <div className="rent-courts">
             {view.courts.map((court) => (
               <CourtButton key={court.id} court={court} onSelect={screen.onSelectCourt} />
@@ -46,11 +53,12 @@ export default function CourtsPageView() {
           </div>
         </section>
         <section className="rent-block">
-          <BlockTitle icon={<Calendar size={18} />} title="Día" hint="Selecciona la fecha de tu reserva" />
+          <BlockTitle icon={<Calendar size={18} />} title="Día" />
           <label className="rent-date">
             <FormInput
               type="date"
               value={view.date}
+              min={view.minDate}
               aria-label="Día"
               onChange={(event) => screen.onDate(event.target.value)}
               style={{ borderRadius: 12, minHeight: 48, paddingRight: "2.6rem" }}
@@ -59,11 +67,9 @@ export default function CourtsPageView() {
           </label>
         </section>
         <section className="rent-block">
-          <BlockTitle icon={<Clock size={18} />} title="Horario" hint="Elige el horario disponible" />
-          {view.dayClosed ? (
-            <p className="rent-empty">Este día la cancha está cerrada.</p>
-          ) : view.fullyBooked ? (
-            <p className="rent-empty">No hay horarios libres este día.</p>
+          <BlockTitle icon={<Clock size={18} />} title="Horario" />
+          {view.noSlots ? (
+            <p className="rent-empty">{NO_SLOTS_TEXT[view.noSlots]}</p>
           ) : (
             <div className="rent-slots">
               {view.slots.map((slot) => (
@@ -81,7 +87,7 @@ export default function CourtsPageView() {
           )}
         </section>
         <section className="rent-block">
-          <BlockTitle icon={<Timer size={18} />} title="Duración" hint="Selecciona el tiempo de tu partida" />
+          <BlockTitle icon={<Timer size={18} />} title="Duración" />
           <FormSelect
             className="rent-duration"
             aria-label="Duración"
@@ -209,14 +215,11 @@ function CourtButton({
   );
 }
 
-function BlockTitle({ icon, title, hint }: { icon: ReactNode; title: string; hint: string }) {
+function BlockTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <div className="rent-head">
       <span className="rent-head__icon">{icon}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{hint}</p>
-      </div>
+      <h2>{title}</h2>
     </div>
   );
 }

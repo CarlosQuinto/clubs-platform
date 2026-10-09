@@ -5,7 +5,6 @@ import { useTournamentEdit } from "./TournamentEditModal";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { markScrollTopAfterNav } from "../shell/PlatformLayout";
 import { dataConnect, deleteUnplayedTournament } from "../../infrastructure/dataconnect";
-import { TOURNAMENT_STATUS } from "./tournamentStatus";
 import type { TournamentTileView } from "./tournamentArchiveViewState";
 
 export default function TournamentTile({
@@ -21,7 +20,6 @@ export default function TournamentTile({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const canDelete = admin && card.playedMatches === 0;
-  const status = TOURNAMENT_STATUS[card.phase];
 
   const confirmDelete = async () => {
     try {
@@ -46,19 +44,14 @@ export default function TournamentTile({
   return (
     <article className="home-card home-tour">
       <div className="home-tour__body">
-        <div className="home-tour__top">
-          {card.categoryName ? (
+        {/* Sin estado: la portada (pestañas) y /torneos (secciones) ya agrupan por en curso / próximos. */}
+        {card.categoryName ? (
+          <div className="home-tour__top">
             <span className="home-chip home-chip--round" title={card.categoryName}>
               {card.categoryName}
             </span>
-          ) : (
-            <span />
-          )}
-          <span className={`home-status ${status.className}`}>
-            <span className="home-status__dot" aria-hidden />
-            {status.label}
-          </span>
-        </div>
+          </div>
+        ) : null}
         <h3>
           {/* Se estira sobre toda la tarjeta (::after); los botones quedan encima con su propia acción. */}
           <Link to={card.href} className="home-tour__link" onClick={markScrollTopAfterNav}>
@@ -79,7 +72,7 @@ export default function TournamentTile({
           <div>
             <dt>
               <Users size={16} aria-hidden />
-              Equipos inscritos:
+              Inscritos:
             </dt>
             <dd>{card.clubsLabel}</dd>
           </div>
@@ -87,7 +80,7 @@ export default function TournamentTile({
             <div>
               <dt>
                 <Medal size={16} aria-hidden />
-                Premio al campeón:
+                Premio:
               </dt>
               <dd className="is-gold">{card.prize}</dd>
             </div>

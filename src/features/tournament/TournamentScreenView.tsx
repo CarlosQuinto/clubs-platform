@@ -177,16 +177,15 @@ export default function TournamentScreenView() {
         {view.showPodium ? <PodiumSection slots={view.podium} /> : null}
 
         <section className="tour-detail__section">
-          <SectionHead icon={<ListOrdered size={22} />} title="Posiciones" subtitle="Tabla del torneo" />
+          <SectionHead icon={<ListOrdered size={22} />} title="Posiciones" />
           <Ranking
             rows={view.standings}
             emptyTitle="Sin partidos oficiales todavía."
-            emptyHint="La tabla se arma con los marcadores de cada jornada."
           />
         </section>
 
         <section className="tour-detail__section">
-          <SectionHead icon={<Goal size={22} />} title="Goleadores" subtitle="Los máximos anotadores" />
+          <SectionHead icon={<Goal size={22} />} title="Goleadores" />
           <TournamentScorers scorers={view.scorers} />
         </section>
 
@@ -194,7 +193,7 @@ export default function TournamentScreenView() {
           <SectionHead
             icon={<CalendarDays size={22} />}
             title="Calendario"
-            subtitle={rounds ? `${rounds} ${rounds === 1 ? "jornada" : "jornadas"}` : "Partidos del torneo"}
+            subtitle={rounds ? `${rounds} ${rounds === 1 ? "jornada" : "jornadas"}` : undefined}
           />
           <TournamentCalendarPanel rounds={view.rounds} admin={isSuperAdmin && view.phase !== "finished"} onSaved={onRefresh} />
         </section>

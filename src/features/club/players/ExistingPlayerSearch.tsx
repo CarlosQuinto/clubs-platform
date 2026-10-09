@@ -71,10 +71,9 @@ export default function ExistingPlayerSearch({ clubId, onPick }: ExistingPlayerS
   };
 
   return (
-    <SectionCard className="compact-form-card" title="¿Ya juega en otro club?" icon={<Search size={14} />}>
+    <SectionCard className="compact-form-card" title="Agregar un jugador de otro club" icon={<Search size={14} />}>
       <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", color: C.gray500, lineHeight: 1.4 }}>
-        Busca al jugador por nombre y súmalo con el dorsal y la posición de este equipo: su nombre, foto y
-        estadísticas de cada club se conservan. Si no aparece, fíchalo abajo.
+        Búscalo y súmalo a este equipo.
       </p>
       <div style={{ position: "relative" }}>
         <Search size={16} color={C.gray400} style={{ position: "absolute", top: "50%", left: "0.75rem", transform: "translateY(-50%)" }} />
@@ -82,7 +81,7 @@ export default function ExistingPlayerSearch({ clubId, onPick }: ExistingPlayerS
           value={query}
           maxLength={50}
           onChange={(e) => setQuery(personName(e.target.value, 50))}
-          placeholder="Nombre del jugador (mínimo 3 letras)"
+          placeholder="Nombre del jugador"
           aria-label="Buscar jugador en la liga"
           style={{ paddingLeft: "2.25rem", width: "100%" }}
         />

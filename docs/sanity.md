@@ -105,7 +105,7 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
    - da de baja temporal a uno y luego reactívalo.
 2. **[C]** En `/admin?tab=players`:
    - crea `QA Libre` sin club; el filtro «Sin club» lo encuentra;
-   - como DT, «¿Ya juega en otro club?» lo encuentra y lo suma.
+   - como DT, «Agregar un jugador de otro club» lo encuentra y lo suma.
 3. **[M]** En `/admin?tab=players`, crea un duplicado y únelo con «Unir duplicado», confirmando con el nombre. Queda una sola ficha, con todos sus clubes.
 4. **[C]** «Ver ficha completa» abre `/jugadores/:id`:
    - funciona también en incógnito;

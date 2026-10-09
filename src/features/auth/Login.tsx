@@ -97,6 +97,14 @@ export default function Login() {
     }
   };
 
+  // El inicio de sesión normal no lleva texto bajo el título.
+  const hint =
+    mode === "reset"
+      ? "Escribe tu correo y te enviaremos un enlace."
+      : platformUnclaimed
+        ? "Crea la primera cuenta para tomar la plataforma, o entra si ya la tienes."
+        : null;
+
   return (
     <PlatformLayout maxWidth="480px">
       <div
@@ -135,26 +143,24 @@ export default function Login() {
             fontSize: "1.35rem",
             fontWeight: 900,
             color: C.navy900,
-            margin: "0 0 0.25rem",
+            margin: hint ? "0 0 0.25rem" : "0 0 1.5rem",
           }}
         >
           {mode === "reset" ? "Recuperar contraseña" : "Iniciar sesión"}
         </h1>
-        <p
-          style={{
-            margin: "0 0 1.5rem",
-            fontSize: "0.85rem",
-            color: C.gray500,
-            textAlign: "center",
-            lineHeight: 1.4,
-          }}
-        >
-          {mode === "reset"
-            ? "Escribe tu correo y te enviaremos un enlace."
-            : platformUnclaimed
-              ? "Crea la primera cuenta para tomar la plataforma, o entra si ya la tienes."
-              : "Accede con el correo con el que fuiste invitado."}
-        </p>
+        {hint ? (
+          <p
+            style={{
+              margin: "0 0 1.5rem",
+              fontSize: "0.85rem",
+              color: C.gray500,
+              textAlign: "center",
+              lineHeight: 1.4,
+            }}
+          >
+            {hint}
+          </p>
+        ) : null}
 
         <form
           onSubmit={handleSubmit}

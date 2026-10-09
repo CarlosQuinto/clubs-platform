@@ -24,7 +24,6 @@ export default function TournamentArchiveView() {
           </span>
           <div className="teams-head__copy">
             <h1>Torneos</h1>
-            <p>Ligas y copas de cada temporada</p>
           </div>
           {isSuperAdmin ? (
             <div className="teams-head__actions">

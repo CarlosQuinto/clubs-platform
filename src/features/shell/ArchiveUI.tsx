@@ -11,18 +11,18 @@ export function ArchiveSection({
 }: {
   title: string;
   count: number;
-  /** Texto del contador; por omisión «N torneos». */
-  countLabel?: string;
+  /** Texto del contador; por omisión «N torneos»; `null` lo oculta. */
+  countLabel?: string | null;
   collapsed?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!collapsed);
-  const label = countLabel ?? (count === 1 ? "1 torneo" : `${count} torneos`);
+  const label = countLabel === undefined ? (count === 1 ? "1 torneo" : `${count} torneos`) : countLabel;
   const heading = (
     <>
       {collapsed && <ChevronDown size={16} className={open ? "is-open" : ""} />}
       <span className="tour-band__title">{title}</span>
-      <span className="tour-band__count">{label}</span>
+      {label ? <span className="tour-band__count">{label}</span> : null}
     </>
   );
 

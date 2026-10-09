@@ -61,7 +61,6 @@ export default function TournamentCalendarPanel({
       <TeamsEmpty
         icon={<CalendarX2 size={20} />}
         title="Este torneo todavía no tiene partidos."
-        hint="El calendario aparecerá aquí cuando se programen las jornadas."
       />
     );
   }
@@ -120,12 +119,11 @@ export default function TournamentCalendarPanel({
 
 function RoundBlock({ round, children }: { round: RoundView; children: ReactNode }) {
   const title = /^\d+$/.test(round.label) ? `Jornada ${round.label}` : round.label;
-  const count = round.matches.length;
   return (
     <ArchiveSection
       title={title}
-      count={count}
-      countLabel={`${count} ${count === 1 ? "partido" : "partidos"}`}
+      count={round.matches.length}
+      countLabel={null}
       collapsed={round.collapsed}
     >
       <div className="home-grid">{children}</div>

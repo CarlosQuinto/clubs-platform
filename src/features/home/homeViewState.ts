@@ -12,8 +12,6 @@ export interface HomeHeroView {
   headline: string;
   tagline: string;
   courtsEnabled: boolean;
-  /** «Temporada 2026 · 3 torneos en curso»; null sin torneos vigentes. */
-  seasonLabel: string | null;
   /** Cifras reales de la plataforma; solo las mayores que cero. */
   stats: HomeStatView[];
 }
@@ -28,7 +26,6 @@ export interface HomeTournamentCard {
   id: string;
   href: string;
   name: string;
-  phase: "active" | "upcoming";
   playedMatches: number;
   categoryName: string;
   meta: string;

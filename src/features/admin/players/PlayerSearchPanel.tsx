@@ -51,7 +51,7 @@ export default function PlayerSearchPanel({
   }, [ready, term, free, refreshKey]);
 
   return (
-    <SectionCard className="compact-form-card" title="Jugadores de la liga" icon={<Users size={14} color={C.amber} />}>
+    <SectionCard className="compact-form-card" title="Jugadores" icon={<Users size={14} color={C.amber} />}>
       <div className="admin-players__filters">
         <div className="admin-players__search">
           <Search size={14} color={C.gray400} aria-hidden />
@@ -73,15 +73,11 @@ export default function PlayerSearchPanel({
           onChange={(v) => setFree(v === "free")}
         />
       </div>
-      <p className="admin-players__hint">
-        {!ready
-          ? "Escribe al menos 3 letras."
-          : term
-            ? "Coincidencias sin importar acentos (hasta 30)."
-            : free
-              ? "Jugadores libres creados más recientemente."
-              : "Creados más recientemente."}
-      </p>
+      {!ready || term ? (
+        <p className="admin-players__hint">
+          {!ready ? "Escribe al menos 3 letras." : "Coincidencias sin importar acentos (hasta 30)."}
+        </p>
+      ) : null}
       {error ? <p className="admin-players__error">{error}</p> : null}
       {hits === null && !error ? (
         <p className="admin-players__hint">Cargando…</p>
