@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
 import ConfirmModal from "../../shared/ConfirmModal";
@@ -27,12 +28,16 @@ export default function ClubAdminMenu({
   const [hideReason, setHideReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const boxRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (event: MouseEvent) => {
-      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -42,6 +47,27 @@ export default function ClubAdminMenu({
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // El panel va en un portal con position: fixed: la cabecera y las pestañas del club son sticky, y un menú
+  // absoluto dentro de la cabecera quedaba debajo de las pestañas.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setAnchor({
+        top: Math.round(rect.bottom + 6),
+        right: Math.max(8, Math.round(window.innerWidth - rect.right)),
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
   }, [open]);
 
@@ -82,8 +108,9 @@ export default function ClubAdminMenu({
   };
 
   return (
-    <div ref={boxRef} style={{ position: "relative" }}>
+    <div style={{ display: "flex" }}>
       <button
+        ref={triggerRef}
         type="button"
         aria-label="Administrar club"
         aria-haspopup="menu"
@@ -106,14 +133,16 @@ export default function ClubAdminMenu({
       >
         <MoreHorizontal size={16} />
       </button>
-      {open ? (
+      {open
+        ? createPortal(
         <div
+          ref={panelRef}
           role="menu"
           style={{
-            position: "absolute",
-            right: 0,
-            top: "calc(100% + 6px)",
-            zIndex: 30,
+            position: "fixed",
+            top: anchor.top,
+            right: anchor.right,
+            zIndex: 1000,
             minWidth: 190,
             padding: "0.35rem",
             background: C.white,
@@ -129,8 +158,10 @@ export default function ClubAdminMenu({
           <MenuItem onClick={() => start("delete")} danger>
             <Trash2 size={14} /> Eliminar club
           </MenuItem>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
 
       <ConfirmModal
         open={action !== null}

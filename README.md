@@ -86,7 +86,7 @@ Hay tres tipos de usuario:
 | `/restablecer` | Fijar una contraseña nueva. El enlace del correo trae un `token_hash` que se verifica al guardar (abrirlo, recargarlo o que un antivirus lo abra antes no lo gasta); funciona en cualquier navegador. |
 | `/invitar` | Aceptar o rechazar una invitación a un club (`?c=&e=&t=`, y `&accion=rechazar`). Aceptar pide sesión con el mismo correo; sin sesión manda a `/login?next=`. |
 
-**Selector de espacios.** Con sesión, la cabecera muestra un selector al estilo de las cuentas de Instagram: la liga (`/`), el panel de administración (`/admin`, solo superadmin) y cada club donde el usuario tiene rol. En escritorio se abre como menú y en móvil como hoja inferior; también incluye «Cerrar sesión».
+**Selector de espacios.** Con sesión, la cabecera muestra un selector al estilo de las cuentas de Instagram: la liga (`/`) y cada club donde el usuario tiene rol. En escritorio se abre como menú y en móvil como hoja inferior; también incluye «Cerrar sesión».
 
 ### Club (`/:slug`), según rol
 

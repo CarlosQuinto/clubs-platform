@@ -22,9 +22,9 @@ export type SwitcherClub = {
 };
 
 /**
- * Selector de espacios de la cabecera: la liga, el panel de la plataforma
- * (superadmin) y los clubes donde la sesión tiene rol. El espacio activo
- * sale de la URL. Solo se monta con sesión.
+ * Selector de espacios de la cabecera: la liga y los clubes donde la sesión tiene rol
+ * (a /admin se llega por el menú lateral). El espacio activo sale de la URL. Solo se
+ * monta con sesión.
  */
 export default function SpaceSwitcher({
   variant,
@@ -209,15 +209,6 @@ export default function SpaceSwitcher({
                 active={leagueActive}
                 onClick={() => go("/")}
               />
-              {isSuperAdmin && (
-                <SpaceRow
-                  avatar={<SpaceAvatar kind="admin" />}
-                  title={ADMIN_SPACE.title}
-                  subtitle={ADMIN_SPACE.subtitle}
-                  active={adminActive}
-                  onClick={() => go(ADMIN_SPACE.path)}
-                />
-              )}
             </div>
 
             <p className="space-switcher__label">Mis clubes</p>

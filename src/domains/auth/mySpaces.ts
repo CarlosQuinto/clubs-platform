@@ -14,7 +14,7 @@ export type Space = {
   kind: "admin" | "club";
   path: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   logoUrl?: string;
   slug?: string;
   role?: Role;
@@ -27,11 +27,11 @@ export const ROLE_FROM_SQL: Record<MemberRole, Role> = {
   TESORERO: "tesorero",
 };
 
+/** Ya no aparece como fila del selector (a /admin se llega por el menú lateral); nombra el espacio activo. */
 export const ADMIN_SPACE: Space = {
   kind: "admin",
   path: "/admin",
   title: "Panel de administración",
-  subtitle: "Clubes, competición y portada",
 };
 
 /** Admin primero y luego los clubes por nombre. */
