@@ -61,10 +61,10 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
 5. **[C]** En incógnito, `/registro` con un correo sin invitación muestra «Necesitas una invitación para registrarte».
 6. **[M]** Recién corregido: en `/admin`, empieza a llenar un formulario (por ejemplo, «Nuevo jugador» en `?tab=players`). Cambia a WhatsApp o a otra pestaña unos 30 segundos y vuelve. Lo escrito sigue ahí.
 
-## 3. /admin: datos base (8 min)
-1. **[C]** En **Competencia**:
-   - crea la temporada `QA 2026` y una categoría;
-   - crea el torneo `QA Copa`.
+## 3. Datos base (8 min)
+1. **[C]** En `/torneos`:
+   - con **Temporadas**, crea la temporada `QA 2026`;
+   - con **Crear torneo**, crea el torneo `QA Copa` con una categoría nueva.
 2. **[C]** En `/equipos` → **Registrar equipo**:
    - crea `QA Club A` con slug, una localidad nueva («+ Nueva localidad») y el correo de presidente `+pres`;
    - aparece el enlace de registro;

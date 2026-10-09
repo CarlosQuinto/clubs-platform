@@ -24,7 +24,7 @@ export default function FinancesAdmin() {
   if (setup.data.seasons.length === 0) {
     return (
       <p style={{ color: C.gray500 }}>
-        Crea una temporada en Competición para empezar a registrar cobros y gastos.
+        Crea una temporada («Temporadas» en /torneos) para empezar a registrar cobros y gastos.
       </p>
     );
   }

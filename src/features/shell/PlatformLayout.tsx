@@ -29,7 +29,7 @@ import {
   shouldScrollTopAfterNav,
 } from "./scrollAfterNav";
 
-type AdminTab = "inbox" | "players" | "competition" | "cover" | "ads" | "admins" | "courts" | "finances";
+type AdminTab = "inbox" | "players" | "cover" | "ads" | "admins" | "courts" | "finances";
 
 export { markScrollTopAfterNav };
 
@@ -56,7 +56,6 @@ export default function PlatformLayout({
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
     return tab === "players" ||
-      tab === "competition" ||
       tab === "cover" ||
       tab === "ads" ||
       tab === "admins" ||
@@ -252,13 +251,6 @@ export default function PlatformLayout({
                 "Jugadores",
                 <Users size={16} />,
                 pathname === "/admin" && adminTab === "players",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=competition",
-                "Competición",
-                <Trophy size={16} />,
-                pathname === "/admin" && adminTab === "competition",
                 true,
               )}
               {navLink(

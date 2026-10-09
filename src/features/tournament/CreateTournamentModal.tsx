@@ -17,7 +17,7 @@ import { FormInput, FormSelect, PrimaryButton, SegmentedControl } from "../../sh
 import { useModalLock } from "../../shared/useModalLock";
 import { outsideSeason, toCompetitionOptions, validateNewTournament } from "./newTournamentMapper";
 
-/** Alta de torneo (solo superadmin). Lo abren «Crear torneo» en /torneos y en /admin → Competición. */
+/** Alta de torneo desde «Crear torneo» en /torneos (solo superadmin). */
 export default function CreateTournamentModal({
   onClose,
   onCreated,
@@ -195,7 +195,7 @@ export default function CreateTournamentModal({
         ) : seasons.length === 0 ? (
           <div className="court-form__body">
             <p className="club-form__note">
-              No hay temporadas activas. Crea una en Administración.
+              No hay temporadas activas. Créala con el botón «Temporadas» de esta página.
             </p>
           </div>
         ) : (

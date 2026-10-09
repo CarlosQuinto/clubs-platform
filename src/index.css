@@ -8321,6 +8321,29 @@ a.home-card:hover,
   text-transform: none;
 }
 
+/* Varios botones del superadmin en la cabecera (/torneos: Temporadas + Crear torneo) */
+.teams-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.teams-head__actions .teams-head__cta {
+  margin-left: 0;
+}
+
+.teams-head__cta--soft {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--sand-border);
+}
+
+.teams-head__cta--soft:hover {
+  border-color: var(--gold-cta);
+}
+
 .teams-error {
   margin: 0 0 1rem;
   font-size: 0.9rem;

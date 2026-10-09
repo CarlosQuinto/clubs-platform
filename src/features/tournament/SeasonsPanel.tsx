@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarRange, Trash2 } from "lucide-react";
-import { addSeason, closeSeason, removeSeason } from "../../../domains/competition/competitionCommands";
-import ConfirmModal from "../../../shared/ConfirmModal";
-import { isIsoDate } from "../../../domains/courts/courts";
-import { seasonSummaryPath } from "../../../shared/paths";
-import type { Season } from "../../../shared/types";
-import { isSeasonLabel, seasonLabel } from "../../../shared/textLimits";
-import Field from "../Field";
+import { Trash2 } from "lucide-react";
+import { addSeason, closeSeason, removeSeason } from "../../domains/competition/competitionCommands";
+import ConfirmModal from "../../shared/ConfirmModal";
+import { isIsoDate } from "../../domains/courts/courts";
+import { seasonSummaryPath } from "../../shared/paths";
+import type { Season } from "../../shared/types";
+import { isSeasonLabel, seasonLabel } from "../../shared/textLimits";
+import Field from "../admin/Field";
 import {
   Badge,
   C,
@@ -15,8 +15,7 @@ import {
   PrimaryButton,
   RADIUS,
   SecondaryButton,
-  SectionCard,
-} from "../../../shared/ui";
+} from "../../shared/ui";
 
 interface Props {
   seasons: Season[];
@@ -46,7 +45,7 @@ function formatSeasonRange(start?: string, end?: string) {
   return from || to || "Sin fechas";
 }
 
-export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) {
+export default function SeasonsPanel({ seasons, tournaments, onChange }: Props) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -149,10 +148,7 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
   };
 
   return (
-    <SectionCard
-      title="Temporadas"
-      icon={<CalendarRange size={16} color={C.amber} />}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <form onSubmit={handleAdd} className="seasons-form">
         <Field label="Nombre">
           <FormInput
@@ -296,6 +292,6 @@ export default function SeasonsAdmin({ seasons, tournaments, onChange }: Props) 
         onConfirm={() => void confirmClose()}
         onCancel={cancelClose}
       />
-    </SectionCard>
+    </div>
   );
 }

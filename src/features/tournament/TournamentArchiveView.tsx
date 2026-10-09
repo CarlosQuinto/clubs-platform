@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { PlusCircle, Trophy } from "lucide-react";
+import { CalendarRange, PlusCircle, Trophy } from "lucide-react";
 import { ArchiveSection } from "../shell/ArchiveUI";
 import PlatformLayout from "../shell/PlatformLayout";
 import { useAuth } from "../../domains/auth/AuthContext";
 import CreateTournamentModal from "./CreateTournamentModal";
+import SeasonsModal from "./SeasonsModal";
 import TournamentTile from "./TournamentTile";
 import { useTournamentArchive } from "./useTournamentArchive";
 import type { TournamentTileView } from "./tournamentArchiveViewState";
@@ -12,6 +13,7 @@ export default function TournamentArchiveView() {
   const { loading, error, view, onRefresh } = useTournamentArchive();
   const { isSuperAdmin } = useAuth();
   const [creating, setCreating] = useState(false);
+  const [seasonsOpen, setSeasonsOpen] = useState(false);
 
   return (
     <PlatformLayout>
@@ -25,14 +27,24 @@ export default function TournamentArchiveView() {
             <p>Ligas y copas de cada temporada</p>
           </div>
           {isSuperAdmin ? (
-            <button
-              type="button"
-              className="home-btn home-btn--gold teams-head__cta"
-              onClick={() => setCreating(true)}
-            >
-              <PlusCircle size={18} />
-              Crear torneo
-            </button>
+            <div className="teams-head__actions">
+              <button
+                type="button"
+                className="home-btn teams-head__cta teams-head__cta--soft"
+                onClick={() => setSeasonsOpen(true)}
+              >
+                <CalendarRange size={18} />
+                Temporadas
+              </button>
+              <button
+                type="button"
+                className="home-btn home-btn--gold teams-head__cta"
+                onClick={() => setCreating(true)}
+              >
+                <PlusCircle size={18} />
+                Crear torneo
+              </button>
+            </div>
           ) : null}
         </header>
 
@@ -64,6 +76,7 @@ export default function TournamentArchiveView() {
       {creating ? (
         <CreateTournamentModal onClose={() => setCreating(false)} onCreated={onRefresh} />
       ) : null}
+      {seasonsOpen ? <SeasonsModal onClose={() => setSeasonsOpen(false)} onChanged={onRefresh} /> : null}
     </PlatformLayout>
   );
 }

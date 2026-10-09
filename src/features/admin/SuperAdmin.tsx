@@ -5,18 +5,17 @@ import CoverAdminView from "./cover/CoverAdminView";
 import AdsAdmin from "./ads/AdsAdmin";
 import InboxAdmin from "./inbox/InboxAdmin";
 import SuperAdminsAdmin from "./admins/SuperAdminsAdmin";
-import CompetitionAdminView from "./competition/CompetitionAdminView";
 import PlayersAdmin from "./players/PlayersAdmin";
 import CourtsAdmin from "./courts/CourtsAdmin";
 import FinancesAdmin from "./finances/FinancesAdmin";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { C, SectionCard } from "../../shared/ui";
 
-type Tab = "inbox" | "players" | "competition" | "cover" | "ads" | "admins" | "courts" | "finances";
+type Tab = "inbox" | "players" | "cover" | "ads" | "admins" | "courts" | "finances";
 
 /**
  * /admin?tab=: lo que no tiene página pública propia. Los clubes se registran y administran en /equipos y en la
- * página de cada club; los torneos, en /torneos.
+ * página de cada club; los torneos y las temporadas, en /torneos.
  */
 export default function SuperAdmin() {
   const { user, loading, isSuperAdmin, sqlAdmin } = useAuth();
@@ -24,7 +23,6 @@ export default function SuperAdmin() {
   const tabParam = params.get("tab");
   const tab: Tab =
     tabParam === "players" ||
-    tabParam === "competition" ||
     tabParam === "cover" ||
     tabParam === "ads" ||
     tabParam === "admins" ||
@@ -79,8 +77,6 @@ export default function SuperAdmin() {
       {tab === "inbox" && <InboxAdmin />}
 
       {tab === "players" && <PlayersAdmin />}
-
-      {tab === "competition" && <CompetitionAdminView />}
 
       {tab === "courts" && <CourtsAdmin />}
 
