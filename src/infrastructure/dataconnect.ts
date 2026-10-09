@@ -221,8 +221,6 @@ export const playerProfile = query<T.PlayerProfileVariables, T.PlayerProfileData
 /** mutation PromoteGalleryPhoto (USER) */
 export const promoteGalleryPhoto = mutation<T.PromoteGalleryPhotoVariables, T.PromoteGalleryPhotoData>("promote_gallery_photo");
 // ---- queries.gql ----
-/** query RegisterTeamPage (PUBLIC) */
-export const registerTeamPage = queryNoVars<T.RegisterTeamPageData>("register_team_page");
 // ---- admin.gql ----
 /** mutation RejectTeamApplication (USER) */
 export const rejectTeamApplication = mutation<T.RejectTeamApplicationVariables, T.RejectTeamApplicationData>("reject_team_application");

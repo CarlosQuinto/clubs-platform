@@ -225,9 +225,10 @@ CREATE OR REPLACE FUNCTION public.teams_page(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT jsonb_build_object(
     'clubs', (
+      -- El teléfono del presidente solo lo ve el superadmin; para todos los demás va vacío
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
-        'presidentPhone', c.president_phone,
+        'presidentPhone', CASE WHEN is_platform_admin() THEN c.president_phone ELSE '' END,
         'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id))
         ORDER BY c.name), '[]'::jsonb)
       FROM clubs c WHERE c.active),
@@ -275,7 +276,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
   SELECT jsonb_build_object('clubs', (
     SELECT coalesce(jsonb_agg(jsonb_build_object(
       'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
-      'presidentPhone', c.president_phone, 'localityName', coalesce(l.name, ''))
+      'presidentPhone', CASE WHEN is_platform_admin() THEN c.president_phone ELSE '' END,
+      'localityName', coalesce(l.name, ''))
       ORDER BY c.name), '[]'::jsonb)
     FROM clubs c
     LEFT JOIN localities l ON l.id = c.locality_id
@@ -288,19 +290,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 CALL api_expose('search_clubs', 'PUBLIC');
 
-CREATE OR REPLACE FUNCTION public.register_team_page(p jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT jsonb_build_object('clubs', (
-    SELECT coalesce(jsonb_agg(row_json ORDER BY name), '[]'::jsonb)
-    FROM (
-      SELECT c.name, jsonb_build_object(
-        'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
-        'presidentPhone', c.president_phone,
-        'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id)) AS row_json
-      FROM clubs c WHERE c.active ORDER BY c.name LIMIT 10
-    ) sub))
-$$;
-CALL api_expose('register_team_page', 'PUBLIC');
+-- register_team_page alimentaba la franja «Únete a un equipo» de /registrar-equipo, que se retiró
+DROP FUNCTION IF EXISTS public.register_team_page(jsonb);
 
 -- ---------- Partidos ----------
 
@@ -834,7 +825,9 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     'clubs', (
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'id', c.id, 'slug', c.slug, 'name', c.name, 'description', c.description, 'location', c.location,
-        'presidentPhone', c.president_phone, 'logoUrl', c.logo_url, 'active', c.active, 'disabledReason', c.disabled_reason,
+        -- El teléfono solo lo recibe quien puede editarlo (presidente o superadmin); no se muestra en la página
+        'presidentPhone', CASE WHEN has_club_role(c.id, ARRAY['ADMIN']) THEN c.president_phone ELSE '' END,
+        'logoUrl', c.logo_url, 'active', c.active, 'disabledReason', c.disabled_reason,
         'locality', (SELECT jsonb_build_object('id', l.id, 'name', l.name) FROM localities l WHERE l.id = c.locality_id),
         'clubHeroImages_on_club', (SELECT coalesce(jsonb_agg(jsonb_build_object('url', h.url) ORDER BY h.position), '[]'::jsonb)
           FROM club_hero_images h WHERE h.club_id = c.id),

@@ -2372,19 +2372,6 @@ export interface PromoteGalleryPhotoVariables {
   photoId: string;
 }
 
-export interface RegisterTeamPageData {
-  clubs: ({
-    name: string;
-    slug: string;
-    logoUrl?: string | null;
-    location: string;
-    presidentPhone: string;
-    locality?: {
-      name: string;
-    };
-  })[];
-}
-
 export interface RejectTeamApplicationData {
   application?: unknown | null;
 }

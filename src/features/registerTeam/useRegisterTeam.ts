@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  dataConnect,
-  QueryFetchPolicy,
-  registerTeamPage,
-  submitTeamApplication,
-} from "../../infrastructure/dataconnect";
+import { useRef, useState } from "react";
+import { dataConnect, submitTeamApplication } from "../../infrastructure/dataconnect";
 import { cellPhone, clubName, emailText, personName } from "../../shared/textLimits";
-import { toRegisterTeamClubs, validateRegisterTeam } from "./registerTeamMapper";
+import { validateRegisterTeam } from "./registerTeamMapper";
 import type { RegisterTeamFormView } from "./registerTeamViewState";
 
 const EMPTY: RegisterTeamFormView = {
@@ -18,35 +13,11 @@ const EMPTY: RegisterTeamFormView = {
   busy: false,
   sent: false,
   error: null,
-  clubs: [],
 };
 
 export function useRegisterTeam() {
   const [form, setForm] = useState<RegisterTeamFormView>(EMPTY);
-  const [clubsLoading, setClubsLoading] = useState(true);
-  const request = useRef(0);
   const sending = useRef(false);
-
-  const loadClubs = useCallback(() => {
-    const ticket = request.current + 1;
-    request.current = ticket;
-    setClubsLoading(true);
-    void registerTeamPage(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY })
-      .then((result) => {
-        if (ticket !== request.current) return;
-        setForm((current) => ({ ...current, clubs: toRegisterTeamClubs(result.data) }));
-      })
-      .catch((err: unknown) => {
-        console.error(err);
-      })
-      .finally(() => {
-        if (ticket === request.current) setClubsLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    loadClubs();
-  }, [loadClubs]);
 
   const setField = (field: "captainName" | "captainEmail" | "captainPhone" | "teamName", value: string) => {
     setForm((current) => ({ ...current, [field]: value, error: null, sent: false }));
@@ -68,18 +39,13 @@ export function useRegisterTeam() {
     })
       .then((response) => {
         if (!response.data.application) {
-          setForm((current) => ({
+          setForm({
             ...EMPTY,
-            clubs: current.clubs,
             error: "Los datos no pasaron la revisión. Vuelve a llenar el formulario.",
-          }));
+          });
           return;
         }
-        setForm((current) => ({
-          ...EMPTY,
-          clubs: current.clubs,
-          sent: true,
-        }));
+        setForm({ ...EMPTY, sent: true });
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -96,7 +62,6 @@ export function useRegisterTeam() {
 
   return {
     ...form,
-    clubsLoading,
     ready: typeof validateRegisterTeam(form) !== "string",
     onCaptainName: (value: string) => setField("captainName", personName(value)),
     onCaptainEmail: (value: string) => setField("captainEmail", emailText(value)),

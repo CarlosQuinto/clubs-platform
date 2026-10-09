@@ -114,6 +114,12 @@ export async function run({ db, rpc, check }) {
   check(onPres.data?.club === null, "set_club_active: presidente -> null", onPres);
   const on = await rpc("admin", "set_club_active", { id: "prueba-club-1", active: true });
   check(on.data?.club?.id === "prueba-club-1", "set_club_active: reactivar", on);
+  const phoneAdmin = (await rpc("admin", "teams_page")).data?.clubs?.find((c) => c.slug === "club-prueba");
+  check(phoneAdmin?.presidentPhone === "6221234567", "teams_page: el superadmin sí ve el teléfono del presidente", phoneAdmin);
+  const phoneSearch = (await rpc("admin", "search_clubs", { term: "club prueba" })).data?.clubs?.[0];
+  check(phoneSearch?.presidentPhone === "6221234567", "search_clubs: el superadmin sí ve el teléfono", phoneSearch);
+  const phonePres = (await rpc("presidente", "teams_page")).data?.clubs?.find((c) => c.slug === "club-prueba");
+  check(phonePres?.presidentPhone === "", "teams_page: un presidente no ve el teléfono de otro club", phonePres);
 
   // Solicitudes de equipo
   const approvePres = await rpc("presidente", "approve_team_application", { id: "dummy-solicitud-1", clubId: "prueba-club-1", slug: "club-prueba" });

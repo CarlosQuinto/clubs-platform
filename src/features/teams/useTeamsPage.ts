@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dataConnect, QueryFetchPolicy, searchClubs, teamsPage } from "../../infrastructure/dataconnect";
 import { teamLabel } from "../../shared/textLimits";
-import { CLUB_PAGE_SIZE } from "../shell/ClubDirectoryList";
 import { clubSearchKey, clubsMatching, toSearchClubs, toTeamsPage } from "./teamsMapper";
 import type {
   ClubCardView,
@@ -10,6 +9,7 @@ import type {
   TeamsScopeView,
 } from "./teamsViewState";
 
+const CLUB_PAGE_SIZE = 5;
 const DESKTOP_QUERY = "(min-width: 800px)";
 const DESKTOP_PAGE_SIZE = 15;
 const STANDINGS_PAGE = 10;

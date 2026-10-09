@@ -1,8 +1,4 @@
-import { whatsappUrl } from "../../domains/platform/social";
-import { type RegisterTeamPageData } from "../../infrastructure/dataconnect";
 import { isCellPhone, isClubName, isPersonName, isRegisterEmail, titleCase } from "../../shared/textLimits";
-import { clubInitials } from "../teams/teamsMapper";
-import type { ClubCardView } from "../teams/teamsViewState";
 
 export interface RegisterTeamDraft {
   captainName: string;
@@ -17,22 +13,6 @@ export interface RegisterTeamPayload {
   captainEmail: string;
   captainPhone: string;
   teamName: string;
-}
-
-export function toRegisterTeamClubs(data: RegisterTeamPageData): ClubCardView[] {
-  return data.clubs.map((club) => {
-    const phone = club.presidentPhone.trim();
-    const locality = club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`;
-    return {
-      href: club.slug.trim() ? `/${club.slug.trim()}` : "/",
-      name: club.name,
-      initials: clubInitials(club.name),
-      locality,
-      logoUrl: club.logoUrl?.trim() || null,
-      phoneLabel: phone ? `Presidente: ${phone}` : null,
-      phoneHref: phone ? whatsappUrl(phone) : null,
-    };
-  });
 }
 
 export function validateRegisterTeam(draft: RegisterTeamDraft): string | RegisterTeamPayload {

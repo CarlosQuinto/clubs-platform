@@ -1194,44 +1194,6 @@
               }
             },
             {
-              "name": "register_team_page",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "apikey",
-                    "value": "{{anon_key}}"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/rest/v1/rpc/register_team_page",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "rest",
-                    "v1",
-                    "rpc",
-                    "register_team_page"
-                  ]
-                },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"p\": {}\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "description": "\n- Operación: `RegisterTeamPage` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
-              }
-            },
-            {
               "name": "search_clubs",
               "request": {
                 "method": "POST",

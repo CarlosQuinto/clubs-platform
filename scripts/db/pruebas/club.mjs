@@ -269,6 +269,10 @@ export async function run({ db, rpc, check }) {
   check(perfil.data?.club?.id === HALCONES && (await count(`SELECT count(*)::int AS n FROM clubs WHERE id = '${HALCONES}' AND logo_url IS NULL AND president_phone = '6221234567'`)) === 1, "save_club_profile: presidente, logo vacío -> null", perfil);
   const perfilSuper = await rpc("admin", "save_club_profile", { id: BAHIA, name: "Deportivo Bahía Demo", logoUrl: "https://a/logo.png", presidentPhone: "6220000000" });
   check(perfilSuper.data?.club?.id === BAHIA, "save_club_profile: superadmin en cualquier club", perfilSuper);
+  // El teléfono solo viaja a quien puede editarlo: presidente de ese club o superadmin
+  const phoneFor = async (role) => (await rpc(role, "club_screen", { slug: "halcones-fc-demo" })).data?.clubs?.[0]?.presidentPhone;
+  check((await phoneFor("presidente")) === "6221234567" && (await phoneFor("admin")) === "6221234567", "club_screen: presidente y superadmin reciben el teléfono");
+  check((await phoneFor("dt")) === "" && (await phoneFor("anon")) === "", "club_screen: DT y anónimo reciben el teléfono vacío");
 
   // ---------- Validaciones de texto (las mismas reglas que textLimits.ts) ----------
   const jugadorBase = { id: "prueba-val-p", clubId: HALCONES, name: "  ana   maría lópez ", shirtNumber: "7", position: "Medio", isCoach: false, active: true, detail: { variant: "Extremo", birthDate: "2000-05-01" } };

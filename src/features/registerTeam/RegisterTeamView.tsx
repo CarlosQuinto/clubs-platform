@@ -1,13 +1,10 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Mail, Phone, Shield, Sparkles, User } from "lucide-react";
+import { Mail, Phone, Shield, Sparkles, User } from "lucide-react";
 import PlatformLayout, { markScrollTopAfterNav } from "../shell/PlatformLayout";
 import PageHeroBanner from "../shell/PageHeroBanner";
 import PublicFormBand from "../shell/PublicFormBand";
-import { C } from "../../shared/ui";
-import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { useRegisterTeam } from "./useRegisterTeam";
-import type { ClubCardView } from "../teams/teamsViewState";
 
 export default function RegisterTeamView() {
   const form = useRegisterTeam();
@@ -106,17 +103,6 @@ export default function RegisterTeamView() {
             </button>
           </form>
       </PublicFormBand>
-      {form.clubs.length > 0 ? (
-        <section className="public-clubs-band">
-          <div className="public-clubs-band__head">
-            <h2>Únete a un equipo</h2>
-            <Link to="/equipos" className="public-clubs-band__all">
-              Ver todos →
-            </Link>
-          </div>
-          <ClubMarquee clubs={form.clubs} />
-        </section>
-      ) : null}
     </PlatformLayout>
   );
 }
@@ -129,34 +115,5 @@ function Field({ icon, children }: { icon: ReactNode; children: ReactNode }) {
       </span>
       {children}
     </label>
-  );
-}
-
-function ClubMarquee({ clubs }: { clubs: ClubCardView[] }) {
-  const cards = (clone: boolean) =>
-    clubs.map((club) => (
-      <article key={`${club.href}-${clone ? "b" : "a"}`} className="club-dir-card">
-        <Link to={club.href} className="club-dir-card__main" tabIndex={clone ? -1 : undefined}>
-          <div className="club-dir-card__logo">
-            <img src={club.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
-          </div>
-          <div className="club-dir-card__copy">
-            <div className="club-dir-card__name">{club.name}</div>
-            <div className="club-dir-card__meta">{club.locality}</div>
-          </div>
-          <ChevronRight size={16} color={C.gray400} />
-        </Link>
-      </article>
-    ));
-
-  return (
-    <div className="club-dir-marquee">
-      <div className="club-dir-grid is-marquee">
-        <div className="club-dir-marquee__set">{cards(false)}</div>
-        <div className="club-dir-marquee__set" aria-hidden="true">
-          {cards(true)}
-        </div>
-      </div>
-    </div>
   );
 }

@@ -1,5 +1,3 @@
-import type { ClubCardView } from "../teams/teamsViewState";
-
 export interface RegisterTeamFormView {
   captainName: string;
   captainEmail: string;
@@ -9,5 +7,4 @@ export interface RegisterTeamFormView {
   busy: boolean;
   sent: boolean;
   error: string | null;
-  clubs: ClubCardView[];
 }
