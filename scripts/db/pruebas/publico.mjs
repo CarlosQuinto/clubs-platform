@@ -43,9 +43,11 @@ export async function run({ db, rpc, check }) {
   check(teams.data?.clubs?.length === 8 && teams.data?.matches?.length > 0, "teams_page: 8 clubes y partidos jugados", teams.error);
   check(Array.isArray(teams.data?.hiddenClubs) && teams.data.hiddenClubs.length === 0, "teams_page: hiddenClubs vacío para anónimo", teams.data?.hiddenClubs);
   check(teams.data?.clubs?.every((c) => c.presidentPhone === ""), "teams_page: el teléfono del presidente va vacío para anónimo", teams.data?.clubs?.map((c) => c.presidentPhone));
+  check(teams.data?.clubs?.every((c) => typeof c.id === "string" && c.id.length > 0), "teams_page: cada club trae su id (para el menú del superadmin)", teams.data?.clubs?.[0]);
   const search = await rpc("anon", "search_clubs", { term: "halcones" });
   check(search.data?.clubs?.length === 1 && search.data.clubs[0].slug === "halcones-fc-demo", "search_clubs: acentos y mayúsculas", search.data);
   check(search.data?.clubs?.[0]?.presidentPhone === "", "search_clubs: el teléfono va vacío para anónimo", search.data?.clubs?.[0]);
+  check(search.data?.clubs?.[0]?.id === "dummy-club-halcones", "search_clubs: trae el id del club", search.data?.clubs?.[0]);
   const short = await rpc("anon", "search_clubs", { term: "ha" });
   check(short.data?.clubs?.length === 0, "search_clubs: término corto no busca", short.data);
 

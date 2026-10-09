@@ -2,8 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Home as HomeIcon, Calendar, Users, Wallet, Package, UserCog } from "lucide-react";
 import { useClubModelContext } from "./useClubScreen";
-import { useModalLock } from "../../shared/useModalLock";
-import { acceptClubInvite, dataConnect, myOpenClubInvites, QueryFetchPolicy, saveClubProfile } from "../../infrastructure/dataconnect";
+import { acceptClubInvite, dataConnect, myOpenClubInvites, QueryFetchPolicy } from "../../infrastructure/dataconnect";
 import { emailKey } from "../../shared/paths";
 import { applyScope, calendarStatus, clubTrophies, computeTeamRecord, defaultSeasonId, isPlayed, matchToClubEvent } from "../../domains/competition/stats";
 import type { StatsScope } from "../../shared/types";
@@ -11,11 +10,7 @@ import { useAuth } from "../../domains/auth/AuthContext";
 import { useClub } from "../../domains/clubs/ClubContext";
 import { buildPerms, ROLE_LABELS } from "../../domains/auth/roles";
 import { invalidateMySpaces } from "../../domains/auth/mySpaces";
-import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { requestClubRefresh } from "./useClubScreen";
-import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../infrastructure/storage/uploadImage";
-import { savedRow } from "../../shared/saved";
-import { isCellPhone, isClubName, titleCase } from "../../shared/textLimits";
 
 // ── CUSTOM HOOK PARA RESIZE Y RESPONSIVIDAD ──
 // Soluciona el problema de window.innerWidth no reactivo al rotar la pantalla
@@ -73,7 +68,7 @@ export function useClubShell() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const section = tabFromSearch(searchParams);
-  const { clubId, storagePath } = useClub();
+  const { clubId } = useClub();
   const navigate = useNavigate();
   const { user, isSuperAdmin } = useAuth();
   const { role: sqlRole } = useClubModelContext().model || { role: null };
@@ -230,110 +225,8 @@ export function useClubShell() {
   const navContainerRef = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
 
-  const [showEditClub, setShowEditClub] = useState(false);
-  const [editClubName, setEditClubName] = useState("");
-  const [editClubLogo, setEditClubLogo] = useState("");
-  const [editClubPhone, setEditClubPhone] = useState("");
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [newlyUploadedLogos, setNewlyUploadedLogos] = useState<string[]>([]);
-
-  const handleOpenEditClub = () => {
-    setEditClubName(clubInfo?.name || DEFAULT_CLUB_NAME);
-    setEditClubLogo(clubInfo?.logoUrl || DEFAULT_CLUB_LOGO);
-    setEditClubPhone(clubInfo?.presidentPhone || "");
-    setNewlyUploadedLogos([]);
-    setShowEditClub(true);
-  };
-
-  const handleLogoUpload = async (file: File) => {
-    if (!file) return;
-    try {
-      setIsUploadingLogo(true);
-      const options = {
-        maxSizeMB: 0.1,
-        maxWidthOrHeight: 500,
-        useWebWorker: true,
-        initialQuality: 0.8,
-      };
-      const url = await uploadImageFile(
-        storagePath("logos", `logo_${Date.now()}.jpg`),
-        file,
-        options,
-      );
-      setNewlyUploadedLogos((prev) => [...prev, url]);
-      setEditClubLogo(url);
-    } catch (error) {
-      console.error("Error subiendo logo:", error);
-      alert("Error al subir el escudo.");
-    } finally {
-      setIsUploadingLogo(false);
-    }
-  };
-
-  const handleCancelEditClub = async () => {
-    if (newlyUploadedLogos.length > 0) {
-      for (const urlToDelete of newlyUploadedLogos) {
-        try {
-          await deleteStoredImage(urlToDelete);
-        } catch (error) {
-          console.error("No se pudo eliminar el logo cancelado:", error);
-        }
-      }
-    }
-    setNewlyUploadedLogos([]);
-    setShowEditClub(false);
-  };
-
-  useModalLock(showEditClub ? () => { void handleCancelEditClub(); } : null);
-
-  const handleSaveClub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Mismas reglas que el alta de club (create_club / save_club_profile): nombre en Title Case y teléfono de 10 a 15 dígitos
-    const name = titleCase(editClubName.trim().replace(/ {2,}/g, " "));
-    const phone = editClubPhone.trim();
-    if (!isClubName(name)) {
-      alert("El nombre del club debe tener de 3 a 30 letras o números.");
-      return;
-    }
-    if (phone && !isCellPhone(phone)) {
-      alert("El teléfono debe tener de 10 a 15 dígitos.");
-      return;
-    }
-    try {
-      const oldLogo = clubInfo?.logoUrl;
-      if (
-        oldLogo &&
-        oldLogo !== editClubLogo &&
-        isStoredImageUrl(oldLogo)
-      ) {
-        try {
-          await deleteStoredImage(oldLogo);
-        } catch (e) {}
-      }
-      const orphanedNewLogos = newlyUploadedLogos.filter(
-        (url) => url !== editClubLogo,
-      );
-      for (const url of orphanedNewLogos) {
-        try {
-          await deleteStoredImage(url);
-        } catch (e) {}
-      }
-      const saved = await saveClubProfile(dataConnect, {
-        id: clubId,
-        name,
-        logoUrl: editClubLogo,
-        presidentPhone: phone,
-      });
-      savedRow(saved.data.club);
-      requestClubRefresh();
-      invalidateMySpaces();
-      setNewlyUploadedLogos([]);
-      setShowEditClub(false);
-    } catch (error) {
-      console.error("Error al actualizar el club:", error);
-      alert("Hubo un problema al guardar los cambios.");
-    }
-  };
+  // «Ajustes del Club» (EditClubModal): lo abre el lápiz del escudo
+  const [editingClub, setEditingClub] = useState(false);
 
   const goToLogin = () => {
     navigate(`/login?next=${encodeURIComponent(`/${clubInfo?.slug || clubId}`)}`);
@@ -491,18 +384,8 @@ export function useClubShell() {
     isUltraSmall,
     navContainerRef,
     sliderRef,
-    showEditClub,
-    editClubName,
-    setEditClubName,
-    editClubLogo,
-    setEditClubLogo,
-    editClubPhone,
-    setEditClubPhone,
-    isUploadingLogo,
-    handleOpenEditClub,
-    handleLogoUpload,
-    handleCancelEditClub,
-    handleSaveClub,
+    editingClub,
+    setEditingClub,
     goToLogin,
     perms,
     roleLabel,

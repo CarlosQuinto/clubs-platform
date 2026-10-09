@@ -3336,6 +3336,7 @@ export interface TeamApplication_Key {
 
 export interface TeamsPageData {
   clubs: ({
+    id: string;
     name: string;
     slug: string;
     logoUrl?: string | null;
@@ -3347,10 +3348,12 @@ export interface TeamsPageData {
   })[];
   /** Clubes desactivados; vacío salvo para el superadmin. */
   hiddenClubs: ({
+    id: string;
     name: string;
     slug: string;
     logoUrl?: string | null;
     location: string;
+    presidentPhone: string;
     disabledReason: string;
     locality?: {
       name: string;

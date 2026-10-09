@@ -68,6 +68,7 @@ export function phoneLabel(phone: string) {
 }
 
 export function toClubCard(club: {
+  id: string;
   name: string;
   slug: string;
   logoUrl?: string | null;
@@ -76,6 +77,9 @@ export function toClubCard(club: {
 }): ClubCardView {
   const phone = club.presidentPhone.trim();
   return {
+    id: club.id,
+    slug: club.slug,
+    presidentPhone: phone,
     href: hrefFor(club.slug) || "/",
     name: club.name,
     initials: clubInitials(club.name),
@@ -100,6 +104,7 @@ export function toSearchClubs(rows: unknown[] | null | undefined): ClubCardView[
     if (!name) return [];
     const locality = textOf(record.localityName) || textOf(record.location) || (slug ? `/${slug}` : "");
     return [toClubCard({
+      id: textOf(record.id),
       name,
       slug,
       logoUrl: textOf(record.logoUrl),
@@ -205,10 +210,11 @@ export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
   }
   const hiddenClubs: HiddenClubCardView[] = (data.hiddenClubs ?? []).map((club) => ({
     ...toClubCard({
+      id: club.id,
       name: club.name,
       slug: club.slug,
       logoUrl: club.logoUrl,
-      presidentPhone: "",
+      presidentPhone: club.presidentPhone,
       locality: club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`,
     }),
     reason: club.disabledReason.trim(),
@@ -216,6 +222,7 @@ export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
   return {
     clubs: data.clubs.map((club) =>
       toClubCard({
+        id: club.id,
         name: club.name,
         slug: club.slug,
         logoUrl: club.logoUrl,

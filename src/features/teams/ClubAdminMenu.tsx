@@ -1,29 +1,36 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
+import { Eye, EyeOff, MoreHorizontal, Pencil, Trash2, UserCog } from "lucide-react";
 import ConfirmModal from "../../shared/ConfirmModal";
 import Field from "../admin/Field";
+import EditClubModal from "../club/EditClubModal";
+import MembersModal from "../club/MembersModal";
+import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { removeClub, setClubVisible } from "../../domains/clubs/clubCommands";
 import { disableReason, isDisableReason } from "../../shared/textLimits";
 import { C, FormInput, RADIUS, SHADOWS } from "../../shared/ui";
-import { requestClubRefresh } from "./useClubScreen";
 
 type Action = "hide" | "show" | "delete";
 
+export type AdminClub = {
+  id: string;
+  slug: string;
+  name: string;
+  active: boolean;
+  logoUrl?: string | null;
+  presidentPhone?: string | null;
+};
+
 /**
- * Menú «⋯» del superadmin en la cabecera del club: desactivar (con motivo visible en la página), activar y
- * eliminar (escribiendo la URL). Son las acciones que antes vivían en /admin → Equipos; aquí viven junto al
- * club. Eliminar manda a /equipos; lo demás recarga la página del club.
+ * Menú «⋯» del superadmin en cada tarjeta de /equipos: editar la información del club, sus administradores,
+ * desactivarlo (con motivo visible en su página) o activarlo, y eliminarlo (escribiendo la URL). Después de
+ * cualquier cambio llama a `onChanged` para recargar el directorio.
  */
-export default function ClubAdminMenu({
-  club,
-}: {
-  club: { id: string; slug: string; name: string; active: boolean };
-}) {
-  const navigate = useNavigate();
+export default function ClubAdminMenu({ club, onChanged }: { club: AdminClub; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [members, setMembers] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState("");
   const [hideReason, setHideReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,8 +57,7 @@ export default function ClubAdminMenu({
     };
   }, [open]);
 
-  // El panel va en un portal con position: fixed: la cabecera y las pestañas del club son sticky, y un menú
-  // absoluto dentro de la cabecera quedaba debajo de las pestañas.
+  // El panel va en un portal con position: fixed, bajo el botón: así no lo recorta ni lo tapa nada de la página.
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -93,12 +99,11 @@ export default function ClubAdminMenu({
       setError("");
       if (action === "delete") {
         await removeClub(club.id);
-        navigate("/equipos");
-        return;
+      } else {
+        await setClubVisible(club.id, action === "show", hideReason);
       }
-      await setClubVisible(club.id, action === "show", hideReason);
       setAction(null);
-      requestClubRefresh();
+      onChanged();
     } catch (err) {
       console.error(err);
       setError("No se pudo completar la acción.");
@@ -108,11 +113,11 @@ export default function ClubAdminMenu({
   };
 
   return (
-    <div style={{ display: "flex" }}>
+    <div className="teams-card__menu">
       <button
         ref={triggerRef}
         type="button"
-        aria-label="Administrar club"
+        aria-label={`Administrar ${club.name}`}
         aria-haspopup="menu"
         aria-expanded={open}
         title="Administrar club"
@@ -121,9 +126,9 @@ export default function ClubAdminMenu({
           width: 32,
           height: 32,
           borderRadius: "50%",
-          border: `1px solid rgba(255,255,255,0.25)`,
-          background: open ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
-          color: C.white,
+          border: "1px solid var(--sand-border)",
+          background: open ? "var(--sand-light)" : "#fff",
+          color: "var(--ink)",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
@@ -135,33 +140,59 @@ export default function ClubAdminMenu({
       </button>
       {open
         ? createPortal(
-        <div
-          ref={panelRef}
-          role="menu"
-          style={{
-            position: "fixed",
-            top: anchor.top,
-            right: anchor.right,
-            zIndex: 1000,
-            minWidth: 190,
-            padding: "0.35rem",
-            background: C.white,
-            border: `1px solid ${C.gray200}`,
-            borderRadius: RADIUS.lg,
-            boxShadow: SHADOWS.md,
-          }}
-        >
-          <MenuItem onClick={() => start(club.active ? "hide" : "show")}>
-            {club.active ? <EyeOff size={14} /> : <Eye size={14} />}
-            {club.active ? "Desactivar club" : "Activar club"}
-          </MenuItem>
-          <MenuItem onClick={() => start("delete")} danger>
-            <Trash2 size={14} /> Eliminar club
-          </MenuItem>
-        </div>,
-        document.body,
-      )
+            <div
+              ref={panelRef}
+              role="menu"
+              style={{
+                position: "fixed",
+                top: anchor.top,
+                right: anchor.right,
+                zIndex: 1000,
+                minWidth: 210,
+                padding: "0.35rem",
+                background: C.white,
+                border: `1px solid ${C.gray200}`,
+                borderRadius: RADIUS.lg,
+                boxShadow: SHADOWS.md,
+              }}
+            >
+              <MenuItem
+                onClick={() => {
+                  setOpen(false);
+                  setEditing(true);
+                }}
+              >
+                <Pencil size={14} /> Editar información
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setOpen(false);
+                  setMembers(true);
+                }}
+              >
+                <UserCog size={14} /> Administradores
+              </MenuItem>
+              <MenuItem onClick={() => start(club.active ? "hide" : "show")}>
+                {club.active ? <EyeOff size={14} /> : <Eye size={14} />}
+                {club.active ? "Desactivar club" : "Activar club"}
+              </MenuItem>
+              <MenuItem onClick={() => start("delete")} danger>
+                <Trash2 size={14} /> Eliminar club
+              </MenuItem>
+            </div>,
+            document.body,
+          )
         : null}
+
+      {editing ? (
+        <EditClubModal club={club} onClose={() => setEditing(false)} onSaved={onChanged} />
+      ) : null}
+
+      {members ? (
+        <ClubProvider clubId={club.id}>
+          <MembersModal clubName={club.name} onClose={() => setMembers(false)} />
+        </ClubProvider>
+      ) : null}
 
       <ConfirmModal
         open={action !== null}
@@ -176,7 +207,7 @@ export default function ClubAdminMenu({
           action === "delete"
             ? `${club.name} (/${club.slug}) desaparecerá de la plataforma y sus administradores perderán el acceso. Sus partidos y resultados se conservan en el historial de la liga. La URL queda reservada.`
             : action === "hide"
-              ? `${club.name} dejará de aparecer como equipo activo y no se podrá inscribir en torneos nuevos. Puedes volver a activarlo después desde esta página o desde «Equipos ocultos» en /equipos.`
+              ? `${club.name} dejará de aparecer como equipo activo y no se podrá inscribir en torneos nuevos. Puedes volver a activarlo desde «Equipos ocultos», al final de esta página.`
               : `${club.name} volverá a aparecer como equipo activo.`
         }
         confirmLabel={action === "delete" ? "Eliminar club" : action === "hide" ? "Desactivar" : "Activar"}

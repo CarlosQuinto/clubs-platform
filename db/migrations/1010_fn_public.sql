@@ -227,7 +227,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     'clubs', (
       -- El teléfono del presidente solo lo ve el superadmin; para todos los demás va vacío
       SELECT coalesce(jsonb_agg(jsonb_build_object(
-        'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
+        'id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
         'presidentPhone', CASE WHEN is_platform_admin() THEN c.president_phone ELSE '' END,
         'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id))
         ORDER BY c.name), '[]'::jsonb)
@@ -235,7 +235,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     -- Clubes desactivados (no borrados), solo para el superadmin: desde /equipos llega a su página y los reactiva
     'hiddenClubs', (
       SELECT CASE WHEN is_platform_admin() THEN coalesce(jsonb_agg(jsonb_build_object(
-        'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
+        'id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
+        'presidentPhone', c.president_phone,
         'disabledReason', coalesce(c.disabled_reason, ''),
         'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id))
         ORDER BY c.name), '[]'::jsonb) ELSE '[]'::jsonb END
@@ -275,7 +276,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
   WITH args AS (SELECT btrim(coalesce(p ->> 'term', '')) AS term)
   SELECT jsonb_build_object('clubs', (
     SELECT coalesce(jsonb_agg(jsonb_build_object(
-      'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
+      'id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
       'presidentPhone', CASE WHEN is_platform_admin() THEN c.president_phone ELSE '' END,
       'localityName', coalesce(l.name, ''))
       ORDER BY c.name), '[]'::jsonb)

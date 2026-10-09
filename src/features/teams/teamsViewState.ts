@@ -1,6 +1,11 @@
 import type { StandingRowView } from "../tournament/tournamentViewState";
 
 export interface ClubCardView {
+  /** Id y slug del club: el menú «⋯» del superadmin los usa para administrarlo. */
+  id: string;
+  slug: string;
+  /** Teléfono tal cual (vacío salvo para el superadmin, que es quien lo edita). */
+  presidentPhone: string;
   href: string;
   name: string;
   initials: string;

@@ -16,6 +16,7 @@ import AdSlot from "../shell/AdSlot";
 import { FormInput, FormSelect } from "../../shared/ui";
 import { useAuth } from "../../domains/auth/AuthContext";
 import RegisterClubModal from "./RegisterClubModal";
+import ClubAdminMenu from "./ClubAdminMenu";
 import { useTeamsPage } from "./useTeamsPage";
 import { ClubCrest, MoreButton, Ranking, TeamsEmpty } from "./StandingsRanking";
 import type { ClubCardView, DirectoryEmptyView, HiddenClubCardView } from "./teamsViewState";
@@ -74,6 +75,8 @@ export default function TeamsPageView() {
         ) : (
           <>
             <Directory
+              admin={isSuperAdmin}
+              onChanged={screen.onCreated}
               clubs={screen.directory}
               empty={screen.directoryEmpty}
               hasMore={screen.hasMoreDirectory}
@@ -132,7 +135,7 @@ export default function TeamsPageView() {
               </>
             )}
             {isSuperAdmin && screen.hiddenClubs.length > 0 && !screen.query.trim() ? (
-              <HiddenDirectory clubs={screen.hiddenClubs} />
+              <HiddenDirectory clubs={screen.hiddenClubs} onChanged={screen.onCreated} />
             ) : null}
           </>
         )}
@@ -146,11 +149,15 @@ export default function TeamsPageView() {
 }
 
 function Directory({
+  admin,
+  onChanged,
   clubs,
   empty,
   hasMore,
   onMore,
 }: {
+  admin: boolean;
+  onChanged: () => void;
   clubs: ClubCardView[];
   empty: DirectoryEmptyView;
   hasMore: boolean;
@@ -206,7 +213,11 @@ function Directory({
                 ) : null}
               </div>
             </div>
-            <ChevronRight className="teams-card__chevron" size={18} aria-hidden="true" />
+            {admin ? (
+              <ClubAdminMenu club={{ ...club, active: true }} onChanged={onChanged} />
+            ) : (
+              <ChevronRight className="teams-card__chevron" size={18} aria-hidden="true" />
+            )}
           </article>
         ))}
       </div>
@@ -215,15 +226,15 @@ function Directory({
   );
 }
 
-/** Clubes desactivados, solo para el superadmin: no salen en el directorio ni en la búsqueda. Se reactivan desde su página. */
-function HiddenDirectory({ clubs }: { clubs: HiddenClubCardView[] }) {
+/** Clubes desactivados, solo para el superadmin: no salen en el directorio ni en la búsqueda. Se reactivan con su «⋯». */
+function HiddenDirectory({ clubs, onChanged }: { clubs: HiddenClubCardView[]; onChanged: () => void }) {
   return (
     <>
       <h2 className="teams-rule">
         <span>Equipos ocultos ({clubs.length})</span>
       </h2>
       <p className="teams-hidden__note">
-        No aparecen en el directorio ni se pueden inscribir en torneos nuevos. Ábrelos para volver a activarlos.
+        No aparecen en el directorio ni se pueden inscribir en torneos nuevos. Actívalos con su «⋯».
       </p>
       <div className="teams-grid">
         {clubs.map((club) => (
@@ -242,7 +253,7 @@ function HiddenDirectory({ clubs }: { clubs: HiddenClubCardView[] }) {
                 {club.reason ? <span className="teams-card__reason">Motivo: {club.reason}</span> : null}
               </div>
             </div>
-            <ChevronRight className="teams-card__chevron" size={18} aria-hidden="true" />
+            <ClubAdminMenu club={{ ...club, active: false }} onChanged={onChanged} />
           </article>
         ))}
       </div>

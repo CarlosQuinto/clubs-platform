@@ -1,21 +1,20 @@
 import { Link, useParams } from "react-router-dom";
-import { Shield, X, Edit2, UploadCloud, LogIn, ArrowLeft, AlertTriangle } from "lucide-react";
-import { useClubModel, ClubModelProvider } from "./useClubScreen";
+import { Shield, Edit2, LogIn, ArrowLeft, AlertTriangle } from "lucide-react";
+import { useClubModel, ClubModelProvider, requestClubRefresh } from "./useClubScreen";
 import StatsScopeBar from "./StatsScopeBar";
 import AvailabilityPanel from "./AvailabilityPanel";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { normalizeSlug } from "../../shared/paths";
-import { cellPhone, clubName } from "../../shared/textLimits";
 import { DEFAULT_CLUB_NAME, DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
-import { C, RADIUS, SHADOWS, FormInput, PrimaryButton, SecondaryButton, SectionCard } from "../../shared/ui";
+import { C, SHADOWS, SectionCard } from "../../shared/ui";
 import Home from "./home/Home";
 import Agenda from "./agenda/Agenda";
 import Players from "./players/Players";
 import Finances from "./finances/Finances";
 import Inventory from "./inventory/Inventory";
 import { MembersPanel } from "./MembersModal";
-import ClubAdminMenu from "./ClubAdminMenu";
+import EditClubModal from "./EditClubModal";
 import AdSlot from "../shell/AdSlot";
 import SpaceSwitcher from "../shell/SpaceSwitcher";
 import PlatformFooter from "../shell/PlatformFooter";
@@ -136,21 +135,10 @@ function ClubShell() {
     isUltraSmall,
     navContainerRef,
     sliderRef,
-    showEditClub,
-    editClubName,
-    setEditClubName,
-    editClubLogo,
-    setEditClubLogo,
-    editClubPhone,
-    setEditClubPhone,
-    isUploadingLogo,
-    handleOpenEditClub,
-    handleLogoUpload,
-    handleCancelEditClub,
-    handleSaveClub,
+    editingClub,
+    setEditingClub,
     goToLogin,
     perms,
-    isSuperAdmin,
     roleLabel,
     hasAccess,
     navItems,
@@ -233,7 +221,7 @@ function ClubShell() {
 
               {perms.isAdmin && (
                 <button
-                  onClick={handleOpenEditClub}
+                  onClick={() => setEditingClub(true)}
                   style={{
                     position: "absolute",
                     bottom: "-2px",
@@ -308,16 +296,6 @@ function ClubShell() {
             <div
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
             >
-              {isSuperAdmin && clubInfo ? (
-                <ClubAdminMenu
-                  club={{
-                    id: clubInfo.id,
-                    slug: clubInfo.slug,
-                    name: clubInfo.name,
-                    active: clubInfo.active !== false,
-                  }}
-                />
-              ) : null}
               {user ? (
                 <SpaceSwitcher
                   variant="club"
@@ -391,320 +369,9 @@ function ClubShell() {
       <AdSlot placement="club" layout="club" />
 
       {/* ── MODAL EDITAR INFO DEL CLUB ── */}
-      {showEditClub && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(10, 25, 41, 0.85)",
-            backdropFilter: "blur(4px)",
-            zIndex: 9999,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "1rem",
-            animation: "fadeIn 0.2s ease",
-          }}
-          onClick={handleCancelEditClub}
-        >
-          <div
-            style={{
-              backgroundColor: C.white,
-              borderRadius: RADIUS.xl,
-              width: "100%",
-              maxWidth: "420px",
-              boxShadow: SHADOWS.xl,
-              overflow: "hidden",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                backgroundColor: C.gray50,
-                borderBottom: `1px solid ${C.gray200}`,
-                padding: "1.25rem 1.5rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "800",
-                  color: C.navy900,
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.6rem",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "rgba(245, 158, 11, 0.15)",
-                    padding: "6px",
-                    borderRadius: "50%",
-                    display: "flex",
-                  }}
-                >
-                  <Edit2 size={16} color={C.amber} />
-                </div>
-                Ajustes del Club
-              </h3>
-              <button
-                onClick={handleCancelEditClub}
-                style={{
-                  background: C.white,
-                  border: `1px solid ${C.gray200}`,
-                  borderRadius: "50%",
-                  color: C.gray500,
-                  cursor: "pointer",
-                  width: "32px",
-                  height: "32px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleSaveClub}
-              style={{
-                padding: "1.5rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "1.25rem",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: C.gray500,
-                    marginBottom: "0.4rem",
-                    fontWeight: "700",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Nombre del Equipo
-                </label>
-                <FormInput
-                  type="text"
-                  required
-                  value={editClubName}
-                  maxLength={30}
-                  onChange={(e) => setEditClubName(clubName(e.target.value))}
-                  placeholder={`Ej. ${DEFAULT_CLUB_NAME}`}
-                  style={{
-                    width: "100%",
-                    fontSize: "1rem",
-                    fontWeight: "600",
-                    padding: "0.75rem",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: C.gray500,
-                    marginBottom: "0.4rem",
-                    fontWeight: "700",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Teléfono del presidente
-                </label>
-                <FormInput
-                  type="tel"
-                  value={editClubPhone}
-                  onChange={(e) => setEditClubPhone(cellPhone(e.target.value))}
-                  placeholder="Ej. 6221234567"
-                  maxLength={16}
-                  style={{
-                    width: "100%",
-                    fontSize: "1rem",
-                    fontWeight: "600",
-                    padding: "0.75rem",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    color: C.gray500,
-                    marginBottom: "0.5rem",
-                    fontWeight: "700",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Escudo del Club (Logo)
-                </label>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "1.25rem",
-                    padding: "1rem",
-                    backgroundColor: C.gray50,
-                    borderRadius: RADIUS.lg,
-                    border: `1px solid ${C.gray100}`,
-                  }}
-                >
-                  <img
-                    src={
-                      editClubLogo ||
-                      "https://ui-avatars.com/api/?name=Club&background=f1f5f9&color=94a3b8"
-                    }
-                    alt="Vista previa"
-                    style={{
-                      width: "72px",
-                      height: "72px",
-                      borderRadius: "50%",
-                      objectFit: "cover",
-                      border: `2px solid ${C.gray200}`,
-                      boxShadow: SHADOWS.sm,
-                      backgroundColor: C.white,
-                      flexShrink: 0,
-                    }}
-                  />
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        backgroundColor: C.white,
-                        border: `1px solid ${C.gray200}`,
-                        color: C.navy900,
-                        padding: "0.4rem 0.875rem",
-                        borderRadius: RADIUS.full,
-                        fontSize: "0.75rem",
-                        fontWeight: "700",
-                        cursor: isUploadingLogo ? "not-allowed" : "pointer",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-                        opacity: isUploadingLogo ? 0.6 : 1,
-                        transition: "background-color 0.2s ease",
-                      }}
-                    >
-                      <UploadCloud size={14} color={C.amber} />
-                      {isUploadingLogo ? "Subiendo..." : "Cambiar Imagen"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={isUploadingLogo}
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleLogoUpload(e.target.files[0]);
-                          }
-                        }}
-                        style={{ display: "none" }}
-                      />
-                    </label>
-                    <span
-                      style={{
-                        fontSize: "0.65rem",
-                        color: C.gray400,
-                        fontWeight: "500",
-                      }}
-                    >
-                      JPG, PNG o WEBP de hasta 5 MB
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      height: "1px",
-                      backgroundColor: C.gray200,
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: "0.65rem",
-                      color: C.gray400,
-                      fontWeight: "700",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    O PEGAR URL
-                  </span>
-                  <div
-                    style={{
-                      flex: 1,
-                      height: "1px",
-                      backgroundColor: C.gray200,
-                    }}
-                  />
-                </div>
-
-                <FormInput
-                  type="url"
-                  value={editClubLogo}
-                  onChange={(e) => setEditClubLogo(e.target.value)}
-                  placeholder="https://ejemplo.com/logo.png"
-                  style={{
-                    width: "100%",
-                    marginTop: "0.75rem",
-                    fontSize: "0.85rem",
-                    color: C.gray600,
-                  }}
-                />
-              </div>
-
-              <div
-                style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}
-              >
-                <SecondaryButton
-                  type="button"
-                  onClick={handleCancelEditClub}
-                  style={{ flex: 1 }}
-                >
-                  Cancelar
-                </SecondaryButton>
-                <PrimaryButton
-                  type="submit"
-                  style={{ flex: 1, opacity: isUploadingLogo ? 0.7 : 1 }}
-                  disabled={isUploadingLogo}
-                >
-                  {isUploadingLogo ? "Guardando..." : "Guardar Cambios"}
-                </PrimaryButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {editingClub && clubInfo ? (
+        <EditClubModal club={clubInfo} onClose={() => setEditingClub(false)} onSaved={requestClubRefresh} />
+      ) : null}
 
       {/* ── NAVIGATION (SWIPEABLE & AUTO-CENTERED TABS) ── */}
       <nav

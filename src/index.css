@@ -8266,6 +8266,13 @@ a.home-card:hover,
   white-space: nowrap;
 }
 
+/* «⋯» del superadmin en la tarjeta de /equipos: por encima del enlace que cubre toda la tarjeta */
+.teams-card__menu {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
 /* /equipos → «Equipos ocultos» (solo superadmin): tarjeta apagada con insignia y motivo */
 .teams-card.is-hidden {
   background: #faf8f4;
