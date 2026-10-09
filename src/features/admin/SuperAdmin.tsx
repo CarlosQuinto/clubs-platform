@@ -23,24 +23,17 @@ import PlayersAdmin from "./players/PlayersAdmin";
 import CourtsAdmin from "./courts/CourtsAdmin";
 import FinancesAdmin from "./finances/FinancesAdmin";
 import Field from "./Field";
-import InviteSignupLink from "../shell/InviteSignupLink";
+import RegisterClubModal from "../teams/RegisterClubModal";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { ClubProvider } from "../../domains/clubs/ClubContext";
 import { useAuth } from "../../domains/auth/AuthContext";
-import { normalizeSlug } from "../../shared/paths";
 import {
   adminClubQuery,
-  cellPhone,
-  clubName,
   disableReason,
-  emailText,
   isDisableReason,
   localityLabel,
-  neighborhood,
-  publicSlug,
 } from "../../shared/textLimits";
 import {
-  addClub,
   addLocality,
   DATA_REVIEW_MESSAGE,
   findAdminClubs,
@@ -53,21 +46,14 @@ import {
   clubsMatchingName,
   toSearchAdminClubs,
   validateLocality,
-  validateNewClub,
 } from "./clubsAdminMapper";
 import { useAdminQuery } from "./useAdminQuery";
 import { formatCurrency } from "../../domains/finances/helpers";
-import {
-  DEFAULT_CLUB_DESCRIPTION,
-  DEFAULT_HERO_IMAGE,
-} from "../../domains/clubs/clubDefaults";
 import type { ClubSummary } from "../../shared/types";
 import {
   Badge,
   C,
   FormInput,
-  FormSelect,
-  PrimaryButton,
   SecondaryButton,
   SectionCard,
 } from "../../shared/ui";
@@ -183,17 +169,7 @@ function ClubsAdmin({
   }));
   const debts = new Map((screen.data?.clubs ?? []).map((club) => [club.id, club.leagueDebt ?? 0]));
   const [newLocality, setNewLocality] = useState("");
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const slugEdited = useRef(false);
-  const [localityId, setLocalityId] = useState("");
-  const [location, setLocation] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [presidentPhone, setPresidentPhone] = useState("");
-  const [lastSignupEmail, setLastSignupEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [registering, setRegistering] = useState(false);
   const [clubAction, setClubAction] = useState<
     null | { type: "hide" | "show" | "delete"; club: ClubSummary }
   >(null);
@@ -205,22 +181,14 @@ function ClubsAdmin({
   const [clubQuery, setClubQuery] = useState("");
   const [searchHits, setSearchHits] = useState<ClubSummary[] | null>(null);
   const [clubPage, setClubPage] = useState(0);
-  const creating = useRef(false);
   const addingLocality = useRef(false);
   const searchCache = useRef(new Map<string, ClubSummary[]>());
   const searchAbort = useRef<AbortController | null>(null);
   const loggedSearchMiss = useRef(false);
 
-  const localityName =
-    localities.find((l) => l.id === localityId)?.name || "";
   const term = clubQuery.trim();
   const searchKey = adminClubSearchKey(term);
   const searching = term.length >= 3;
-  const clubReady =
-    typeof validateNewClub(
-      { name, slug, localityId, location, adminEmail, presidentPhone },
-      localityName,
-    ) !== "string";
   const localityReady = typeof validateLocality(newLocality) !== "string";
 
   useEffect(() => {
@@ -281,20 +249,6 @@ function ClubsAdmin({
     (safeClubPage + 1) * CLUB_PAGE_SIZE,
   );
 
-  const handleName = (value: string) => {
-    const next = clubName(value);
-    setName(next);
-    setError("");
-    if (!slugEdited.current) setSlug(normalizeSlug(next));
-  };
-
-  const handleSlug = (value: string, field: EventTarget | null) => {
-    if (field !== document.activeElement) return;
-    slugEdited.current = true;
-    setSlug(publicSlug(value));
-    setError("");
-  };
-
   const handleAddLocality = async (e: React.FormEvent) => {
     e.preventDefault();
     if (addingLocality.current) return;
@@ -324,63 +278,6 @@ function ClubsAdmin({
     } finally {
       addingLocality.current = false;
       setLocalityBusy(false);
-    }
-  };
-
-  const handleCreateClub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (creating.current) return;
-    setError("");
-    setSuccess("");
-    setLastSignupEmail("");
-    const result = validateNewClub(
-      { name, slug, localityId, location, adminEmail, presidentPhone },
-      localityName,
-    );
-    if (typeof result === "string") {
-      setError(result);
-      return;
-    }
-    if (clubs.some((club) => club.slug === result.slug)) {
-      setError(`Ya existe un club en /${result.slug}.`);
-      return;
-    }
-    creating.current = true;
-    setBusy(true);
-    try {
-      await addClub({
-        slug: result.slug,
-        name: result.name,
-        localityId: result.localityId,
-        location: result.location,
-        presidentPhone: result.presidentPhone,
-        description: DEFAULT_CLUB_DESCRIPTION,
-        heroUrl: DEFAULT_HERO_IMAGE,
-        adminEmail: result.adminEmail,
-      });
-      if (result.adminEmail) setLastSignupEmail(result.adminEmail);
-      screen.reload();
-      setSuccess(
-        result.adminEmail
-          ? `Club creado en /${result.slug}. Envíale al presidente la URL para crear su cuenta.`
-          : `Club creado en /${result.slug}.`,
-      );
-      setName("");
-      setSlug("");
-      slugEdited.current = false;
-      setLocation("");
-      setAdminEmail("");
-      setPresidentPhone("");
-    } catch (err) {
-      console.error(err);
-      setError(
-        err instanceof Error && err.message === DATA_REVIEW_MESSAGE
-          ? `${DATA_REVIEW_MESSAGE} Esa URL puede estar en uso por un club eliminado.`
-          : "No se pudo crear el club.",
-      );
-    } finally {
-      creating.current = false;
-      setBusy(false);
     }
   };
 
@@ -438,122 +335,9 @@ function ClubsAdmin({
       >
         <SectionCard
           className="compact-form-card"
-          title="Nuevo club"
-          icon={<Shield size={14} color={C.amber} />}
-        >
-          <form
-            onSubmit={handleCreateClub}
-            className="compact-form admin-club-form"
-          >
-            <div className="admin-club-form-grid">
-              <Field label="Nombre del club">
-                <FormInput
-                  value={name}
-                  maxLength={30}
-                  onChange={(e) => handleName(e.target.value)}
-                  placeholder="Ej. Joga Bonito FC"
-                />
-              </Field>
-              <Field
-                label="URL pública"
-                hint={slug ? `/${slug}` : ""}
-              >
-                <FormInput
-                  value={slug}
-                  maxLength={40}
-                  onChange={(e) => handleSlug(e.target.value, e.target)}
-                  placeholder="joga-bonito-fc"
-                />
-              </Field>
-              <Field label="Localidad">
-                <FormSelect
-                  value={localityId}
-                  onChange={(e) => {
-                    setLocalityId(e.target.value);
-                    setError("");
-                  }}
-                >
-                  <option value="">Selecciona...</option>
-                  {localities.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </FormSelect>
-              </Field>
-              <Field label="Barrio / escuela (opcional)">
-                <FormInput
-                  value={location}
-                  maxLength={50}
-                  onChange={(e) => {
-                    setLocation(neighborhood(e.target.value));
-                    setError("");
-                  }}
-                  placeholder="Ej. Col. Centro, CETIS 4"
-                />
-              </Field>
-            </div>
-            <Field
-              label="Correo del presidente (opcional)"
-              hint="Recibe el rol Presidente al crear su cuenta con este correo."
-            >
-              <FormInput
-                type="email"
-                value={adminEmail}
-                maxLength={100}
-                onChange={(e) => {
-                  setAdminEmail(emailText(e.target.value));
-                  setError("");
-                }}
-                placeholder="presidente@club.com"
-              />
-            </Field>
-            <Field
-              label="Teléfono del presidente (opcional)"
-              hint="Se muestra en el directorio público de equipos."
-            >
-              <FormInput
-                type="tel"
-                value={presidentPhone}
-                maxLength={16}
-                onChange={(e) => {
-                  setPresidentPhone(cellPhone(e.target.value));
-                  setError("");
-                }}
-                placeholder="Ej. 6221234567"
-              />
-            </Field>
-            {error && (
-              <p style={{ margin: 0, color: C.red, fontSize: "0.72rem" }}>
-                {error}
-              </p>
-            )}
-            {success && (
-              <p style={{ margin: 0, color: C.green, fontSize: "0.72rem" }}>
-                {success}
-              </p>
-            )}
-            {lastSignupEmail && <InviteSignupLink email={lastSignupEmail} />}
-            <PrimaryButton
-              type="submit"
-              disabled={!clubReady || busy}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.3rem",
-                padding: "0.5rem",
-              }}
-            >
-              <Plus size={13} /> {busy ? "Creando..." : "Crear club"}
-            </PrimaryButton>
-          </form>
-        </SectionCard>
-
-        <SectionCard
-          className="compact-form-card"
           title="Localidades"
           icon={<MapPin size={14} color={C.amber} />}
+          style={{ maxWidth: 640 }}
         >
           <form
             onSubmit={handleAddLocality}
@@ -604,33 +388,59 @@ function ClubsAdmin({
         title={`Clubes (${filteredClubs.length})`}
         icon={<Shield size={14} color={C.amber} />}
       >
-        {clubs.length === 0 ? (
-          <p style={{ margin: 0, color: C.gray400, fontSize: "0.8rem" }}>
-            Todavía no hay clubes.
-          </p>
-        ) : (
-          <div
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.6rem",
+            marginBottom: "0.75rem",
+          }}
+        >
+          {clubs.length === 0 ? (
+            <p style={{ margin: 0, color: C.gray400, fontSize: "0.8rem" }}>
+              Todavía no hay clubes.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                flex: "1 1 200px",
+                maxWidth: 280,
+              }}
+            >
+              <Search size={14} color={C.gray400} style={{ flexShrink: 0 }} />
+              <FormInput
+                type="search"
+                value={clubQuery}
+                maxLength={30}
+                onChange={(e) => {
+                  setClubQuery(adminClubQuery(e.target.value));
+                  setClubPage(0);
+                }}
+                placeholder="Buscar por nombre"
+              />
+            </div>
+          )}
+          {/* El mismo alta que «Registrar equipo» en /equipos */}
+          <SecondaryButton
+            type="button"
+            onClick={() => setRegistering(true)}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "0.45rem",
-              maxWidth: 280,
-              marginBottom: "0.75rem",
+              gap: "0.3rem",
+              padding: "0.4rem 0.7rem",
+              fontSize: "0.72rem",
+              whiteSpace: "nowrap",
             }}
           >
-            <Search size={14} color={C.gray400} style={{ flexShrink: 0 }} />
-            <FormInput
-              type="search"
-              value={clubQuery}
-              maxLength={30}
-              onChange={(e) => {
-                setClubQuery(adminClubQuery(e.target.value));
-                setClubPage(0);
-              }}
-              placeholder="Buscar por nombre"
-            />
-          </div>
-        )}
+            <Plus size={13} /> Registrar equipo
+          </SecondaryButton>
+        </div>
         {clubs.length > 0 && filteredClubs.length === 0 && (
           <p style={{ margin: 0, color: C.gray400, fontSize: "0.8rem" }}>
             Ningún club coincide con “{clubQuery.trim()}”.
@@ -706,6 +516,10 @@ function ClubsAdmin({
           />
         )}
       </SectionCard>
+
+      {registering ? (
+        <RegisterClubModal onClose={() => setRegistering(false)} onCreated={() => screen.reload()} />
+      ) : null}
 
       <ConfirmModal
         open={Boolean(clubAction)}

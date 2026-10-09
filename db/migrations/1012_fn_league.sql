@@ -11,11 +11,13 @@ SET ROLE postgres;
 
 -- ---------- Lecturas ----------
 
--- Editor del torneo: ficha, clubes activos para elegir y todos sus partidos
+-- Editor del torneo: ficha, clubes activos para elegir y todos sus partidos. Solo el superadmin, que es
+-- el único que puede escribir con lo que devuelve.
 CREATE OR REPLACE FUNCTION public.tournament_editor(p jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  WITH s AS (SELECT require_uid() AS uid)
-  SELECT jsonb_build_object(
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM require_platform_admin();
+  RETURN jsonb_build_object(
     'tournaments', (
       SELECT coalesce(jsonb_agg(jsonb_build_object(
         'id', t.id, 'name', t.name, 'legs', t.legs, 'footballType', to_jsonb(t.football_type),
@@ -38,8 +40,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
         'homeClub', jsonb_build_object('id', m.home_club_id), 'awayClub', jsonb_build_object('id', m.away_club_id))
         ORDER BY m.round_number NULLS LAST, m.match_date NULLS LAST, m.id), '[]'::jsonb)
       FROM matches m WHERE m.tournament_id = p ->> 'id')
-  )
-  FROM s
+  );
+END
 $$;
 CALL api_expose('tournament_editor', 'USER');
 

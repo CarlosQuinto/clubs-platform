@@ -38,6 +38,8 @@ export async function run({ db, rpc, check }) {
 
   const anonEditor = await rpc("anon", "tournament_editor", { id: APERTURA });
   check(Boolean(anonEditor.error), "tournament_editor: anónimo no puede");
+  const presEditor = await rpc("presidente", "tournament_editor", { id: APERTURA });
+  check(presEditor.error?.code === "42501", "tournament_editor: presidente de club no puede", presEditor.error);
   const editor = await rpc("admin", "tournament_editor", { id: APERTURA });
   check(!editor.error, "tournament_editor responde", editor.error);
   const e = editor.data ?? {};

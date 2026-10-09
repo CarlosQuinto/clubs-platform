@@ -3541,12 +3541,6 @@ button {
   gap: 0.5rem;
 }
 
-.admin-club-form-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
-}
-
 .compact-form.admin-club-form label > span:first-child {
   font-size: 0.62rem;
 }
@@ -3674,10 +3668,6 @@ button {
 @media (min-width: 560px) {
   .admin-tabs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .admin-club-form-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 

@@ -59,7 +59,7 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
    - entras con ella;
    - el mismo enlace, abierto otra vez, dice que venció o ya se usó.
 5. **[C]** En incógnito, `/registro` con un correo sin invitación muestra «Necesitas una invitación para registrarte».
-6. **[M]** Recién corregido: en `/admin`, empieza a llenar un formulario (por ejemplo, «Nuevo club»). Cambia a WhatsApp o a otra pestaña unos 30 segundos y vuelve. Lo escrito sigue ahí.
+6. **[M]** Recién corregido: en `/admin`, empieza a llenar un formulario (por ejemplo, «Nuevo jugador» en `?tab=players`). Cambia a WhatsApp o a otra pestaña unos 30 segundos y vuelve. Lo escrito sigue ahí.
 
 ## 3. /admin: datos base (8 min)
 1. **[C]** En **Competencia**:

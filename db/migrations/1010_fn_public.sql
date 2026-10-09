@@ -28,6 +28,19 @@ BEGIN
 END
 $$;
 
+-- Falla si la sesión no es superadmin. 42501 es lo que el cliente y scripts/db/check.mjs tratan como
+-- error de permiso (P0001 se reserva a los mensajes de negocio). Vive aquí, y no en 1013, porque las
+-- lecturas de 1012 (tournament_editor) ya la usan y las funciones SQL se validan al crearse.
+CREATE OR REPLACE FUNCTION public.require_platform_admin()
+RETURNS void LANGUAGE plpgsql STABLE SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM require_uid();
+  IF NOT is_platform_admin() THEN
+    RAISE EXCEPTION 'No autorizado.' USING ERRCODE = '42501';
+  END IF;
+END
+$$;
+
 -- Perfil en public.users al crear la cuenta y, si la plataforma no tiene administrador, el primer usuario lo es.
 -- Un perfil con el mismo correo sin cuenta detrás (de una cuenta borrada) haría fallar el alta por correo
 -- repetido: se quita antes.

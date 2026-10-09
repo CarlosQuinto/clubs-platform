@@ -9,17 +9,8 @@
 -- - Las validaciones de texto son idénticas a src/shared/textLimits.ts.
 SET ROLE postgres;
 
--- Falla si la sesión no es superadmin. 42501 es lo que el cliente y scripts/db/check.mjs tratan como
--- error de permiso (P0001 se reserva a los mensajes de negocio).
-CREATE OR REPLACE FUNCTION public.require_platform_admin()
-RETURNS void LANGUAGE plpgsql STABLE SET search_path = public, pg_temp AS $$
-BEGIN
-  PERFORM require_uid();
-  IF NOT is_platform_admin() THEN
-    RAISE EXCEPTION 'No autorizado.' USING ERRCODE = '42501';
-  END IF;
-END
-$$;
+-- require_platform_admin() (42501 si la sesión no es superadmin) está en 1010_fn_public.sql, junto a
+-- require_uid(), porque 1012 también la necesita.
 
 -- ---------- Lecturas ----------
 

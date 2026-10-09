@@ -15,7 +15,7 @@ type Option = { id: string; name: string };
 type Created = { slug: string; email: string };
 
 /**
- * Alta de club desde /equipos (solo superadmin). Mismas reglas que «Nuevo club» en /admin.
+ * Alta de club (solo superadmin). Lo abren «Registrar equipo» en /equipos y en /admin → Equipos.
  * `embedded`: abierto desde otro modal (Editar torneo): queda encima, sin «Ver club» y, sin correo
  * del presidente que compartir, se cierra solo al crear.
  */

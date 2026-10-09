@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, CalendarRange, Medal, Plus, Trophy, X } from "lucide-react";
-import { CategoryPicker } from "../admin/competition/TournamentsAdmin";
+import { CategoryPicker } from "./CategoryPicker";
 import { addTournament, loadCompetition } from "../../domains/competition/competitionCommands";
 import { todayIso } from "../../domains/courts/courts";
 import { tournamentName, tournamentPrize } from "../../shared/textLimits";
@@ -17,7 +17,7 @@ import { FormInput, FormSelect, PrimaryButton, SegmentedControl } from "../../sh
 import { useModalLock } from "../../shared/useModalLock";
 import { outsideSeason, toCompetitionOptions, validateNewTournament } from "./newTournamentMapper";
 
-/** Alta de torneo desde /torneos (solo superadmin). Mismas reglas que «Nuevo torneo» en /admin. */
+/** Alta de torneo (solo superadmin). Lo abren «Crear torneo» en /torneos y en /admin → Competición. */
 export default function CreateTournamentModal({
   onClose,
   onCreated,
@@ -109,7 +109,7 @@ export default function CreateTournamentModal({
     creating.current = true;
     setBusy(true);
     setError("");
-    // Una liga por categoría, todas en el mismo grupo (igual que /admin).
+    // Una liga por categoría, todas en el mismo grupo.
     const groupId = crypto.randomUUID();
     let done = 0;
     try {
