@@ -41,6 +41,7 @@ export async function run({ db, rpc, check }) {
   // Equipos y búsqueda
   const teams = await rpc("anon", "teams_page");
   check(teams.data?.clubs?.length === 8 && teams.data?.matches?.length > 0, "teams_page: 8 clubes y partidos jugados", teams.error);
+  check(Array.isArray(teams.data?.hiddenClubs) && teams.data.hiddenClubs.length === 0, "teams_page: hiddenClubs vacío para anónimo", teams.data?.hiddenClubs);
   const search = await rpc("anon", "search_clubs", { term: "halcones" });
   check(search.data?.clubs?.length === 1 && search.data.clubs[0].slug === "halcones-fc-demo", "search_clubs: acentos y mayúsculas", search.data);
   const short = await rpc("anon", "search_clubs", { term: "ha" });

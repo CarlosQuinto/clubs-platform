@@ -15,6 +15,7 @@ import Players from "./players/Players";
 import Finances from "./finances/Finances";
 import Inventory from "./inventory/Inventory";
 import { MembersPanel } from "./MembersModal";
+import ClubAdminMenu from "./ClubAdminMenu";
 import AdSlot from "../shell/AdSlot";
 import SpaceSwitcher from "../shell/SpaceSwitcher";
 import PlatformFooter from "../shell/PlatformFooter";
@@ -149,6 +150,7 @@ function ClubShell() {
     handleSaveClub,
     goToLogin,
     perms,
+    isSuperAdmin,
     roleLabel,
     hasAccess,
     navItems,
@@ -306,6 +308,16 @@ function ClubShell() {
             <div
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
             >
+              {isSuperAdmin && clubInfo ? (
+                <ClubAdminMenu
+                  club={{
+                    id: clubInfo.id,
+                    slug: clubInfo.slug,
+                    name: clubInfo.name,
+                    active: clubInfo.active !== false,
+                  }}
+                />
+              ) : null}
               {user ? (
                 <SpaceSwitcher
                   variant="club"

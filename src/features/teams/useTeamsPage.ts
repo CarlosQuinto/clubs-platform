@@ -173,6 +173,7 @@ export function useTeamsPage() {
     directory: directory.slice(0, dirLimit),
     directoryEmpty,
     hasMoreDirectory: directory.length > dirLimit,
+    hiddenClubs: model?.hiddenClubs ?? [],
     seasons: model?.seasons ?? [],
     categories: model?.categories ?? [],
     scope,

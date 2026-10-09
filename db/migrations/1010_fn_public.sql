@@ -231,6 +231,14 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
         'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id))
         ORDER BY c.name), '[]'::jsonb)
       FROM clubs c WHERE c.active),
+    -- Clubes desactivados (no borrados), solo para el superadmin: desde /equipos llega a su página y los reactiva
+    'hiddenClubs', (
+      SELECT CASE WHEN is_platform_admin() THEN coalesce(jsonb_agg(jsonb_build_object(
+        'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url, 'location', c.location,
+        'disabledReason', coalesce(c.disabled_reason, ''),
+        'locality', (SELECT jsonb_build_object('name', l.name) FROM localities l WHERE l.id = c.locality_id))
+        ORDER BY c.name), '[]'::jsonb) ELSE '[]'::jsonb END
+      FROM clubs c WHERE NOT c.active AND c.deleted_at IS NULL),
     'seasons', (
       SELECT coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'active', s.active,
         'startDate', to_jsonb(s.start_date)) ORDER BY s.start_date DESC NULLS LAST, s.id), '[]'::jsonb)

@@ -65,15 +65,16 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
 1. **[C]** En **Competencia**:
    - crea la temporada `QA 2026` y una categoría;
    - crea el torneo `QA Copa`.
-2. **[C]** En **Equipos**:
-   - crea `QA Club A` con slug, localidad y el correo de presidente `+pres`;
+2. **[C]** En `/equipos` → **Registrar equipo**:
+   - crea `QA Club A` con slug, una localidad nueva («+ Nueva localidad») y el correo de presidente `+pres`;
    - aparece el enlace de registro;
    - crea también `QA Club B`, sin presidente.
-3. **[C]** El buscador de clubes encuentra `QA` (con 3 letras o más).
-4. **[M]** «Abrir» lleva a la página del club.
-5. **[M]** Ocultar `QA Club B`, dando un motivo de 5 caracteres o más:
-   - en incógnito se ve el banner con el motivo;
-   - después vuelve a mostrarlo.
+3. **[C]** El buscador de `/equipos` encuentra `QA` (con 3 letras o más).
+4. **[M]** La tarjeta lleva a la página del club.
+5. **[M]** En la página de `QA Club B`, menú «⋯» → **Desactivar club**, dando un motivo de 5 caracteres o más:
+   - en incógnito se ve el banner con el motivo y el club no sale en `/equipos`;
+   - como superadmin aparece al final de `/equipos` en «Equipos ocultos»;
+   - desde ahí ábrelo y actívalo de nuevo con el mismo menú.
 6. **[M]** En **Portada**, cambia el eslogan y sube una imagen al carrusel. Se ven en `/`.
 7. **[M]** En **Superadmins**:
    - invita a otro correo y llega el correo;
@@ -157,7 +158,7 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
 4. **[M]** Llena un formulario, cambia a WhatsApp y vuelve. No se pierde, salvo que el sistema haya cerrado la pestaña.
 
 ## 10. Limpieza (2 min)
-- Borra `QA Club A`, `QA Club B` y el club creado desde la bandeja, confirmando con el slug.
+- Borra `QA Club A`, `QA Club B` y el club creado desde la bandeja desde el menú «⋯» de cada uno, confirmando con el slug.
 - Borra el anuncio y la cancha, o desactívalos.
 - Borra el torneo `QA Copa`. Solo se puede si no tiene partidos jugados; si no, déjalo como dato de prueba.
 - Las cuentas `+pres`, `+dt`, etc. pueden quedarse para el próximo sanity: así te saltas el bloque 4.1–4.3 y bastan unos 30 minutos.

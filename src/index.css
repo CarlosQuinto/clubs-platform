@@ -8449,6 +8449,46 @@ a.home-card:hover,
   white-space: nowrap;
 }
 
+/* /equipos → «Equipos ocultos» (solo superadmin): tarjeta apagada con insignia y motivo */
+.teams-card.is-hidden {
+  background: #faf8f4;
+  border-style: dashed;
+}
+
+.teams-card.is-hidden .teams-card__name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-soft);
+}
+
+.teams-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #ebe7df;
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.teams-card__reason {
+  flex-basis: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.teams-hidden__note {
+  margin: -0.4rem 0 0.85rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
 .teams-card__phone {
   position: relative;
   z-index: 2;

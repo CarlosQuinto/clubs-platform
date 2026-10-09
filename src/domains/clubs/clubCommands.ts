@@ -14,7 +14,6 @@ import {
   removeClubMember,
   saveClubInvite,
   saveSignupInvite,
-  searchAdminClubs,
   setClubActive,
   setClubMemberRole,
   signupInviteByEmail,
@@ -54,15 +53,6 @@ export async function addLocality(name: string) {
   if (!result.data.locality) throw new Error(DATA_REVIEW_MESSAGE);
   savedRow(result.data.locality);
   return id;
-}
-
-export async function findAdminClubs(term: string) {
-  const result = await searchAdminClubs(
-    dataConnect,
-    { term },
-    { fetchPolicy: QueryFetchPolicy.SERVER_ONLY },
-  );
-  return result.data.clubs;
 }
 
 export async function addClub(input: {

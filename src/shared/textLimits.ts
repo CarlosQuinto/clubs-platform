@@ -168,10 +168,6 @@ export function localityLabel(value: string, max = 50) {
   return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9, ]`, "g"), "")).slice(0, max);
 }
 
-export function adminClubQuery(value: string, max = 30) {
-  return singleSpaces(value.replace(new RegExp(`[^${LATIN_LETTERS}0-9 ]`, "g"), "")).slice(0, max);
-}
-
 export function contactMessage(value: string, max = 200) {
   return singleSpaces(value.replace(new RegExp(`[^${MESSAGE_CHARS}\\n-]`, "g"), "")).slice(0, max);
 }

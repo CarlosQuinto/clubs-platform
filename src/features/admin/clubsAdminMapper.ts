@@ -8,7 +8,6 @@ import {
   isRegisterEmail,
   titleCase,
 } from "../../shared/textLimits";
-import type { ClubSummary } from "../../shared/types";
 
 export interface NewClubDraft {
   name: string;
@@ -62,34 +61,3 @@ export function validateLocality(value: string): string | { name: string } {
   return { name };
 }
 
-export function adminClubSearchKey(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-}
-
-export function clubsMatchingName(clubs: ClubSummary[], key: string) {
-  if (!key) return clubs;
-  return clubs.filter((club) => adminClubSearchKey(club.name).includes(key));
-}
-
-export function toSearchAdminClubs(rows: unknown[] | null | undefined): ClubSummary[] {
-  if (!rows) return [];
-  return rows.flatMap((row) => {
-    if (!row || typeof row !== "object") return [];
-    const record = row as Record<string, unknown>;
-    const id = typeof record.id === "string" ? record.id : "";
-    const name = typeof record.name === "string" ? record.name.trim() : "";
-    const slug = typeof record.slug === "string" ? record.slug.trim() : "";
-    if (!id || !name) return [];
-    const localityId = typeof record.localityId === "string" ? record.localityId : "";
-    return [
-      {
-        id,
-        slug,
-        name,
-        localityId: localityId || undefined,
-        active: record.active !== false,
-        disabledReason: typeof record.disabledReason === "string" ? record.disabledReason : "",
-      },
-    ];
-  });
-}

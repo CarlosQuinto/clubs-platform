@@ -112,6 +112,10 @@ export async function run({ db, rpc, check }) {
   check(off.data?.club?.id === "prueba-club-1", "set_club_active: desactivar con motivo", off);
   const offRow = (await rpc("admin", "admin_clubs")).data?.clubs?.find((c) => c.id === "prueba-club-1");
   check(offRow?.active === false && offRow.disabledReason === "Falta documentación", "set_club_active: motivo guardado", offRow);
+  const hiddenAdmin = (await rpc("admin", "teams_page")).data;
+  check(hiddenAdmin?.hiddenClubs?.some((c) => c.slug === "club-prueba" && c.disabledReason === "Falta documentación") && !hiddenAdmin.clubs.some((c) => c.slug === "club-prueba"), "teams_page: el superadmin ve el club oculto en hiddenClubs y no en clubs", hiddenAdmin?.hiddenClubs);
+  const hiddenPres = (await rpc("presidente", "teams_page")).data;
+  check(Array.isArray(hiddenPres?.hiddenClubs) && hiddenPres.hiddenClubs.length === 0, "teams_page: el presidente no ve hiddenClubs", hiddenPres?.hiddenClubs);
   const onPres = await rpc("presidente", "set_club_active", { userId: ADMIN_UID, id: "prueba-club-1", active: true });
   check(onPres.data?.club === null, "set_club_active: presidente -> null", onPres);
   const on = await rpc("admin", "set_club_active", { id: "prueba-club-1", active: true });

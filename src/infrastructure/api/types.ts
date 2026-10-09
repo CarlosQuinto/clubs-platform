@@ -3366,6 +3366,17 @@ export interface TeamsPageData {
       name: string;
     };
   })[];
+  /** Clubes desactivados; vacío salvo para el superadmin. */
+  hiddenClubs: ({
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    location: string;
+    disabledReason: string;
+    locality?: {
+      name: string;
+    };
+  })[];
   seasons: ({
     id: string;
     name: string;

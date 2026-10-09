@@ -29,7 +29,7 @@ import {
   shouldScrollTopAfterNav,
 } from "./scrollAfterNav";
 
-type AdminTab = "clubs" | "players" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
+type AdminTab = "inbox" | "players" | "competition" | "cover" | "ads" | "admins" | "courts" | "finances";
 
 export { markScrollTopAfterNav };
 
@@ -59,12 +59,11 @@ export default function PlatformLayout({
       tab === "competition" ||
       tab === "cover" ||
       tab === "ads" ||
-      tab === "inbox" ||
       tab === "admins" ||
       tab === "courts" ||
       tab === "finances"
       ? tab
-      : "clubs";
+      : "inbox";
   })();
 
   useEffect(() => {
@@ -243,9 +242,9 @@ export default function PlatformLayout({
               <div className="platform-sidebar__section-label">Operación</div>
               {navLink(
                 "/admin",
-                "Equipos",
-                <Shield size={16} />,
-                pathname === "/admin" && adminTab === "clubs",
+                "Solicitudes",
+                <Inbox size={16} />,
+                pathname === "/admin" && adminTab === "inbox",
                 true,
               )}
               {navLink(
@@ -274,13 +273,6 @@ export default function PlatformLayout({
                 "Finanzas",
                 <Wallet size={16} />,
                 pathname === "/admin" && adminTab === "finances",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=inbox",
-                "Solicitudes",
-                <Inbox size={16} />,
-                pathname === "/admin" && adminTab === "inbox",
                 true,
               )}
             </div>

@@ -3,6 +3,7 @@ import { whatsappUrl } from "../../domains/platform/social";
 import { type TeamsPageData } from "../../infrastructure/dataconnect";
 import type {
   ClubCardView,
+  HiddenClubCardView,
   TeamStandingView,
   TeamsPageModel,
   TeamsScopeView,
@@ -202,6 +203,16 @@ export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
     const logo = club.logoUrl?.trim();
     if (club.slug && logo) logos.set(club.slug, logo);
   }
+  const hiddenClubs: HiddenClubCardView[] = (data.hiddenClubs ?? []).map((club) => ({
+    ...toClubCard({
+      name: club.name,
+      slug: club.slug,
+      logoUrl: club.logoUrl,
+      presidentPhone: "",
+      locality: club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`,
+    }),
+    reason: club.disabledReason.trim(),
+  }));
   return {
     clubs: data.clubs.map((club) =>
       toClubCard({
@@ -212,6 +223,7 @@ export function toTeamsPage(data: TeamsPageData): TeamsPageModel {
         locality: club.locality?.name?.trim() || club.location.trim() || `/${club.slug}`,
       }),
     ),
+    hiddenClubs,
     seasons: seasons.map((season) => ({ id: season.id, name: season.name })),
     categories: categories.map((category) => ({ id: category.id, name: category.name })),
     defaultScope: {

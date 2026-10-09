@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight,
+  EyeOff,
   ListFilter,
   Loader2,
   MessageCircle,
@@ -17,7 +18,7 @@ import { useAuth } from "../../domains/auth/AuthContext";
 import RegisterClubModal from "./RegisterClubModal";
 import { useTeamsPage } from "./useTeamsPage";
 import { ClubCrest, MoreButton, Ranking, TeamsEmpty } from "./StandingsRanking";
-import type { ClubCardView, DirectoryEmptyView } from "./teamsViewState";
+import type { ClubCardView, DirectoryEmptyView, HiddenClubCardView } from "./teamsViewState";
 
 export default function TeamsPageView() {
   const screen = useTeamsPage();
@@ -130,6 +131,9 @@ export default function TeamsPageView() {
                 />
               </>
             )}
+            {isSuperAdmin && screen.hiddenClubs.length > 0 && !screen.query.trim() ? (
+              <HiddenDirectory clubs={screen.hiddenClubs} />
+            ) : null}
           </>
         )}
       </div>
@@ -207,6 +211,41 @@ function Directory({
         ))}
       </div>
       {hasMore ? <MoreButton onClick={onMore} /> : null}
+    </>
+  );
+}
+
+/** Clubes desactivados, solo para el superadmin: no salen en el directorio ni en la búsqueda. Se reactivan desde su página. */
+function HiddenDirectory({ clubs }: { clubs: HiddenClubCardView[] }) {
+  return (
+    <>
+      <h2 className="teams-rule">
+        <span>Equipos ocultos ({clubs.length})</span>
+      </h2>
+      <p className="teams-hidden__note">
+        No aparecen en el directorio ni se pueden inscribir en torneos nuevos. Ábrelos para volver a activarlos.
+      </p>
+      <div className="teams-grid">
+        {clubs.map((club) => (
+          <article key={club.href} className="teams-card is-hidden">
+            <Link to={club.href} className="teams-card__link" aria-label={club.name} />
+            <ClubCrest logoUrl={club.logoUrl} initials={club.initials} />
+            <div className="teams-card__copy">
+              <div className="teams-card__name">
+                {club.name}
+                <span className="teams-card__badge">
+                  <EyeOff size={10} /> Oculto
+                </span>
+              </div>
+              <div className="teams-card__meta">
+                <span className="teams-card__place">{club.locality}</span>
+                {club.reason ? <span className="teams-card__reason">Motivo: {club.reason}</span> : null}
+              </div>
+            </div>
+            <ChevronRight className="teams-card__chevron" size={18} aria-hidden="true" />
+          </article>
+        ))}
+      </div>
     </>
   );
 }
