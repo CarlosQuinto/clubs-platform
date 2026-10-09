@@ -343,6 +343,15 @@ function deleteCourtMessage(name: string, matches: number, rentals: number, link
   return `¿Seguro que deseas eliminar ${name}? ${has}Se quitarán esos apartados y los partidos quedarán sin esta cancha. El marcador y la fecha se conservan.${refund}`;
 }
 
+/** Ocultar no toca los partidos: siguen ligados a la cancha (y apartándola) hasta que se reprogramen. */
+function hideCourtMessage(court: Court, holds: CourtHold[], today: string) {
+  const matches = holds.filter((hold) => hold.courtId === court.id && hold.source === "match" && hold.date >= today).length;
+  const linked = matches
+    ? ` Tiene ${plural(matches, "partido programado", "partidos programados")}; seguirán ligados a ella hasta que se reprogramen.`
+    : "";
+  return `¿Ocultar ${court.name}? Esta cancha ya no estará disponible para el público.${linked}`;
+}
+
 async function deleteCourtAndLinks(court: Court, holds: CourtHold[]) {
   const own = holds.filter((hold) => hold.courtId === court.id);
   const matches = own.filter((hold) => hold.source === "match").length;
@@ -720,14 +729,7 @@ export default function CourtsAdmin() {
         onToggleActive={() => {
           if (!courtModal || courtModal === "add") return;
           const next = !courtModal.active;
-          if (
-            !next &&
-            !window.confirm(
-              `¿Ocultar ${courtModal.name}? Esta cancha ya no estará disponible para el público.`,
-            )
-          ) {
-            return;
-          }
+          if (!next && !window.confirm(hideCourtMessage(courtModal, holds, today))) return;
           void upsertCourt({
             id: courtModal.id,
             name: courtName(courtModal.name).trim(),

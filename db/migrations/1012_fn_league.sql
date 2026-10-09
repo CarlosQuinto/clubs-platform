@@ -555,20 +555,25 @@ CALL api_expose('set_match_round', 'USER');
 
 -- Programa fecha, hora, sede y cancha de un partido no jugado. La fecha no puede ser anterior al inicio
 -- del torneo (o de su temporada, si el torneo no tiene fecha propia); el formulario pone el mismo «min».
--- La sede es el nombre de la cancha o, sin canchas, el lugar escrito a mano: opcional, 3 a 60 caracteres,
--- las mismas reglas que la ubicación de una cancha (courtLocation en textLimits.ts).
+-- Con cancha (courtId: debe existir, estar activa y ser de fútbol) la sede es el nombre de la cancha, puesto aquí y no
+-- por el cliente; el trigger courts_sync_match_venue (1013) la mantiene al día si renombran la cancha. Sin cancha, la
+-- sede es el lugar escrito a mano: opcional, 3 a 60 caracteres, las reglas de la ubicación de una cancha (courtLocation).
 CREATE OR REPLACE FUNCTION public.schedule_official_match(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_id text := p ->> 'id';
   v_date date := (p ->> 'matchDate')::date;
+  v_court text := NULLIF(p ->> 'courtId', '');
   v_venue text := btrim(coalesce(p ->> 'venue', ''));
   v_saved text;
 BEGIN
   IF NOT is_platform_admin() OR v_date IS NULL THEN
     RETURN jsonb_build_object('match', NULL);
   END IF;
-  IF v_venue <> '' AND (char_length(v_venue) NOT BETWEEN 3 AND 60
+  IF v_court IS NOT NULL THEN
+    SELECT c.name INTO v_venue FROM courts c WHERE c.id = v_court AND c.active AND c.football;
+    IF NOT FOUND THEN RETURN jsonb_build_object('match', NULL); END IF;
+  ELSIF v_venue <> '' AND (char_length(v_venue) NOT BETWEEN 3 AND 60
       OR v_venue !~ '^([A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)( [A-Za-z0-9À-ÖØ-öø-ÿ.,#/-]+)*$') THEN
     RETURN jsonb_build_object('match', NULL);
   END IF;
@@ -576,7 +581,7 @@ BEGIN
   SET match_date = v_date,
       start_time = p ->> 'startTime',
       venue = v_venue,
-      court_id = NULLIF(p ->> 'courtId', ''),
+      court_id = v_court,
       status = 'SCHEDULED'::match_status
   WHERE m.id = v_id
     AND m.status <> 'PLAYED'

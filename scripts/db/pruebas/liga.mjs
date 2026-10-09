@@ -146,6 +146,16 @@ export async function run({ db, rpc, check }) {
   check(scheduled?.status === "SCHEDULED" && scheduled.matchDate === "2026-10-12" && scheduled.startTime === "18:00" && scheduled.court?.name === "Campo Miramar", "schedule_official_match: fecha, hora y cancha", scheduled);
   const schedPlayed = await rpc("admin", "schedule_official_match", { ...scheduleVars, id: "dummy-tour-veteranos-j01-1" });
   check(schedPlayed.data?.match === null, "schedule_official_match: jugado -> null", schedPlayed);
+  // Con cancha, la sede la pone el servidor (nombre de la cancha), no el cliente
+  await rpc("admin", "schedule_official_match", { ...scheduleVars, venue: "Otro Nombre" });
+  const copied = (await rpc("anon", "match_detail", { id: toSchedule })).data?.matches?.[0];
+  check(copied?.venue === "Campo Miramar" && copied.court?.name === "Campo Miramar", "schedule_official_match: con cancha, venue = nombre de la cancha", [copied?.venue, copied?.court]);
+  const noCourt = await rpc("admin", "schedule_official_match", { ...scheduleVars, courtId: "no-existe" });
+  check(noCourt.data?.match === null, "schedule_official_match: cancha inexistente -> null", noCourt);
+  await db.query("UPDATE courts SET active = false WHERE id = 'dummy-court-miramar'");
+  const hiddenCourt = await rpc("admin", "schedule_official_match", scheduleVars);
+  await db.query("UPDATE courts SET active = true WHERE id = 'dummy-court-miramar'");
+  check(hiddenCourt.data?.match === null, "schedule_official_match: cancha oculta -> null", hiddenCourt);
 
   const holdVars = { userId: ADMIN_UID, id: `match_${toSchedule}`, courtId: "dummy-court-miramar", holdDate: "2026-10-12", startTime: "18:00", endTime: "19:00", matchId: toSchedule };
   const holdPres = await rpc("presidente", "save_match_court_hold", holdVars);

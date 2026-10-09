@@ -352,6 +352,14 @@ export async function run({ db, rpc, check }) {
   check(courtRow?.name === "Campo Prueba" && courtRow.hourlyRate === 123.46 && courtRow.imageUrl === null, "save_court: initcap, redondeo e imagen nula", courtRow);
   const courtEdit = await rpc("admin", "save_court", { ...courtVars, hourlyRate: 200, location: "Col. Centro" });
   check(courtEdit.data?.court?.id === "prueba-court-1", "save_court: edición", courtEdit);
+  // Renombrar la cancha actualiza la copia del nombre en sus partidos (trigger courts_sync_match_venue)
+  const linked = (await db.query("SELECT id, court_id, venue FROM matches ORDER BY id LIMIT 1")).rows[0];
+  await db.query("UPDATE matches SET court_id = 'prueba-court-1', venue = 'Campo Prueba' WHERE id = $1", [linked.id]);
+  await rpc("admin", "save_court", { ...courtVars, name: "campo nuevo" });
+  const renamed = (await db.query("SELECT venue FROM matches WHERE id = $1", [linked.id])).rows[0];
+  await rpc("admin", "save_court", courtVars);
+  await db.query("UPDATE matches SET court_id = $2, venue = $3 WHERE id = $1", [linked.id, linked.court_id, linked.venue]);
+  check(renamed?.venue === "Campo Nuevo", "save_court: renombrar actualiza matches.venue de los partidos ligados", renamed);
   // La URL pública del bucket en desarrollo es http://localhost:8000/...: tiene que aceptarse
   const localImage = "http://localhost:8000/storage/v1/object/public/media/platform/courts/1.jpg";
   const courtPhoto = await rpc("admin", "save_court", { ...courtVars, imageUrl: localImage });
@@ -474,8 +482,14 @@ export async function run({ db, rpc, check }) {
     VALUES ('prueba-hold-hoy', 'prueba-court-1', league_today(), '20:00', '21:00', 'MANUAL', 'Pedro', '', 20)`);
   const delCourtPres = await rpc("presidente", "delete_court", { id: "prueba-court-1" });
   check(delCourtPres.data?.court === null, "delete_court: presidente -> null", delCourtPres);
+  // Un partido ligado se queda con la copia del nombre como sede escrita
+  const linkedDel = (await db.query("SELECT id, court_id, venue FROM matches ORDER BY id LIMIT 1")).rows[0];
+  await db.query("UPDATE matches SET court_id = 'prueba-court-1', venue = 'Campo Prueba' WHERE id = $1", [linkedDel.id]);
   const delCourt = await rpc("admin", "delete_court", { id: "prueba-court-1" });
   check(delCourt.data?.court?.id === "prueba-court-1", "delete_court: válido", delCourt);
+  const unlinked = (await db.query("SELECT court_id, venue FROM matches WHERE id = $1", [linkedDel.id])).rows[0];
+  await db.query("UPDATE matches SET court_id = $2, venue = $3 WHERE id = $1", [linkedDel.id, linkedDel.court_id, linkedDel.venue]);
+  check(unlinked?.court_id === null && unlinked.venue === "Campo Prueba", "delete_court: el partido ligado conserva el nombre como sede escrita", unlinked);
   const todayRent = (await db.query(`SELECT c.status::text AS status, (SELECT count(*)::int FROM league_payments lp WHERE lp.charge_id = c.id) AS n
     FROM league_charges c WHERE c.source_key = 'hold:prueba-hold-hoy'`)).rows;
   check(todayRent.length === 1 && todayRent[0].status === "CANCELADO" && todayRent[0].n === 0,

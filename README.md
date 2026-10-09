@@ -403,7 +403,9 @@ Al rechazar, la app ejecuta `rejectTeamApplication` y la API manda el correo de 
 ### Programar un partido y la tabla
 
 - La ficha del torneo, la portada y `/partidos` usan el mismo formulario (`features/matches/MatchScheduleForm.tsx`). Ofrece las canchas con `football` y `active` verdaderos, libres en la apertura y sin un apartado que se cruce. Las tres fechas sugeridas salen de la disponibilidad de ambos clubes, la apertura y los partidos que ya tienen.
-- Sin canchas registradas, o con el módulo Canchas apagado (`match_slot_hints` no devuelve canchas), el formulario pide la **sede escrita a mano** en lugar del select: opcional, 3 a 60 caracteres, las mismas reglas que la ubicación de una cancha. Se guarda en `matches.venue` sin cancha ligada ni apartado.
+- La sede es una cancha de la liga u **«Otra sede (escribir)»**, un lugar a mano (cancha prestada, partido de visita): opcional, 3 a 60 caracteres, las mismas reglas que la ubicación de una cancha. Sin canchas registradas, o con el módulo Canchas apagado (`match_slot_hints` no devuelve canchas), solo queda el campo de texto. Una sede escrita se guarda en `matches.venue` sin cancha ligada: no aparta nada, no se detectan choques entre sedes escritas y no aparece en el calendario de canchas de `/admin`.
+- Con cancha, `schedule_official_match` exige que exista, esté activa y sea de fútbol, y guarda en `matches.venue` el nombre de la cancha (no lo que mande el cliente); el trigger `courts_sync_match_venue` lo actualiza al renombrarla. La agenda del club y el correo leen esa copia; las demás pantallas prefieren la cancha ligada («ubicación · nombre»).
+- Al reprogramar un partido cuya cancha ya no está disponible (oculta, sin fútbol, borrada o módulo apagado), el formulario abre con «Otra sede» y el nombre de esa cancha como texto: nada se pierde sin que se vea; si se guarda así, el partido deja de apartar la cancha.
 - Al guardar, si la cancha ya no está libre, no se guarda y se muestra «Esa cancha no está disponible en esa fecha y hora».
 - Después de programar, la app llama a `sendMatchScheduleNotice`. La API compara fecha, hora y cancha (o la sede escrita, guardada como `@sede`) con `matches.schedule_notice_key`; solo si cambiaron, avisa a los Presidentes de ambos clubes y actualiza la llave.
 - Al sumar equipos a un torneo, la app llama a `sendTournamentEnrollmentNotice`. La API inserta en `tournament_notices` y solo manda el correo si la fila es nueva.
@@ -654,6 +656,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) comprueba tipos, bui
 - **Podio:** se lee de `tournament_podium` y se muestra en torneos finalizados, pero ninguna operación lo escribe desde la interfaz.
 - **Renta de canchas pública** termina en WhatsApp; no crea apartados. Los apartados manuales los hace el superadmin en `/admin?tab=courts`.
 - **Partidos jugados** no se pueden reprogramar ni cambiar de cancha; un **torneo en curso** no se puede borrar.
+- **Ocultar una cancha** (o quitarle «fútbol») no toca sus partidos: siguen ligados y apartándola hasta que se reprogramen; el diálogo avisa cuántos son. **Borrar una cancha** deja esos partidos con el nombre de la cancha como sede escrita, sin correo a los clubes.
 - **Studio** no tiene pestaña de logs (no se despliega el servicio de analytics).
 - **Finanzas de la liga:** no hay pago en línea; se marca a mano si un cobro se pagó. No hay árbitros como entidad: el arbitraje es una tarifa por partido y el pago a árbitros se anota como gasto. Cambiar la duración de un torneo o el costo de una cancha no recalcula los cobros ya registrados.
 - No hay tests de interfaz ni lint, y el chunk `vendor` pasa de 1000 kB.

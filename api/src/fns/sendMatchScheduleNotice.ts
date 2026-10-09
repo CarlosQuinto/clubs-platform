@@ -53,7 +53,8 @@ export const sendMatchScheduleNotice: FnHandler = async ({ auth, data }) => {
     return reason ? await notifyUnscheduled(matchId, match, result.courts, reason) : { mailed: false };
   }
 
-  const venue = match.venue || match.court?.name || "";
+  // La cancha ligada manda, como en las pantallas; `venue` es la sede escrita o la copia del nombre de la cancha
+  const venue = match.court?.name || match.venue || "";
   const nextKey = `${date}|${time}|${placeKey(match.court?.id || "", match.venue)}`;
   const previousKey = match.scheduleNoticeKey || "";
   if (nextKey === previousKey) return { mailed: false };

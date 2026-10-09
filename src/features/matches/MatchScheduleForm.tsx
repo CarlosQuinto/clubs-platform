@@ -12,6 +12,7 @@ export interface ScheduleTarget {
   isoDate: string;
   /** «HH:MM»; "" sin hora. */
   time: string;
+  /** La sede tal cual está guardada: el texto escrito o la copia del nombre de la cancha. Nunca la etiqueta de pantalla. */
   venue: string;
   /** "" sin cancha. */
   courtId: string;
@@ -19,9 +20,15 @@ export interface ScheduleTarget {
   awayClubId: string;
 }
 
+/** Valor del select para escribir la sede a mano en lugar de elegir una cancha. */
+const OTHER = "@otra";
+
 /**
- * Programa o reprograma un partido: sugiere horarios, lista solo canchas libres, aparta la cancha y avisa. Sin canchas
- * (o con el módulo Canchas apagado, que match_slot_hints devuelve sin canchas) la sede se escribe a mano.
+ * Programa o reprograma un partido: sugiere horarios, lista solo canchas libres, aparta la cancha y avisa. La sede es una
+ * cancha de la liga u «Otra sede», escrita a mano (cancha prestada, partido de visita). Sin canchas (o con el módulo
+ * Canchas apagado, que match_slot_hints devuelve sin canchas) solo queda el campo de texto. Si la cancha del partido ya no
+ * está disponible (oculta, sin fútbol, borrada o módulo apagado) se ofrece su nombre como sede escrita: nada se pierde
+ * sin que se vea.
  */
 export default function MatchScheduleForm({
   match,
@@ -38,9 +45,8 @@ export default function MatchScheduleForm({
 }) {
   const [date, setDate] = useState(match.isoDate);
   const [time, setTime] = useState(match.time);
-  const [courtId, setCourtId] = useState(match.courtId);
-  // Con cancha ligada, venue es el nombre de esa cancha: no se ofrece como sede escrita
-  const [venue, setVenue] = useState(match.courtId ? "" : courtLocation(match.venue));
+  const [courtId, setCourtId] = useState(match.courtId || (match.venue ? OTHER : ""));
+  const [venue, setVenue] = useState(courtLocation(match.venue));
   const [courts, setCourts] = useState<Court[] | null>(null);
   const [openWindows, setOpenWindows] = useState<TimeWindow[]>([]);
   const [slotMinutes, setSlotMinutes] = useState<CourtSlotMinutes>(60);
@@ -61,6 +67,10 @@ export default function MatchScheduleForm({
       .then((hints) => {
         if (cancelled) return;
         setCourts(hints.courts);
+        // La cancha del partido ya no se ofrece: se conserva su nombre como sede escrita
+        setCourtId((current) =>
+          current && current !== OTHER && !hints.courts.some((court) => court.id === current) ? OTHER : current,
+        );
         setOpenWindows(hints.openWindows);
         setSlotMinutes(hints.slotMinutes);
         setSuggestions(hints.suggestions);
@@ -93,7 +103,7 @@ export default function MatchScheduleForm({
         if (cancelled) return;
         const ids = free.map((court) => court.id);
         setFreeIds(ids);
-        setCourtId((current) => (current && !ids.includes(current) ? "" : current));
+        setCourtId((current) => (current && current !== OTHER && !ids.includes(current) ? "" : current));
       })
       .catch((err) => {
         console.error(err);
@@ -110,28 +120,29 @@ export default function MatchScheduleForm({
     return all.filter((court) => freeIds.includes(court.id));
   }, [courts, date, time, freeIds]);
 
-  const manualVenue = courts !== null && courts.length === 0;
+  // Sin canchas solo se puede escribir la sede
+  const typing = courtId === OTHER || (courts !== null && courts.length === 0);
 
   const save = async () => {
     if (!date || !time) {
       setError("Elige fecha y hora.");
       return;
     }
-    if (manualVenue && !isCourtLocation(venue)) {
+    if (typing && !isCourtLocation(venue)) {
       setError("La sede debe tener de 3 a 60 caracteres: letras, números y . , # / -");
       return;
     }
-    const court = courts?.find((item) => item.id === courtId);
     try {
       setBusy(true);
       setError("");
+      // Con cancha, el servidor pone su nombre como sede
       await saveMatchSchedule({
         matchId: match.id,
         date,
         time,
         startDate,
-        venue: manualVenue ? venue.trim() : court?.name || (courtId ? match.venue : ""),
-        courtId: manualVenue ? "" : courtId,
+        venue: typing ? venue.trim() : "",
+        courtId: typing ? "" : courtId,
         durationMinutes,
         courts: courts || [],
         openWindows,
@@ -184,7 +195,25 @@ export default function MatchScheduleForm({
           <FormInput type="time" value={time} aria-label="Hora" onChange={(event) => setTime(event.target.value)} />
         </label>
       </div>
-      {manualVenue ? (
+      {courts && courts.length > 0 ? (
+        <label style={field}>
+          <span style={fieldLabel}>Cancha</span>
+          <FormSelect
+            aria-label="Cancha"
+            value={courtId}
+            onChange={(event) => setCourtId(event.target.value)}
+          >
+            <option value="">Sin sede</option>
+            {listedCourts.map((court) => (
+              <option key={court.id} value={court.id}>
+                {courtPlaceLabel(court.location, court.name)}
+              </option>
+            ))}
+            <option value={OTHER}>Otra sede (escribir)</option>
+          </FormSelect>
+        </label>
+      ) : null}
+      {typing ? (
         <label style={field}>
           <span style={fieldLabel}>Sede</span>
           <FormInput
@@ -195,23 +224,7 @@ export default function MatchScheduleForm({
             onChange={(event) => setVenue(courtLocation(event.target.value))}
           />
         </label>
-      ) : (
-        <label style={field}>
-          <span style={fieldLabel}>Cancha</span>
-          <FormSelect
-            aria-label="Cancha"
-            value={courtId}
-            onChange={(event) => setCourtId(event.target.value)}
-          >
-            <option value="">Sin cancha</option>
-            {listedCourts.map((court) => (
-              <option key={court.id} value={court.id}>
-                {courtPlaceLabel(court.location, court.name)}
-              </option>
-            ))}
-          </FormSelect>
-        </label>
-      )}
+      ) : null}
       {error ? <p style={{ margin: 0, color: C.red, fontSize: "0.78rem" }}>{error}</p> : null}
       <div className="match-edit-actions">
         {onCancel ? (

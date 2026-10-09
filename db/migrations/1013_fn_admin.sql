@@ -994,6 +994,21 @@ END
 $$;
 CALL api_expose('save_court', 'USER');
 
+-- matches.venue guarda una copia del nombre de la cancha ligada (la leen la agenda del club y el correo de programación):
+-- al renombrar la cancha se actualiza en todos sus partidos, jugados incluidos, porque es el mismo lugar con otro nombre.
+CREATE OR REPLACE FUNCTION public.courts_trg_sync_match_venue()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  UPDATE matches SET venue = NEW.name, updated_at = now()
+  WHERE court_id = NEW.id AND venue IS DISTINCT FROM NEW.name;
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION public.courts_trg_sync_match_venue() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS courts_sync_match_venue ON courts;
+CREATE TRIGGER courts_sync_match_venue
+  AFTER UPDATE OF name ON courts FOR EACH ROW EXECUTE FUNCTION courts_trg_sync_match_venue();
+
 -- Desvincula los partidos, borra los apartados y la cancha
 CREATE OR REPLACE FUNCTION public.delete_court(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$

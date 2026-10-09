@@ -160,6 +160,7 @@ function toMatch(
     time: match.startTime,
     timeLabel: formatFriendlyTime(match.startTime),
     venue: venue || null,
+    venueText: match.venue.trim(),
     homeClubId: match.homeClub.id,
     awayClubId: match.awayClub.id,
     homeName: match.homeClub.name,

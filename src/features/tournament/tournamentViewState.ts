@@ -52,6 +52,8 @@ export interface CalendarMatchView {
   isoDate: string;
   time: string;
   venue: string;
+  /** La sede guardada tal cual, sin la cancha ligada (ver UpcomingMatchView.venueText). */
+  venueText: string;
   courtId: string;
   home: ClubMark;
   away: ClubMark;

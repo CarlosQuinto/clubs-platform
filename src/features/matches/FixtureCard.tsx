@@ -84,7 +84,7 @@ export default function FixtureCard({
             id: match.id,
             isoDate: match.isoDate,
             time: match.time,
-            venue: match.venue || "",
+            venue: match.venueText,
             courtId: match.courtId,
             homeClubId: match.homeClubId,
             awayClubId: match.awayClubId,

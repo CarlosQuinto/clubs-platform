@@ -15,7 +15,10 @@ export interface UpcomingMatchView {
   /** «HH:MM» guardado; "" si aún no tiene hora. */
   time: string;
   timeLabel: string | null;
+  /** Etiqueta de pantalla: «ubicación · cancha» de la cancha ligada o, sin ella, la sede guardada. */
   venue: string | null;
+  /** La sede tal cual está guardada (texto escrito o copia del nombre de la cancha); la usa «Reprogramar». */
+  venueText: string;
   homeClubId: string;
   awayClubId: string;
   homeName: string;
