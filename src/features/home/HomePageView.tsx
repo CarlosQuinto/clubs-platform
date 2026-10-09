@@ -232,7 +232,7 @@ function HomeHero({ hero, editable }: { hero: HomeHeroView; editable: boolean })
       </div>
       <div className="home-hero__scrim" aria-hidden />
       {editable ? (
-        <Link to="/admin?tab=cover" className="home-hero__edit">
+        <Link to="/admin?tab=content&seccion=portada" className="home-hero__edit">
           <Pencil size={12} /> Editar portada
         </Link>
       ) : null}
@@ -536,7 +536,7 @@ function PromoSection({
   const index = useRotation(ads.length, AD_ROTATE_MS, ads.map((ad) => ad.imageUrl).join("|"));
   const ad = ads[index];
   const manage = admin ? (
-    <Link to="/admin?tab=ads" className="home-promo__manage">
+    <Link to="/admin?tab=content&seccion=publicidad" className="home-promo__manage">
       <Megaphone size={14} aria-hidden /> Gestionar publicidad
     </Link>
   ) : null;

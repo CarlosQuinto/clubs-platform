@@ -4,7 +4,6 @@ import {
   Crown,
   Image as ImageIcon,
   Inbox,
-  Megaphone,
   Wallet,
   LogIn,
   Calendar,
@@ -29,7 +28,7 @@ import {
   shouldScrollTopAfterNav,
 } from "./scrollAfterNav";
 
-type AdminTab = "inbox" | "players" | "cover" | "ads" | "admins" | "courts" | "finances";
+type AdminTab = "inbox" | "players" | "content" | "admins" | "courts" | "finances";
 
 export { markScrollTopAfterNav };
 
@@ -55,9 +54,9 @@ export default function PlatformLayout({
   const showCourts = chrome.courtsEnabled;
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
+    if (tab === "cover" || tab === "ads") return "content";
     return tab === "players" ||
-      tab === "cover" ||
-      tab === "ads" ||
+      tab === "content" ||
       tab === "admins" ||
       tab === "courts" ||
       tab === "finances"
@@ -269,24 +268,14 @@ export default function PlatformLayout({
               )}
             </div>
             <div className="platform-sidebar__section">
-              <div className="platform-sidebar__section-label">Contenido</div>
+              <div className="platform-sidebar__section-label">Plataforma</div>
               {navLink(
-                "/admin?tab=ads",
-                "Publicidad",
-                <Megaphone size={16} />,
-                pathname === "/admin" && adminTab === "ads",
-                true,
-              )}
-              {navLink(
-                "/admin?tab=cover",
-                "Portada",
+                "/admin?tab=content",
+                "Contenido",
                 <ImageIcon size={16} />,
-                pathname === "/admin" && adminTab === "cover",
+                pathname === "/admin" && adminTab === "content",
                 true,
               )}
-            </div>
-            <div className="platform-sidebar__section">
-              <div className="platform-sidebar__section-label">Configuración</div>
               {navLink(
                 "/admin?tab=admins",
                 "Administradores",

@@ -99,7 +99,7 @@ Hay tres tipos de usuario:
 
 ### Superadministración (`/admin?tab=`)
 
-`inbox` (contactos y solicitudes de equipo; es la pestaña inicial), `players` (jugadores de toda la liga, ver abajo), `cover` (portada y marca de la plataforma), `ads` (anuncios por ubicación `home`, `tournament`, `club`, `teams`; la vigencia la deciden las fechas y «Pausar» es el único freno manual), `admins` (superadministradores e invitaciones), `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido; la renta se cobra a quien aparta y al apartar se anota si pagó todo o un anticipo: lo que resta se cobra desde el apartado, que lo marca con $ en la rejilla, o en Finanzas) y `finances` (finanzas de la liga, ver abajo).
+`inbox` (contactos y solicitudes de equipo; es la pestaña inicial), `players` (jugadores de toda la liga, ver abajo), `content` (con `&seccion=portada`: portada y marca de la plataforma; `&seccion=publicidad`: anuncios por ubicación `home`, `tournament`, `club`, `teams`, cuya vigencia la deciden las fechas y «Pausar» es el único freno manual; `tab=cover` y `tab=ads` siguen abriendo cada sección), `admins` (superadministradores e invitaciones), `courts` (canchas, horario de apertura, bloque de 30 o 60 minutos, apartados manuales y de partido; la renta se cobra a quien aparta y al apartar se anota si pagó todo o un anticipo: lo que resta se cobra desde el apartado, que lo marca con $ en la rejilla, o en Finanzas) y `finances` (finanzas de la liga, ver abajo).
 
 **Jugadores** (`/admin?tab=players`, `&jugador=<id>` abre uno; funciones `admin_*_player*` de [`1013_fn_admin.sql`](db/migrations/1013_fn_admin.sql)):
 
@@ -246,7 +246,7 @@ Plantilla en [`docker/.env.example`](docker/.env.example); `npm run docker:env` 
 
 ### Constantes de marca
 
-[`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts) define `PLATFORM_NAME`, `PLATFORM_SHORT_NAME`, `PLATFORM_DESCRIPTION`, las imágenes de portada por defecto y los valores iniciales de un club. `vite.config.ts` las usa para el manifiesto PWA. El nombre, lema, logo y redes que se ven en la app se editan en `/admin?tab=cover` y se guardan en `platform_settings`.
+[`src/domains/clubs/clubDefaults.ts`](src/domains/clubs/clubDefaults.ts) define `PLATFORM_NAME`, `PLATFORM_SHORT_NAME`, `PLATFORM_DESCRIPTION`, las imágenes de portada por defecto y los valores iniciales de un club. `vite.config.ts` las usa para el manifiesto PWA. El nombre, lema, logo y redes que se ven en la app se editan en `/admin?tab=content` (Portada) y se guardan en `platform_settings`.
 
 ---
 

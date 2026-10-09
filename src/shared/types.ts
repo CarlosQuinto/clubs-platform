@@ -186,7 +186,7 @@ export interface PlatformSocial {
   whatsapp?: string;
 }
 
-/** Marca y portada de la plataforma, como se editan en /admin?tab=cover. */
+/** Marca y portada de la plataforma, como se editan en /admin?tab=content (Portada). */
 export interface PlatformCover {
   name: string;
   motto: string;

@@ -75,8 +75,8 @@ Este plan se concentra en lo que el smoke no cubre: la interfaz, los correos rea
    - en incógnito se ve el banner con el motivo y el club no sale en `/equipos`;
    - como superadmin aparece al final de `/equipos` en «Equipos ocultos»;
    - desde ahí ábrelo y actívalo de nuevo con el mismo menú.
-6. **[M]** En **Portada**, cambia el eslogan y sube una imagen al carrusel. Se ven en `/`.
-7. **[M]** En **Superadmins**:
+6. **[M]** En **Contenido → Portada**, cambia el eslogan y sube una imagen al carrusel. Se ven en `/`.
+7. **[M]** En **Administradores**:
    - invita a otro correo y llega el correo;
    - cancela la invitación.
 

@@ -1,8 +1,7 @@
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
 import PlatformLayout from "../shell/PlatformLayout";
-import CoverAdminView from "./cover/CoverAdminView";
-import AdsAdmin from "./ads/AdsAdmin";
+import ContentAdminView, { type ContentSection } from "./content/ContentAdminView";
 import InboxAdmin from "./inbox/InboxAdmin";
 import SuperAdminsAdmin from "./admins/SuperAdminsAdmin";
 import PlayersAdmin from "./players/PlayersAdmin";
@@ -11,7 +10,21 @@ import FinancesAdmin from "./finances/FinancesAdmin";
 import { useAuth } from "../../domains/auth/AuthContext";
 import { C, SectionCard } from "../../shared/ui";
 
-type Tab = "inbox" | "players" | "cover" | "ads" | "admins" | "courts" | "finances";
+type Tab = "inbox" | "players" | "content" | "admins" | "courts" | "finances";
+
+/** Pestaña y sección de /admin a partir de la URL. `tab=cover` y `tab=ads` siguen valiendo como atajos a Contenido. */
+export function adminTabFromParams(params: URLSearchParams): { tab: Tab; section: ContentSection } {
+  const tab = params.get("tab");
+  if (tab === "cover" || tab === "ads") return { tab: "content", section: tab };
+  if (tab === "content") {
+    return { tab, section: params.get("seccion") === "publicidad" ? "ads" : "cover" };
+  }
+  return {
+    tab:
+      tab === "players" || tab === "admins" || tab === "courts" || tab === "finances" ? tab : "inbox",
+    section: "cover",
+  };
+}
 
 /**
  * /admin?tab=: lo que no tiene página pública propia. Los clubes se registran y administran en /equipos y en la
@@ -20,16 +33,7 @@ type Tab = "inbox" | "players" | "cover" | "ads" | "admins" | "courts" | "financ
 export default function SuperAdmin() {
   const { user, loading, isSuperAdmin, sqlAdmin } = useAuth();
   const [params] = useSearchParams();
-  const tabParam = params.get("tab");
-  const tab: Tab =
-    tabParam === "players" ||
-    tabParam === "cover" ||
-    tabParam === "ads" ||
-    tabParam === "admins" ||
-    tabParam === "courts" ||
-    tabParam === "finances"
-      ? tabParam
-      : "inbox";
+  const { tab, section } = adminTabFromParams(params);
 
   if (loading || (user && sqlAdmin === null)) {
     return (
@@ -82,9 +86,7 @@ export default function SuperAdmin() {
 
       {tab === "finances" && <FinancesAdmin />}
 
-      {tab === "ads" && <AdsAdmin />}
-
-      {tab === "cover" && <CoverAdminView />}
+      {tab === "content" && <ContentAdminView section={section} />}
 
       {tab === "admins" && <SuperAdminsAdmin />}
     </PlatformLayout>
