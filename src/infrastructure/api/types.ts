@@ -2874,6 +2874,148 @@ export interface SearchPlayersVariables {
   q: string;
 }
 
+/** Contadores de la ficha del jugador (player_profile): solo partidos oficiales jugados, sin walkovers. */
+export interface PlayerProfileCounts {
+  matches: number;
+  goals: number;
+  assists: number;
+  penalties: number;
+  ownGoals: number;
+  yellowCards: number;
+  redCards: number;
+  mvps: number;
+}
+
+/** Club de la ficha: ACTIVE, INACTIVE (de baja) o FORMER (eliminado de la plantilla). No trae clubes borrados. */
+export interface PlayerProfileClub {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  shirtNumber: string;
+  position: string;
+  isCoach: boolean;
+  status: "ACTIVE" | "INACTIVE" | "FORMER";
+  since: TimestampString;
+}
+
+/** Números de un jugador en un torneo con un club (un torneo con dos clubes son dos filas). */
+export interface PlayerProfileStatLine extends PlayerProfileCounts {
+  season: { id: string; name: string; active: boolean; startDate?: DateString | null };
+  tournament: { id: string; name: string; status: TournamentStatus; category?: { name: string } | null };
+  /** slug null si el club fue borrado: sus números se conservan sin enlace. */
+  club: { id: string; name: string; slug?: string | null; logoUrl?: string | null };
+}
+
+/** Ficha pública del jugador: la edad, nunca la fecha de nacimiento. */
+export interface PlayerProfileData {
+  player: {
+    id: string;
+    name: string;
+    imageUrl: string;
+    age?: number | null;
+    clubs_on_player: PlayerProfileClub[];
+    totals: PlayerProfileCounts;
+    statLines: PlayerProfileStatLine[];
+  } | null;
+}
+
+export interface PlayerProfileVariables {
+  id: string;
+}
+
+/** Jugador del buscador de /admin (admin_search_players). */
+export interface AdminPlayerHit {
+  id: string;
+  name: string;
+  imageUrl: string;
+  birthDate?: DateString | null;
+  createdAt: TimestampString;
+  /** Clubes donde está hoy (no eliminado); active false = de baja ahí. Vacío = jugador libre. */
+  clubs_on_player: { id: string; name: string; slug: string; logoUrl?: string | null; active: boolean }[];
+}
+
+export interface AdminSearchPlayersData {
+  players: AdminPlayerHit[];
+}
+
+export interface AdminSearchPlayersVariables {
+  /** Letras, 3 a 50; vacío trae los 30 más recientes. */
+  q?: string | null;
+  /** Solo jugadores sin club. */
+  free?: boolean | null;
+}
+
+/** Ficha de un club en el detalle de /admin, también eliminadas y de clubes borrados. */
+export interface AdminPlayerMembership {
+  club: { id: string; name: string; slug: string; logoUrl?: string | null; deleted: boolean };
+  shirtNumber: string;
+  position: string;
+  variant: string;
+  isCoach: boolean;
+  active: boolean;
+  deletedAt?: TimestampString | null;
+  createdAt: TimestampString;
+}
+
+export interface AdminPlayerData {
+  player: {
+    id: string;
+    name: string;
+    birthDate?: DateString | null;
+    imageUrl: string;
+    createdAt: TimestampString;
+    clubPlayers_on_player: AdminPlayerMembership[];
+  } | null;
+}
+
+export interface AdminPlayerVariables {
+  id: string;
+}
+
+export interface AdminSavePlayerData {
+  player?: { id: string; name: string } | null;
+}
+
+/** Datos de la persona; clubId (con dorsal, posición y variante) solo al crear. */
+export interface AdminSavePlayerVariables {
+  id: string;
+  name: string;
+  birthDate: string;
+  imageUrl: string;
+  clubId?: string | null;
+  shirtNumber?: string | null;
+  position?: string | null;
+  variant?: string | null;
+}
+
+export interface AdminMergePlayersData {
+  merged?: {
+    id: string;
+    name: string;
+    /** Foto del origen que ya no usa nadie: el cliente la borra de Storage. */
+    orphanImageUrl?: string | null;
+    moved: {
+      clubs: number;
+      attendees: number;
+      goals: number;
+      assists: number;
+      cards: number;
+      mvps: number;
+      lineups: number;
+      eventFacts: number;
+      contributions: number;
+      transactions: number;
+    };
+  } | null;
+}
+
+export interface AdminMergePlayersVariables {
+  /** El duplicado: sus datos pasan a targetId y se borra. */
+  sourceId: string;
+  targetId: string;
+}
+
 export interface SavePlayerVariables {
   id: string;
   clubId: string;

@@ -14,6 +14,7 @@ import {
   Shield,
   Trophy,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { useAuth } from "../../domains/auth/AuthContext";
@@ -28,7 +29,7 @@ import {
   shouldScrollTopAfterNav,
 } from "./scrollAfterNav";
 
-type AdminTab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
+type AdminTab = "clubs" | "players" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
 
 export { markScrollTopAfterNav };
 
@@ -54,7 +55,8 @@ export default function PlatformLayout({
   const showCourts = chrome.courtsEnabled;
   const adminTab = ((): AdminTab => {
     const tab = new URLSearchParams(search).get("tab");
-    return tab === "competition" ||
+    return tab === "players" ||
+      tab === "competition" ||
       tab === "cover" ||
       tab === "ads" ||
       tab === "inbox" ||
@@ -244,6 +246,13 @@ export default function PlatformLayout({
                 "Equipos",
                 <Shield size={16} />,
                 pathname === "/admin" && adminTab === "clubs",
+                true,
+              )}
+              {navLink(
+                "/admin?tab=players",
+                "Jugadores",
+                <Users size={16} />,
+                pathname === "/admin" && adminTab === "players",
                 true,
               )}
               {navLink(

@@ -19,6 +19,7 @@ import AdsAdmin from "./ads/AdsAdmin";
 import InboxAdmin from "./inbox/InboxAdmin";
 import SuperAdminsAdmin from "./admins/SuperAdminsAdmin";
 import CompetitionAdminView from "./competition/CompetitionAdminView";
+import PlayersAdmin from "./players/PlayersAdmin";
 import CourtsAdmin from "./courts/CourtsAdmin";
 import FinancesAdmin from "./finances/FinancesAdmin";
 import Field from "./Field";
@@ -71,13 +72,14 @@ import {
   SectionCard,
 } from "../../shared/ui";
 
-type Tab = "clubs" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
+type Tab = "clubs" | "players" | "competition" | "cover" | "ads" | "inbox" | "admins" | "courts" | "finances";
 
 export default function SuperAdmin() {
   const { user, loading, isSuperAdmin, sqlAdmin } = useAuth();
   const [params] = useSearchParams();
   const tabParam = params.get("tab");
   const tab: Tab =
+    tabParam === "players" ||
     tabParam === "competition" ||
     tabParam === "cover" ||
     tabParam === "ads" ||
@@ -145,6 +147,8 @@ export default function SuperAdmin() {
       {tab === "finances" && <FinancesAdmin />}
 
       {tab === "competition" && <CompetitionAdminView />}
+
+      {tab === "players" && <PlayersAdmin />}
 
       {tab === "clubs" && <ClubsAdmin onMembers={setMembersClub} />}
 

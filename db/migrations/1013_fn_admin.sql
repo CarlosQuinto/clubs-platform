@@ -252,7 +252,7 @@ BEGIN
     AND v_slug NOT IN (
       'admin', 'login', 'registro', 'invitar', 'registrar-equipo', 'contacto',
       'solicitudes', 'clubes', 'equipos', 'torneos', 'temporadas', 'categorias',
-      'canchas', 'api', 'partido', 'partidos'
+      'canchas', 'api', 'partido', 'partidos', 'jugadores'
     )
     AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = v_slug)
     AND EXISTS (SELECT 1 FROM localities WHERE id = p ->> 'localityId')
@@ -1454,5 +1454,310 @@ BEGIN
 END
 $$;
 CALL api_expose('remove_platform_admin', 'USER');
+
+-- ---------- Jugadores ----------
+
+-- Busca jugadores de toda la liga por nombre (superadmin). «q»: letras, 3 a 50, sin importar acentos ni
+-- mayúsculas; vacío trae los 30 creados más recientemente. «free»: solo los que no están vivos en ningún club vivo
+-- (jugadores libres). clubs_on_player: clubes donde está hoy (no eliminados), con active por si está de baja.
+CREATE OR REPLACE FUNCTION public.admin_search_players(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_q text := api_clean_text(p ->> 'q');
+  v_free boolean := COALESCE((p ->> 'free')::boolean, false);
+  v_term text;
+BEGIN
+  PERFORM require_platform_admin();
+  IF v_q <> '' AND (char_length(v_q) NOT BETWEEN 3 AND 50 OR v_q !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$') THEN
+    RETURN jsonb_build_object('players', '[]'::jsonb);
+  END IF;
+  v_term := '%' || translate(lower(v_q), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%';
+  RETURN jsonb_build_object('players', (
+    SELECT coalesce(jsonb_agg(s.pj ORDER BY s.ord), '[]'::jsonb) FROM (
+      SELECT row_number() OVER (ORDER BY CASE WHEN v_q = '' THEN pl.created_at END DESC, pl.name, pl.id) AS ord,
+        jsonb_build_object(
+          'id', pl.id, 'name', pl.name, 'imageUrl', pl.image_url, 'birthDate', to_jsonb(pl.birth_date),
+          'createdAt', api_ts(pl.created_at),
+          'clubs_on_player', (
+            SELECT coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug,
+              'logoUrl', c.logo_url, 'active', cp.active) ORDER BY c.name), '[]'::jsonb)
+            FROM club_players cp JOIN clubs c ON c.id = cp.club_id
+            WHERE cp.player_id = pl.id AND cp.deleted_at IS NULL AND c.deleted_at IS NULL)) AS pj
+      FROM players pl
+      WHERE translate(lower(pl.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') LIKE v_term
+        AND (NOT v_free OR NOT EXISTS (
+          SELECT 1 FROM club_players cp JOIN clubs c ON c.id = cp.club_id
+          WHERE cp.player_id = pl.id AND cp.deleted_at IS NULL AND c.deleted_at IS NULL))
+      ORDER BY ord
+      LIMIT 30) s));
+END
+$$;
+CALL api_expose('admin_search_players', 'USER');
+
+-- Un jugador para editarlo desde /admin (superadmin): fecha de nacimiento exacta y todas sus fichas de club, también
+-- las eliminadas y las de clubes borrados (club.deleted). player null si no existe.
+CREATE OR REPLACE FUNCTION public.admin_player(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM require_platform_admin();
+  RETURN jsonb_build_object('player', (
+    SELECT jsonb_build_object(
+      'id', pl.id, 'name', pl.name, 'birthDate', to_jsonb(pl.birth_date), 'imageUrl', pl.image_url,
+      'createdAt', api_ts(pl.created_at),
+      'clubPlayers_on_player', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'club', jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
+            'deleted', c.deleted_at IS NOT NULL),
+          'shirtNumber', cp.shirt_number, 'position', cp.position, 'variant', cp.variant, 'isCoach', cp.is_coach,
+          'active', cp.active, 'deletedAt', api_ts(cp.deleted_at), 'createdAt', api_ts(cp.created_at))
+          ORDER BY c.deleted_at IS NOT NULL, cp.deleted_at IS NOT NULL, c.name, c.id), '[]'::jsonb)
+        FROM club_players cp JOIN clubs c ON c.id = cp.club_id
+        WHERE cp.player_id = pl.id))
+    FROM players pl WHERE pl.id = p ->> 'id'));
+END
+$$;
+CALL api_expose('admin_player', 'USER');
+
+-- Crea o edita a un jugador desde /admin (superadmin): nombre, nacimiento y foto, que se ven en todos sus clubes.
+-- Mismas reglas que save_player: nombre de letras, 3 a 50, en Title Case; nacimiento opcional, desde 1940 y nunca
+-- futuro. El club es opcional y solo al crear: con clubId entra a la plantilla de ese club (vivo) con su dorsal,
+-- posición y variante; sin él queda libre y los clubes lo encuentran con search_players. Para sumar a un jugador
+-- que ya existe a un club está add_existing_player; para quitarlo, delete_player (has_club_role incluye al superadmin).
+CREATE OR REPLACE FUNCTION public.admin_save_player(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid text := require_uid();
+  v_id text := btrim(coalesce(p ->> 'id', ''));
+  v_name text := api_clean_text(p ->> 'name');
+  v_birth text := coalesce(p ->> 'birthDate', '');
+  v_club text := NULLIF(p ->> 'clubId', '');
+  v_variant text := api_clean_text(p ->> 'variant');
+BEGIN
+  IF NOT is_platform_admin()
+     OR v_id = ''
+     OR char_length(v_name) NOT BETWEEN 3 AND 50
+     OR v_name !~ '^[A-Za-zÀ-ÖØ-öø-ÿ]+( [A-Za-zÀ-ÖØ-öø-ÿ]+)*$'
+     OR (v_birth <> '' AND v_birth !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  -- El cast va aparte: dentro del mismo IF el planificador podría evaluarlo antes que el formato
+  IF v_birth <> '' AND v_birth::date NOT BETWEEN DATE '1940-01-01' AND CURRENT_DATE + 1 THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  IF v_club IS NOT NULL AND (
+       EXISTS (SELECT 1 FROM players WHERE id = v_id)
+       OR NOT EXISTS (SELECT 1 FROM clubs WHERE id = v_club AND deleted_at IS NULL)
+       OR club_player_fields_error(p ->> 'shirtNumber', p ->> 'position', v_variant) <> '') THEN
+    RETURN jsonb_build_object('player', NULL);
+  END IF;
+  INSERT INTO players (id, name, birth_date, image_url, created_at)
+  VALUES (v_id, initcap(v_name), NULLIF(v_birth, '')::date, COALESCE(p ->> 'imageUrl', ''), CURRENT_TIMESTAMP)
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    birth_date = EXCLUDED.birth_date,
+    image_url = EXCLUDED.image_url;
+  IF v_club IS NOT NULL THEN
+    INSERT INTO club_players (club_id, player_id, shirt_number, position, variant, is_coach, active, created_at)
+    VALUES (v_club, v_id, p ->> 'shirtNumber', p ->> 'position', v_variant, false, true, CURRENT_TIMESTAMP);
+  END IF;
+  RETURN jsonb_build_object('player', jsonb_build_object('id', v_id, 'name', initcap(v_name)));
+END
+$$;
+CALL api_expose('admin_save_player', 'USER');
+
+-- true si la alineación (objeto con «positions»: posición → id) tiene al jugador
+CREATE OR REPLACE FUNCTION public.lineup_has_player(p_lineup jsonb, p_player text)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT coalesce(jsonb_typeof(p_lineup -> 'positions') = 'object'
+    AND EXISTS (SELECT 1 FROM jsonb_each_text(p_lineup -> 'positions') AS pos WHERE pos.value = p_player), false)
+$$;
+REVOKE ALL ON FUNCTION public.lineup_has_player(jsonb, text) FROM PUBLIC, anon, authenticated;
+
+-- La misma alineación con p_from cambiado por p_to en cada posición; lo demás (modo, formación) queda igual
+CREATE OR REPLACE FUNCTION public.lineup_swap_player(p_lineup jsonb, p_from text, p_to text)
+RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE WHEN lineup_has_player(p_lineup, p_from) THEN
+    jsonb_set(p_lineup, '{positions}', (
+      SELECT jsonb_object_agg(pos.key, CASE WHEN pos.value = to_jsonb(p_from) THEN to_jsonb(p_to) ELSE pos.value END)
+      FROM jsonb_each(p_lineup -> 'positions') AS pos))
+    ELSE p_lineup END
+$$;
+REVOKE ALL ON FUNCTION public.lineup_swap_player(jsonb, text, text) FROM PUBLIC, anon, authenticated;
+
+-- Fusiona dos fichas de la misma persona (superadmin): todo lo de sourceId pasa a targetId y sourceId se borra.
+-- No se puede deshacer. Reglas:
+-- - Plantillas: si los dos están en el mismo club queda la ficha del destino, salvo que la del origen esté más viva
+--   (eliminada → viva, de baja → activa): entonces el destino toma sus datos. Se queda el alta más antigua.
+-- - Convocatorias, porteros y asistencias a eventos repetidas en el mismo partido o evento: queda la del destino.
+-- - Aportes a la misma meta: se suman (es dinero).
+-- - Goles, asistencias, tarjetas, MVP, movimientos y alineaciones (partidos, eventos y la alineación por defecto)
+--   pasan al destino. El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas
+--   NO se toca: es la clave de las multas de la liga (league_match_expected) y cambiarlo las cancelaría y rehacería.
+-- - Persona: ganan nombre, nacimiento y foto del destino; los vacíos se completan con los del origen. Si la foto del
+--   origen no se usa vuelve en orphanImageUrl para que el cliente la borre de Storage.
+CREATE OR REPLACE FUNCTION public.admin_merge_players(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid text := require_uid();
+  v_src text := btrim(coalesce(p ->> 'sourceId', ''));
+  v_dst text := btrim(coalesce(p ->> 'targetId', ''));
+  v_from players%ROWTYPE;
+  v_to players%ROWTYPE;
+  v_n integer;
+  v_clubs integer := 0;
+  v_attendees integer := 0;
+  v_goals integer := 0;
+  v_assists integer := 0;
+  v_cards integer := 0;
+  v_mvps integer := 0;
+  v_lineups integer := 0;
+  v_event_facts integer := 0;
+  v_contributions integer := 0;
+  v_transactions integer := 0;
+  v_orphan text;
+BEGIN
+  IF NOT is_platform_admin() OR v_src = '' OR v_dst = '' OR v_src = v_dst THEN
+    RETURN jsonb_build_object('merged', NULL);
+  END IF;
+  -- Bloqueo en orden de id: dos fusiones cruzadas no se traban entre sí
+  PERFORM 1 FROM players WHERE id IN (v_src, v_dst) ORDER BY id FOR UPDATE;
+  SELECT * INTO v_from FROM players WHERE id = v_src;
+  SELECT * INTO v_to FROM players WHERE id = v_dst;
+  IF v_from.id IS NULL OR v_to.id IS NULL THEN
+    RETURN jsonb_build_object('merged', NULL);
+  END IF;
+
+  -- Plantillas: mismo club en los dos → queda la ficha del destino (con los datos del origen si está más viva)
+  UPDATE club_players d SET
+    shirt_number = CASE WHEN s.take THEN s.shirt_number ELSE d.shirt_number END,
+    position = CASE WHEN s.take THEN s.position ELSE d.position END,
+    variant = CASE WHEN s.take THEN s.variant ELSE d.variant END,
+    is_coach = CASE WHEN s.take THEN s.is_coach ELSE d.is_coach END,
+    active = CASE WHEN s.take THEN s.active ELSE d.active END,
+    deleted_at = CASE WHEN s.take THEN s.deleted_at ELSE d.deleted_at END,
+    created_at = LEAST(d.created_at, s.created_at)
+  FROM (
+    SELECT o.*, (t.deleted_at IS NOT NULL AND o.deleted_at IS NULL)
+      OR (t.deleted_at IS NULL AND o.deleted_at IS NULL AND NOT t.active AND o.active) AS take
+    FROM club_players o JOIN club_players t ON t.club_id = o.club_id AND t.player_id = v_dst
+    WHERE o.player_id = v_src) s
+  WHERE d.player_id = v_dst AND d.club_id = s.club_id;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_clubs := v_n;
+  DELETE FROM club_players o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM club_players t WHERE t.player_id = v_dst AND t.club_id = o.club_id);
+  UPDATE club_players SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_clubs := v_clubs + v_n;
+
+  -- Convocatorias y porteros de partidos: si ya está el destino en el mismo partido y club, sobra la del origen
+  DELETE FROM match_attendees o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM match_attendees t
+      WHERE t.player_id = v_dst AND t.match_id = o.match_id AND t.club_id = o.club_id);
+  UPDATE match_attendees SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_attendees := v_n;
+  DELETE FROM match_goalkeepers o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM match_goalkeepers t
+      WHERE t.player_id = v_dst AND t.match_id = o.match_id AND t.club_id = o.club_id);
+  UPDATE match_goalkeepers SET player_id = v_dst WHERE player_id = v_src;
+
+  -- Goles y asistencias (el nombre guardado sigue a la persona solo si era el del origen)
+  UPDATE match_goals SET
+    scorer_id = v_dst,
+    scorer_name = CASE WHEN scorer_name = v_from.name THEN v_to.name ELSE scorer_name END
+  WHERE scorer_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_goals := v_n;
+  UPDATE match_goals SET
+    assist_id = v_dst,
+    assist_name = CASE WHEN assist_name = v_from.name THEN v_to.name ELSE assist_name END
+  WHERE assist_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_assists := v_n;
+
+  -- Tarjetas: solo el id; player_name queda igual porque es la clave de las multas
+  UPDATE match_cards SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_cards := v_n;
+
+  UPDATE match_club_reports SET mvp_id = v_dst WHERE mvp_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_mvps := v_n;
+  UPDATE club_events SET mvp_id = v_dst WHERE mvp_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_mvps := v_mvps + v_n;
+
+  -- Alineaciones guardadas como JSON (posición → id)
+  UPDATE match_club_reports SET lineup = lineup_swap_player(lineup, v_src, v_dst)
+  WHERE lineup_has_player(lineup, v_src);
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_lineups := v_n;
+  UPDATE club_events SET lineup = lineup_swap_player(lineup, v_src, v_dst)
+  WHERE lineup_has_player(lineup, v_src);
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_lineups := v_lineups + v_n;
+  UPDATE club_default_lineups SET positions = lineup_swap_player(positions, v_src, v_dst)
+  WHERE lineup_has_player(positions, v_src);
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_lineups := v_lineups + v_n;
+
+  -- Eventos del club (amistosos y entrenamientos): asistencia, goles, tarjetas y porteros
+  DELETE FROM club_event_attendees o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM club_event_attendees t WHERE t.player_id = v_dst AND t.event_id = o.event_id);
+  UPDATE club_event_attendees SET
+    player_id = CASE WHEN player_id = v_src THEN v_dst ELSE player_id END,
+    raw_label = CASE WHEN raw_label = v_src THEN v_dst ELSE raw_label END
+  WHERE player_id = v_src OR raw_label = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_event_facts := v_n;
+  UPDATE club_event_goals SET scorer_id = v_dst WHERE scorer_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_event_facts := v_event_facts + v_n;
+  UPDATE club_event_goals SET assist_id = v_dst WHERE assist_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_event_facts := v_event_facts + v_n;
+  UPDATE club_event_cards SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_event_facts := v_event_facts + v_n;
+  DELETE FROM club_event_goalkeepers o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM club_event_goalkeepers t WHERE t.player_id = v_dst AND t.event_id = o.event_id);
+  UPDATE club_event_goalkeepers SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_event_facts := v_event_facts + v_n;
+
+  -- Dinero: aportes a metas (se suman si los dos aportaron a la misma) y movimientos
+  UPDATE goal_contributions d SET amount = d.amount + o.amount
+  FROM goal_contributions o
+  WHERE d.player_id = v_dst AND o.player_id = v_src AND o.goal_id = d.goal_id;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_contributions := v_n;
+  DELETE FROM goal_contributions o WHERE o.player_id = v_src
+    AND EXISTS (SELECT 1 FROM goal_contributions t WHERE t.player_id = v_dst AND t.goal_id = o.goal_id);
+  UPDATE goal_contributions SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_contributions := v_contributions + v_n;
+  UPDATE transactions SET player_id = v_dst WHERE player_id = v_src;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  v_transactions := v_n;
+
+  -- Persona: gana el destino; los vacíos se completan con el origen
+  UPDATE players SET
+    birth_date = coalesce(birth_date, v_from.birth_date),
+    image_url = CASE WHEN image_url = '' THEN v_from.image_url ELSE image_url END
+  WHERE id = v_dst;
+  v_orphan := CASE WHEN v_to.image_url <> '' AND v_from.image_url <> '' AND v_from.image_url <> v_to.image_url
+    THEN v_from.image_url END;
+  DELETE FROM players WHERE id = v_src;
+
+  RETURN jsonb_build_object('merged', jsonb_build_object(
+    'id', v_to.id, 'name', v_to.name, 'orphanImageUrl', v_orphan,
+    'moved', jsonb_build_object(
+      'clubs', v_clubs, 'attendees', v_attendees, 'goals', v_goals, 'assists', v_assists, 'cards', v_cards,
+      'mvps', v_mvps, 'lineups', v_lineups, 'eventFacts', v_event_facts, 'contributions', v_contributions,
+      'transactions', v_transactions)));
+END
+$$;
+CALL api_expose('admin_merge_players', 'USER');
 
 RESET ROLE;

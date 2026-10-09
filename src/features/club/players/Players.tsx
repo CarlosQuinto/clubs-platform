@@ -31,7 +31,8 @@ import { useModalLock } from "../../../shared/useModalLock";
 import { C, RADIUS, SHADOWS, SectionCard, FormInput } from "../../../shared/ui";
 import { CompareModal } from "../ClubComponents";
 
-import PlayerForm, { playerFormError } from "./PlayerForm";
+import PlayerForm from "./PlayerForm";
+import { playerFormError } from "../../../domains/players/playerRules";
 import ExistingPlayerSearch from "./ExistingPlayerSearch";
 import { titleCase } from "../../../shared/textLimits";
 import PlayerRow from "./PlayerRow";

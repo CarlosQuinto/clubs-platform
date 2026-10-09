@@ -19,6 +19,8 @@ export interface SeasonStatView {
 export interface AwardEntryView {
   key: string;
   name: string;
+  /** Ficha del jugador; null si ya no existe. */
+  href: string | null;
   imageUrl: string | null;
   clubName: string | null;
   clubLogo: string | null;

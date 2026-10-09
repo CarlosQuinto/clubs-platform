@@ -32,6 +32,9 @@ export const matchPath = (matchId: string) => `/partido/${encodeURIComponent(mat
 /** Resumen público (por enlace) de una temporada cerrada. */
 export const seasonSummaryPath = (seasonId: string) => `/temporadas/${encodeURIComponent(seasonId)}/resumen`;
 
+/** Ficha pública de un jugador: sus clubes y sus números por temporada y torneo. */
+export const playerPath = (playerId: string) => `/jugadores/${encodeURIComponent(playerId)}`;
+
 /** Clave `email_key` de invitaciones y administradores. Debe coincidir con la de las Functions y con las filas guardadas. */
 export const emailKey = (email: string) =>
   email.trim().toLowerCase().replace(/\./g, ",");
@@ -53,4 +56,5 @@ export const RESERVED_SLUGS = [
   "api",
   "partido",
   "partidos",
+  "jugadores",
 ];

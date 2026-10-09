@@ -10,7 +10,7 @@ import {
 import { courtPlaceLabel, suggestSlots, toMinutes } from "../../domains/courts/courts";
 import { tournamentPhase } from "../../domains/competition/tournamentPhase";
 import { formatFriendlyDate, formatFriendlyTime, formatShortDate } from "../../shared/helpers";
-import { matchPath } from "../../shared/paths";
+import { matchPath, playerPath } from "../../shared/paths";
 import { asCourtSlot, asMatchDuration, type Court, type CourtHold, type TimeWindow, type Weekday } from "../../shared/types";
 import { clubInitials } from "../teams/teamsMapper";
 import type { LiveMatchView, UpcomingMatchView } from "../matches/matchesViewState";
@@ -248,6 +248,7 @@ export function toTournamentScreen(data: TournamentScreenData, today: string): T
     scorers: data.tournamentScorers.map((row) => ({
       playerId: row.player?.id || row.playerName || "",
       name: row.playerName?.trim() || "Sin nombre",
+      href: row.player?.id ? playerPath(row.player.id) : null,
       clubId: row.club?.id || "",
       clubName: row.club?.name || "",
       clubLogo: row.club?.logoUrl?.trim() || null,

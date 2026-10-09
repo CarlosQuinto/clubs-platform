@@ -40,6 +40,14 @@ export const adminCourts = queryNoVars<T.AdminCourtsData>("admin_courts");
 export const adminCover = queryNoVars<T.AdminCoverData>("admin_cover");
 /** query AdminInbox (USER) */
 export const adminInbox = queryNoVars<T.AdminInboxData>("admin_inbox");
+/** mutation AdminMergePlayers (USER): fusiona dos fichas de la misma persona */
+export const adminMergePlayers = mutation<T.AdminMergePlayersVariables, T.AdminMergePlayersData>("admin_merge_players");
+/** query AdminPlayer (USER): un jugador con todas sus fichas de club, para editarlo */
+export const adminPlayer = query<T.AdminPlayerVariables, T.AdminPlayerData>("admin_player");
+/** mutation AdminSavePlayer (USER): crea o edita a un jugador desde /admin, con club opcional */
+export const adminSavePlayer = mutation<T.AdminSavePlayerVariables, T.AdminSavePlayerData>("admin_save_player");
+/** query AdminSearchPlayers (USER): jugadores de toda la liga por nombre; free = sin club */
+export const adminSearchPlayers = query<T.AdminSearchPlayersVariables, T.AdminSearchPlayersData>("admin_search_players");
 /** mutation ApproveTeamApplication (USER) */
 export const approveTeamApplication = mutation<T.ApproveTeamApplicationVariables, T.ApproveTeamApplicationData>("approve_team_application");
 /** mutation BootstrapPlatformAdmin (USER) */
@@ -207,6 +215,8 @@ export const platformBanner = queryNoVars<T.PlatformBannerData>("platform_banner
 export const platformChrome = queryNoVars<T.PlatformChromeData>("platform_chrome");
 /** query PlatformClaimOpen (PUBLIC) */
 export const platformClaimOpen = queryNoVars<T.PlatformClaimOpenData>("platform_claim_open");
+/** query PlayerProfile (PUBLIC): ficha del jugador con sus clubes y números por temporada, torneo y club */
+export const playerProfile = query<T.PlayerProfileVariables, T.PlayerProfileData>("player_profile");
 // ---- club.gql ----
 /** mutation PromoteGalleryPhoto (USER) */
 export const promoteGalleryPhoto = mutation<T.PromoteGalleryPhotoVariables, T.PromoteGalleryPhotoData>("promote_gallery_photo");

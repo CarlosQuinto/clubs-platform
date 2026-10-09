@@ -29,6 +29,8 @@ export interface StandingRowView {
 export interface ScorerRowView {
   playerId: string;
   name: string;
+  /** Ficha del jugador; null si el gol quedó solo con el nombre (jugador borrado). */
+  href: string | null;
   clubId: string;
   clubName: string;
   clubLogo: string | null;

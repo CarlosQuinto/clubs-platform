@@ -18,6 +18,7 @@ import Contact from "../features/contact/ContactView";
 import RegisterTeam from "../features/registerTeam/RegisterTeamView";
 import CourtsPage from "../features/courts/CourtsPageView";
 import SeasonSummary from "../features/seasonSummary/SeasonSummaryView";
+import PlayerProfile from "../features/playerProfile/PlayerProfileView";
 import { PrivacyPage, TermsPage } from "../features/legal/LegalPage";
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/partidos" element={<MatchesPage />} />
             <Route path="/partido/:id" element={<MatchPage />} />
             <Route path="/canchas" element={<CourtsPage />} />
+            <Route path="/jugadores/:id" element={<PlayerProfile />} />
             <Route path="/terminos" element={<TermsPage />} />
             <Route path="/aviso-de-privacidad" element={<PrivacyPage />} />
             <Route path="/:slug" element={<ClubPage />} />

@@ -177,7 +177,7 @@ function AwardCard({ group }: { group: AwardGroupView }) {
               }}
             />
             <span className="tour-scorers__who">
-              <strong>{entry.name}</strong>
+              <strong>{entry.href ? <Link to={entry.href}>{entry.name}</Link> : entry.name}</strong>
               {entry.clubName ? (
                 <span className="tour-scorers__club">
                   <img src={entry.clubLogo || DEFAULT_CLUB_LOGO} alt="" />

@@ -70,6 +70,9 @@ check(teams.json?.clubs?.length > 0, `teams_page: ${teams.json?.clubs?.length} c
 const club = await rpc("club_screen", { slug: "halcones-fc-demo" });
 check(club.json?.clubs?.[0]?.players_on_club?.length > 0, "club_screen: plantilla visible");
 check(club.json?.clubs?.[0]?.transactions_on_club?.length === 0, "club_screen: finanzas ocultas a anónimos");
+const firstPlayer = club.json?.clubs?.[0]?.players_on_club?.[0]?.id;
+const profile = await rpc("player_profile", { id: firstPlayer });
+check(profile.status === 200 && Boolean(profile.json?.player?.name) && !profile.text.includes("birthDate"), "player_profile: ficha pública sin fecha de nacimiento", profile.text.slice(0, 200));
 
 console.log("\nPermisos:");
 const table = await http(`${URL_BASE}/rest/v1/clubs?select=id&limit=1`);
@@ -107,6 +110,8 @@ const inbox = await rpc("admin_inbox", {}, adminToken);
 check(Array.isArray(inbox.json?.inquiries), "admin_inbox como superadmin");
 const inboxPres = await rpc("admin_inbox", {}, presToken);
 check(inboxPres.status >= 400, `admin_inbox rechaza al presidente (HTTP ${inboxPres.status})`);
+const playersPres = await rpc("admin_search_players", { q: "" }, presToken);
+check(playersPres.status >= 400, `admin_search_players rechaza al presidente (HTTP ${playersPres.status})`);
 const spaces = await rpc("my_spaces", {}, presToken);
 check(spaces.json?.clubMembers?.[0]?.role === "ADMIN", "my_spaces: presidente de Halcones");
 const clubPres = await rpc("club_screen", { slug: "halcones-fc-demo" }, presToken);

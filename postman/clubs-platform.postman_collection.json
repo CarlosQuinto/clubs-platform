@@ -1156,6 +1156,44 @@
               }
             },
             {
+              "name": "player_profile",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{anon_key}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/rest/v1/rpc/player_profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rest",
+                    "v1",
+                    "rpc",
+                    "player_profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"p\": {\n    \"id\": \"{{player_id}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Ficha pública de un jugador (se comparte por enlace): clubes donde está o estuvo y sus números por temporada, torneo y club. Trae la edad, nunca la fecha de nacimiento. Solo cuentan partidos oficiales jugados (PLAYED con marcador) que no sean walkover; los amistosos del club no entran. Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia, tarjeta o MVP (lo mismo que match_player_refs, pero por club). Goles y asistencias siguen a tournament_scorers (sin goles en contra); el gol en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: solo el que eligió el club, como season_summary. Los clubes borrados no salen en clubs_on_player pero sus números se conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER (eliminado del club).\n\n- Operación: `PlayerProfile` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
+              }
+            },
+            {
               "name": "register_team_page",
               "request": {
                 "method": "POST",
@@ -5463,6 +5501,82 @@
               }
             },
             {
+              "name": "admin_player",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{anon_key}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/rest/v1/rpc/admin_player",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rest",
+                    "v1",
+                    "rpc",
+                    "admin_player"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"p\": {\n    \"id\": \"{{player_id}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Un jugador para editarlo desde /admin (superadmin): fecha de nacimiento exacta y todas sus fichas de club, también las eliminadas y las de clubes borrados (club.deleted). player null si no existe.\n\n- Operación: `AdminPlayer` (lectura)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)"
+              }
+            },
+            {
+              "name": "admin_search_players",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{anon_key}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/rest/v1/rpc/admin_search_players",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rest",
+                    "v1",
+                    "rpc",
+                    "admin_search_players"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"p\": {}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Busca jugadores de toda la liga por nombre (superadmin). «q»: letras, 3 a 50, sin importar acentos ni mayúsculas; vacío trae los 30 creados más recientemente. «free»: solo los que no están vivos en ningún club vivo (jugadores libres). clubs_on_player: clubes donde está hoy (no eliminados), con active por si está de baja.\n\n- Operación: `AdminSearchPlayers` (lectura)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `q`, `free`"
+              }
+            },
+            {
               "name": "search_admin_clubs",
               "request": {
                 "method": "POST",
@@ -5505,6 +5619,116 @@
         {
           "name": "Mutaciones",
           "item": [
+            {
+              "name": "admin_merge_players",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{anon_key}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/rest/v1/rpc/admin_merge_players",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rest",
+                    "v1",
+                    "rpc",
+                    "admin_merge_players"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"p\": {\n    \"sourceId\": \"\",\n    \"targetId\": \"\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Fusiona dos fichas de la misma persona (superadmin): todo lo de sourceId pasa a targetId y sourceId se borra. No se puede deshacer. Reglas: - Plantillas: si los dos están en el mismo club queda la ficha del destino, salvo que la del origen esté más viva   (eliminada → viva, de baja → activa): entonces el destino toma sus datos. Se queda el alta más antigua. - Convocatorias, porteros y asistencias a eventos repetidas en el mismo partido o evento: queda la del destino. - Aportes a la misma meta: se suman (es dinero). - Goles, asistencias, tarjetas, MVP, movimientos y alineaciones (partidos, eventos y la alineación por defecto)   pasan al destino. El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas   NO se toca: es la clave de las multas de la liga (league_match_expected) y cambiarlo las cancelaría y rehacería. - Persona: ganan nombre, nacimiento y foto del destino; los vacíos se completan con los del origen. Si la foto del   origen no se usa vuelve en orphanImageUrl para que el cliente la borre de Storage.\n\n- Operación: `AdminMergePlayers` (mutación)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Una mutación devuelve una clave por paso. Si todas vienen en null, la función rechazó el cambio (sin",
+                      "// permiso o datos inválidos); con varias claves, alguna puede ser null aunque haya funcionado.",
+                      "if (pm.response.code < 400) {",
+                      "  const data = pm.response.json() || {};",
+                      "  const keys = Object.keys(data);",
+                      "  pm.test(\"La función aceptó el cambio\", () => pm.expect(keys.length && keys.every((k) => data[k] === null), \"todas las claves en null: \" + keys.join(\", \")).to.not.be.ok);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "admin_save_player",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{anon_key}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/rest/v1/rpc/admin_save_player",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rest",
+                    "v1",
+                    "rpc",
+                    "admin_save_player"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"p\": {\n    \"id\": \"{{player_id}}\",\n    \"name\": \"Prueba {{sufijo}}\",\n    \"birthDate\": \"\",\n    \"imageUrl\": \"\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Crea o edita a un jugador desde /admin (superadmin): nombre, nacimiento y foto, que se ven en todos sus clubes. Mismas reglas que save_player: nombre de letras, 3 a 50, en Title Case; nacimiento opcional, desde 1940 y nunca futuro. El club es opcional y solo al crear: con clubId entra a la plantilla de ese club (vivo) con su dorsal, posición y variante; sin él queda libre y los clubes lo encuentran con search_players. Para sumar a un jugador que ya existe a un club está add_existing_player; para quitarlo, delete_player (has_club_role incluye al superadmin).\n\n- Operación: `AdminSavePlayer` (mutación)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `clubId`, `shirtNumber`, `position`, `variant`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Una mutación devuelve una clave por paso. Si todas vienen en null, la función rechazó el cambio (sin",
+                      "// permiso o datos inválidos); con varias claves, alguna puede ser null aunque haya funcionado.",
+                      "if (pm.response.code < 400) {",
+                      "  const data = pm.response.json() || {};",
+                      "  const keys = Object.keys(data);",
+                      "  pm.test(\"La función aceptó el cambio\", () => pm.expect(keys.length && keys.every((k) => data[k] === null), \"todas las claves en null: \" + keys.join(\", \")).to.not.be.ok);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
             {
               "name": "approve_team_application",
               "request": {

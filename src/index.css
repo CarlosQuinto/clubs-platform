@@ -3681,6 +3681,377 @@ button {
   }
 }
 
+/* /admin → Jugadores: buscador, alta, fichas por club y unión de duplicados */
+.admin-players {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.admin-players__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-players__toolbar button,
+.admin-players__row-actions button,
+.admin-players__add,
+.admin-players__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.admin-players__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.admin-players__search {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.admin-players__filters .segmented-control {
+  flex: 0 1 14rem;
+}
+
+.admin-players__hint {
+  margin: 0.6rem 0;
+  color: var(--gray-500);
+  font-size: 0.75rem;
+}
+
+.admin-players__error {
+  margin: 0.6rem 0;
+  color: var(--red);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admin-players__list,
+.admin-players__memberships {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-players__item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  background: var(--gray-50);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-players__item:hover {
+  border-color: var(--gold-cta);
+  background: #fff;
+}
+
+.admin-players__item img {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.admin-players__who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.admin-players__who strong {
+  overflow: hidden;
+  color: var(--gray-800);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-players__who span {
+  overflow: hidden;
+  color: var(--gray-500);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-players__memberships .admin-club-item__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-players__memberships .admin-club-item__title a:hover {
+  text-decoration: underline;
+}
+
+.admin-players__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.admin-players__add {
+  margin-top: 0.75rem;
+}
+
+.admin-players__draft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px dashed var(--gray-300);
+  border-radius: 10px;
+}
+
+.admin-players__draft > strong {
+  color: var(--gray-800);
+  font-size: 0.8rem;
+}
+
+.admin-players__check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--gray-600);
+  font-size: 0.78rem;
+}
+
+.admin-players__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(205, 154, 64, 0.45);
+  border-radius: 10px;
+  background: var(--amber-light);
+  color: var(--gold-deep);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.admin-players__notice span {
+  flex: 1;
+}
+
+.admin-players__notice button {
+  padding: 0 0.2rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-player-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-player-form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.admin-player-form__photo-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.admin-player-form__caption {
+  color: var(--gray-500);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-player-form__photo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.35rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--gray-700);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-player-form__photo img,
+.admin-player-form__photo > svg:first-child {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.admin-player-form__photo > svg:first-child {
+  padding: 6px;
+  background: var(--gray-100);
+  color: var(--gray-400);
+}
+
+.admin-player-form__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold-deep);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.admin-player-form__similar {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(205, 154, 64, 0.45);
+  border-radius: 10px;
+  background: var(--amber-light);
+  color: var(--gray-700);
+  font-size: 0.75rem;
+}
+
+.admin-player-form__similar ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-player-form__similar li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+}
+
+.admin-player-form__similar button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold-deep);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.admin-player-form__similar li span {
+  color: var(--gray-500);
+}
+
+.admin-player-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-merge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-merge__sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.admin-merge__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.75rem 0.5rem;
+  border: 2px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--gray-50);
+  color: var(--gray-500);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.admin-merge__side.is-chosen {
+  border-color: var(--gold-cta);
+  background: #fff;
+}
+
+.admin-merge__side img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.admin-merge__side strong {
+  color: var(--gray-800);
+  font-size: 0.82rem;
+}
+
+.admin-merge__keep {
+  color: var(--red);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-merge__side.is-chosen .admin-merge__keep {
+  color: var(--green);
+}
+
+@media (min-width: 560px) {
+  .admin-player-form__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .admin-player-form__grid--3 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.4fr);
+  }
+}
+
 /* Sección «En vivo» de la portada */
 .live-card__status {
   flex: 0 0 4.6rem;
@@ -9098,6 +9469,284 @@ a.season-summary__record:hover {
 .season-summary__record-detail {
   color: var(--ink-soft);
   font-size: 0.75rem;
+}
+
+/* ── Ficha del jugador (/jugadores/:id y /admin → Jugadores) ──
+   Reutiliza la ficha de torneo (cabecera, secciones) y las cifras del resumen de temporada. */
+.player-profile__back {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.player-profile__head {
+  flex-wrap: wrap;
+}
+
+.player-profile__photo {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--gold-cta), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.player-profile__head .teams-head__copy {
+  flex: 1 1 10rem;
+}
+
+.player-profile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.player-profile__label {
+  margin: 1rem 0 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.player-profile__clubs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.player-profile__club {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--sand-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--elev-1);
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+a.player-profile__club:hover {
+  border-color: var(--gold-cta);
+  box-shadow: var(--elev-2);
+}
+
+.player-profile__clubs.is-former .player-profile__club {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.player-profile__club img {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+}
+
+.player-profile__club-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.player-profile__club-copy strong {
+  overflow: hidden;
+  color: #000;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-profile__club-copy span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.player-profile__badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--amber-light);
+  color: var(--gold-deep);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.player-profile__seasons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.player-profile__season {
+  overflow: hidden;
+  border: 1px solid var(--sand-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--elev-1);
+}
+
+.player-profile__season > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--sand-border);
+  background: var(--sand-light);
+}
+
+.player-profile__season > header a,
+.player-profile__season > header strong {
+  color: #000;
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.player-profile__season > header a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.player-profile__season > header span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.player-profile__table-wrap {
+  overflow-x: auto;
+}
+
+.player-profile__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.player-profile__table th,
+.player-profile__table td {
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-profile__table thead th {
+  color: var(--ink-soft);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.player-profile__table th[scope="row"],
+.player-profile__table thead th:first-child {
+  padding-left: 1rem;
+  text-align: left;
+}
+
+.player-profile__table td:last-child,
+.player-profile__table thead th:last-child {
+  padding-right: 1rem;
+}
+
+.player-profile__table tbody tr + tr {
+  border-top: 1px solid var(--sand-border);
+}
+
+.player-profile__table td {
+  width: 2.4rem;
+  color: #000;
+  font-weight: 800;
+}
+
+.player-profile__table th[scope="row"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 8rem;
+  font-weight: 400;
+}
+
+.player-profile__tournament {
+  color: #000;
+  font-weight: 800;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.player-profile__tournament:hover,
+.player-profile__row-club a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.player-profile__row-club {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.player-profile__row-club a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.player-profile__row-club img {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+}
+
+.player-profile__row-note {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+/* Nombre de goleadores y premiados: enlace a su ficha */
+.tour-scorers__who strong a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tour-scorers__who strong a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.player-profile__footnote {
+  margin: 0.75rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
 }
 
 /* Calendario: una banda de /torneos por jornada. */

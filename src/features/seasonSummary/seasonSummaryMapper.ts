@@ -1,5 +1,5 @@
 import type { SeasonSummaryData, SeasonSummaryMatch, SeasonSummaryPlayerAward } from "../../infrastructure/dataconnect";
-import { matchPath } from "../../shared/paths";
+import { matchPath, playerPath } from "../../shared/paths";
 import { formatCalendarDate, toPodium } from "../tournament/tournamentMapper";
 import type {
   AwardEntryView,
@@ -61,6 +61,7 @@ function playerEntry(award: SeasonSummaryPlayerAward, index: number, one: string
   return {
     key: `${award.club?.id ?? ""}:${award.player?.id ?? award.playerName}:${index}`,
     name: award.playerName || "Jugador",
+    href: award.player?.id ? playerPath(award.player.id) : null,
     imageUrl: clean(award.player?.imageUrl),
     clubName: award.club?.name ?? null,
     clubLogo: clean(award.club?.logoUrl),
@@ -97,6 +98,7 @@ function toAwards(awards: Season["awards"]): AwardGroupView[] {
       entries: awards.keepers.map((k, i) => ({
         key: `${k.club?.id ?? ""}:${k.player.id}:${i}`,
         name: k.playerName || "Arquero",
+        href: playerPath(k.player.id),
         imageUrl: clean(k.player.imageUrl),
         clubName: k.club?.name ?? null,
         clubLogo: clean(k.club?.logoUrl),

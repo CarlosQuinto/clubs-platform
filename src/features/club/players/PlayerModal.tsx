@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
+  ArrowRight,
   X,
   Trophy,
   Star,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import { C, RADIUS, SHADOWS } from "../../../shared/ui";
 import { calculateAge } from "../../../shared/helpers";
+import { playerPath } from "../../../shared/paths";
 import { useModalLock } from "../../../shared/useModalLock";
 import TrophyCase, { Achievement } from "./TrophyCase";
 
@@ -311,6 +314,24 @@ export default function PlayerModal({
               </>
             )}
           </div>
+
+          <Link
+            to={playerPath(player.id)}
+            onClick={onClose}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.3rem",
+              marginTop: "0.75rem",
+              fontSize: "0.8rem",
+              fontWeight: "800",
+              color: "var(--gold-deep)",
+              textDecoration: "none",
+            }}
+          >
+            Ver ficha completa
+            <ArrowRight size={14} aria-hidden />
+          </Link>
         </div>
 
         {/* ── RENDIMIENTO HISTÓRICO ── */}

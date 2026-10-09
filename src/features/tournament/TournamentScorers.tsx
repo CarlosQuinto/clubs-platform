@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Goal } from "lucide-react";
 import { DEFAULT_CLUB_LOGO } from "../../domains/clubs/clubDefaults";
 import { TeamsEmpty } from "../teams/StandingsRanking";
@@ -33,7 +34,7 @@ export default function TournamentScorers({ scorers }: { scorers: ScorerRowView[
               }}
             />
             <span className="tour-scorers__who">
-              <strong>{scorer.name}</strong>
+              <strong>{scorer.href ? <Link to={scorer.href}>{scorer.name}</Link> : scorer.name}</strong>
               {scorer.clubName ? (
                 <span className="tour-scorers__club">
                   <img src={scorer.clubLogo || DEFAULT_CLUB_LOGO} alt="" />

@@ -624,6 +624,103 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 CALL api_expose('season_summary', 'PUBLIC');
 
+-- ---------- Jugadores ----------
+
+-- Ficha pública de un jugador (se comparte por enlace): clubes donde está o estuvo y sus números por temporada,
+-- torneo y club. Trae la edad, nunca la fecha de nacimiento.
+-- Solo cuentan partidos oficiales jugados (PLAYED con marcador) que no sean walkover; los amistosos del club no entran.
+-- Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia, tarjeta o MVP (lo mismo
+-- que match_player_refs, pero por club). Goles y asistencias siguen a tournament_scorers (sin goles en contra); el gol
+-- en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: solo
+-- el que eligió el club, como season_summary. Los clubes borrados no salen en clubs_on_player pero sus números se
+-- conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER (eliminado del club).
+CREATE OR REPLACE FUNCTION public.player_profile(p jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH pl AS (
+    SELECT * FROM players WHERE id = player_profile.p ->> 'id'
+  ),
+  facts AS (
+    SELECT g.match_id, g.club_id, 1 AS goals, 0 AS assists, g.is_penalty::int AS penalties, 0 AS own_goals,
+      0 AS yellow, 0 AS red, 0 AS mvps
+    FROM match_goals g JOIN pl ON pl.id = g.scorer_id WHERE NOT g.is_own_goal
+    UNION ALL
+    SELECT g.match_id, g.club_id, 0, 1, 0, 0, 0, 0, 0
+    FROM match_goals g JOIN pl ON pl.id = g.assist_id WHERE NOT g.is_own_goal
+    UNION ALL
+    SELECT g.match_id, CASE WHEN g.club_id = m.home_club_id THEN m.away_club_id ELSE m.home_club_id END,
+      0, 0, 0, 1, 0, 0, 0
+    FROM match_goals g JOIN pl ON pl.id = g.scorer_id JOIN matches m ON m.id = g.match_id WHERE g.is_own_goal
+    UNION ALL
+    SELECT k.match_id, k.club_id, 0, 0, 0, 0, (k.color = 'YELLOW'::card_color)::int, (k.color = 'RED'::card_color)::int, 0
+    FROM match_cards k JOIN pl ON pl.id = k.player_id
+    UNION ALL
+    SELECT r.match_id, r.club_id, 0, 0, 0, 0, 0, 0, 1
+    FROM match_club_reports r JOIN pl ON pl.id = r.mvp_id
+    UNION ALL
+    SELECT a.match_id, a.club_id, 0, 0, 0, 0, 0, 0, 0
+    FROM match_attendees a JOIN pl ON pl.id = a.player_id
+    UNION ALL
+    SELECT r.match_id, r.club_id, 0, 0, 0, 0, 0, 0, 0
+    FROM match_club_reports r CROSS JOIN pl
+    WHERE jsonb_typeof(r.lineup -> 'positions') = 'object'
+      AND EXISTS (SELECT 1 FROM jsonb_each_text(r.lineup -> 'positions') AS pos WHERE pos.value = pl.id)
+  ),
+  pf AS (
+    SELECT f.*, m.tournament_id FROM facts f JOIN matches m ON m.id = f.match_id
+    WHERE m.status = 'PLAYED'::match_status AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+      AND NOT m.walkover
+  ),
+  lines AS (
+    SELECT pf.tournament_id, pf.club_id, count(DISTINCT pf.match_id)::int AS matches,
+      sum(pf.goals)::int AS goals, sum(pf.assists)::int AS assists, sum(pf.penalties)::int AS penalties,
+      sum(pf.own_goals)::int AS own_goals, sum(pf.yellow)::int AS yellow, sum(pf.red)::int AS red,
+      sum(pf.mvps)::int AS mvps
+    FROM pf GROUP BY pf.tournament_id, pf.club_id
+  )
+  SELECT jsonb_build_object('player', (
+    SELECT jsonb_build_object(
+      'id', pl.id, 'name', pl.name, 'imageUrl', pl.image_url,
+      'age', CASE WHEN pl.birth_date IS NULL THEN NULL
+        ELSE date_part('year', age(CURRENT_DATE, pl.birth_date))::int END,
+      'clubs_on_player', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
+          'shirtNumber', cp.shirt_number, 'position', cp.position, 'isCoach', cp.is_coach,
+          'status', st.status, 'since', api_ts(cp.created_at))
+          ORDER BY st.ord, c.name, c.id), '[]'::jsonb)
+        FROM club_players cp JOIN clubs c ON c.id = cp.club_id
+        CROSS JOIN LATERAL (SELECT
+          CASE WHEN cp.deleted_at IS NOT NULL THEN 'FORMER' WHEN NOT cp.active THEN 'INACTIVE' ELSE 'ACTIVE' END AS status,
+          CASE WHEN cp.deleted_at IS NOT NULL THEN 3 WHEN NOT cp.active THEN 2 ELSE 1 END AS ord) st
+        WHERE cp.player_id = pl.id AND c.deleted_at IS NULL),
+      'totals', (
+        SELECT jsonb_build_object(
+          'matches', count(DISTINCT pf.match_id), 'goals', coalesce(sum(pf.goals), 0),
+          'assists', coalesce(sum(pf.assists), 0), 'penalties', coalesce(sum(pf.penalties), 0),
+          'ownGoals', coalesce(sum(pf.own_goals), 0), 'yellowCards', coalesce(sum(pf.yellow), 0),
+          'redCards', coalesce(sum(pf.red), 0), 'mvps', coalesce(sum(pf.mvps), 0))
+        FROM pf),
+      'statLines', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'season', jsonb_build_object('id', s.id, 'name', s.name, 'active', s.active,
+            'startDate', to_jsonb(s.start_date)),
+          'tournament', jsonb_build_object('id', t.id, 'name', t.name, 'status', to_jsonb(t.status),
+            'category', CASE WHEN ca.id IS NULL THEN NULL ELSE jsonb_build_object('name', ca.name) END),
+          'club', jsonb_build_object('id', c.id, 'name', c.name,
+            'slug', CASE WHEN c.deleted_at IS NULL THEN c.slug END, 'logoUrl', c.logo_url),
+          'matches', l.matches, 'goals', l.goals, 'assists', l.assists, 'penalties', l.penalties,
+          'ownGoals', l.own_goals, 'yellowCards', l.yellow, 'redCards', l.red, 'mvps', l.mvps)
+          ORDER BY s.start_date DESC NULLS LAST, s.name, s.id, t.start_date DESC NULLS LAST, t.name, t.id,
+            c.name, c.id), '[]'::jsonb)
+        FROM lines l
+        JOIN tournaments t ON t.id = l.tournament_id
+        JOIN seasons s ON s.id = t.season_id
+        LEFT JOIN categories ca ON ca.id = t.category_id
+        JOIN clubs c ON c.id = l.club_id))
+    FROM pl))
+$$;
+CALL api_expose('player_profile', 'PUBLIC');
+
 -- ---------- Canchas ----------
 
 CREATE OR REPLACE FUNCTION public.courts_page(p jsonb DEFAULT '{}'::jsonb)

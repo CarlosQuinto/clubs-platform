@@ -13,9 +13,6 @@ import {
 } from "../../../shared/ui";
 import { isoDate } from "../../../shared/helpers";
 import {
-  isPlayerFullName,
-  isPlayerVariant,
-  isShirtNumber,
   playerFullName,
   playerVariant as playerVariantText,
   shirtNumber,
@@ -25,19 +22,7 @@ import {
 import { useClub } from "../../../domains/clubs/ClubContext";
 import { deleteStoredImage, isStoredImageUrl, uploadImageFile } from "../../../infrastructure/storage/uploadImage";
 
-/** Fecha de nacimiento más antigua que se acepta (la misma que save_player). */
-export const BIRTH_MIN = "1940-01-01";
-
-/** Motivo por el que no se puede fichar; vacío si todo cumple (las reglas de save_player). */
-export function playerFormError(name: string, number: string, variant: string, birthDate: string) {
-  if (!isPlayerFullName(name)) return "El nombre lleva de 3 a 50 letras, sin números ni símbolos.";
-  if (!isShirtNumber(number)) return "El dorsal va del 1 al 99.";
-  if (!isPlayerVariant(variant)) return "La variante lleva solo letras, hasta 30.";
-  if (birthDate && (birthDate < BIRTH_MIN || birthDate > isoDate())) {
-    return "La fecha de nacimiento va de 1940 a hoy.";
-  }
-  return "";
-}
+import { BIRTH_MIN } from "../../../domains/players/playerRules";
 
 // ── COMPONENTE SWITCH (SLIDER) PERSONALIZADO ──
 const ToggleSwitch = ({
