@@ -7535,6 +7535,11 @@ a.home-card:hover,
   margin-bottom: 0.75rem;
 }
 
+/* Sin categoría el estado sigue a la derecha */
+.home-live__top .home-status {
+  margin-left: auto;
+}
+
 .home-live__face {
   display: flex;
   align-items: center;
