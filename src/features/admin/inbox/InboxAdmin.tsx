@@ -16,6 +16,7 @@ import { DEFAULT_CLUB_DESCRIPTION, DEFAULT_HERO_IMAGE } from "../../../domains/c
 import { whatsappUrl } from "../../../domains/platform/social";
 import { reviewTeamApplication } from "../../../infrastructure/functions/callables";
 import InviteSignupLink from "../../shell/InviteSignupLink";
+import NewLocalityInline from "../../teams/NewLocalityInline";
 import type { Inquiry, TeamApplication } from "../../../shared/types";
 import {
   Badge,
@@ -453,6 +454,14 @@ export default function InboxAdmin() {
               </option>
             ))}
           </FormSelect>
+          <NewLocalityInline
+            localities={localities}
+            disabled={!!busyId}
+            onCreated={(locality) => {
+              setLocalityId(locality.id);
+              screen.reload();
+            }}
+          />
         </Field>
       </ConfirmModal>
 

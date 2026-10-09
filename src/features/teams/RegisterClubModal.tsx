@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Home, Link2, Mail, MapPin, Phone, Plus, Shield, X } from "lucide-react";
 import InviteSignupLink from "../shell/InviteSignupLink";
+import NewLocalityInline from "./NewLocalityInline";
 import { validateNewClub } from "../admin/clubsAdminMapper";
 import { addClub, DATA_REVIEW_MESSAGE, loadClubs } from "../../domains/clubs/clubCommands";
 import { DEFAULT_CLUB_DESCRIPTION, DEFAULT_HERO_IMAGE } from "../../domains/clubs/clubDefaults";
@@ -258,6 +259,16 @@ export default function RegisterClubModal({
                   ))}
                 </FormSelect>
               </span>
+              <NewLocalityInline
+                localities={localities}
+                disabled={busy}
+                onCreated={(locality) => {
+                  setLocalities((current) =>
+                    [...current, locality].sort((a, b) => a.name.localeCompare(b.name, "es")),
+                  );
+                  edit(() => setLocalityId(locality.id));
+                }}
+              />
             </label>
             <label className="court-form__label">
               Barrio / escuela (opcional)

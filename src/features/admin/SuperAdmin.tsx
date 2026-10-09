@@ -5,7 +5,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  MapPin,
   Plus,
   Search,
   Shield,
@@ -31,11 +30,8 @@ import {
   adminClubQuery,
   disableReason,
   isDisableReason,
-  localityLabel,
 } from "../../shared/textLimits";
 import {
-  addLocality,
-  DATA_REVIEW_MESSAGE,
   findAdminClubs,
   loadClubs,
   removeClub,
@@ -45,7 +41,6 @@ import {
   adminClubSearchKey,
   clubsMatchingName,
   toSearchAdminClubs,
-  validateLocality,
 } from "./clubsAdminMapper";
 import { useAdminQuery } from "./useAdminQuery";
 import { formatCurrency } from "../../domains/finances/helpers";
@@ -168,7 +163,6 @@ function ClubsAdmin({
     disabledReason: club.disabledReason || "",
   }));
   const debts = new Map((screen.data?.clubs ?? []).map((club) => [club.id, club.leagueDebt ?? 0]));
-  const [newLocality, setNewLocality] = useState("");
   const [registering, setRegistering] = useState(false);
   const [clubAction, setClubAction] = useState<
     null | { type: "hide" | "show" | "delete"; club: ClubSummary }
@@ -176,12 +170,9 @@ function ClubsAdmin({
   const [deleteSlug, setDeleteSlug] = useState("");
   const [hideReason, setHideReason] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
-  const [localityError, setLocalityError] = useState("");
-  const [localityBusy, setLocalityBusy] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
   const [searchHits, setSearchHits] = useState<ClubSummary[] | null>(null);
   const [clubPage, setClubPage] = useState(0);
-  const addingLocality = useRef(false);
   const searchCache = useRef(new Map<string, ClubSummary[]>());
   const searchAbort = useRef<AbortController | null>(null);
   const loggedSearchMiss = useRef(false);
@@ -189,7 +180,6 @@ function ClubsAdmin({
   const term = clubQuery.trim();
   const searchKey = adminClubSearchKey(term);
   const searching = term.length >= 3;
-  const localityReady = typeof validateLocality(newLocality) !== "string";
 
   useEffect(() => {
     if (!searching) {
@@ -249,38 +239,6 @@ function ClubsAdmin({
     (safeClubPage + 1) * CLUB_PAGE_SIZE,
   );
 
-  const handleAddLocality = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (addingLocality.current) return;
-    const result = validateLocality(newLocality);
-    if (typeof result === "string") {
-      setLocalityError(result);
-      return;
-    }
-    if (localities.some((item) => item.name.toLowerCase() === result.name.toLowerCase())) {
-      setLocalityError("Esa localidad ya existe.");
-      return;
-    }
-    addingLocality.current = true;
-    setLocalityBusy(true);
-    setLocalityError("");
-    try {
-      await addLocality(result.name);
-      screen.reload();
-      setNewLocality("");
-    } catch (err) {
-      console.error(err);
-      setLocalityError(
-        err instanceof Error && err.message === DATA_REVIEW_MESSAGE
-          ? DATA_REVIEW_MESSAGE
-          : "No se pudo añadir la localidad.",
-      );
-    } finally {
-      addingLocality.current = false;
-      setLocalityBusy(false);
-    }
-  };
-
   const toggleActive = async (club: ClubSummary) => {
     setHideReason("");
     setClubAction({ type: club.active ? "hide" : "show", club });
@@ -325,64 +283,6 @@ function ClubsAdmin({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "1.25rem",
-          alignItems: "start",
-        }}
-      >
-        <SectionCard
-          className="compact-form-card"
-          title="Localidades"
-          icon={<MapPin size={14} color={C.amber} />}
-          style={{ maxWidth: 640 }}
-        >
-          <form
-            onSubmit={handleAddLocality}
-            className="compact-form"
-            style={{
-              display: "flex",
-              gap: "0.4rem",
-              marginBottom: "0.65rem",
-            }}
-          >
-            <FormInput
-              value={newLocality}
-              maxLength={50}
-              onChange={(e) => {
-                setNewLocality(localityLabel(e.target.value));
-                setLocalityError("");
-              }}
-              placeholder="Ej. Guaymas, Sonora"
-            />
-            <SecondaryButton
-              type="submit"
-              disabled={!localityReady || localityBusy}
-              style={{ whiteSpace: "nowrap", padding: "0.4rem 0.7rem" }}
-            >
-              {localityBusy ? "Añadiendo..." : "Añadir"}
-            </SecondaryButton>
-          </form>
-          {localityError ? (
-            <p style={{ margin: "0 0 0.65rem", color: C.red, fontSize: "0.72rem" }}>
-              {localityError}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-            {localities.map((l) => (
-              <Badge key={l.id} color="gray">
-                <MapPin size={10} /> {l.name}{" "}
-                <span style={{ color: C.gray400, fontWeight: 600 }}>
-                  ({clubs.filter((c) => c.localityId === l.id).length})
-                </span>
-              </Badge>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
-
       <SectionCard
         className="compact-form-card"
         title={`Clubes (${filteredClubs.length})`}

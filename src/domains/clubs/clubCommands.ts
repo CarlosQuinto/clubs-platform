@@ -43,14 +43,17 @@ export async function signupInviteExists(emailKey: string) {
   return Boolean(result.data.signupInvite);
 }
 
+/** Crea la localidad y devuelve su id (el nombre se guarda en Title Case, como initcap de create_locality). */
 export async function addLocality(name: string) {
+  const id = crypto.randomUUID();
   const result = await createLocality(dataConnect, {
     userId: sessionUserId(),
-    id: crypto.randomUUID(),
+    id,
     name,
   });
   if (!result.data.locality) throw new Error(DATA_REVIEW_MESSAGE);
   savedRow(result.data.locality);
+  return id;
 }
 
 export async function findAdminClubs(term: string) {
