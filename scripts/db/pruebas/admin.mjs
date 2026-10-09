@@ -41,8 +41,6 @@ export async function run({ db, rpc, check }) {
     const anon = await rpc("anon", fn);
     check(denied(anon), `${fn}: anónimo no puede`, anon);
   }
-  const search0 = await rpc("presidente", "search_admin_clubs", { term: "halcones" });
-  check(denied(search0), "search_admin_clubs: presidente no puede", search0);
   const peopleBahia = await rpc("presidente", "admin_club_people", { clubId: BAHIA });
   check(denied(peopleBahia), "admin_club_people: presidente de otro club no puede", peopleBahia);
   const peopleDt = await rpc("dt", "admin_club_people", { clubId: HALCONES });
@@ -51,10 +49,6 @@ export async function run({ db, rpc, check }) {
   const clubs = await rpc("admin", "admin_clubs");
   check(clubs.data?.clubs?.length === 8 && clubs.data.localities.length === 3, "admin_clubs: 8 clubes y 3 localidades", clubs.error ?? clubs.data?.clubs?.length);
   check(clubs.data?.clubs?.[0]?.locality?.name && typeof clubs.data.clubs[0].location === "string", "admin_clubs: localidad y campos retirados", clubs.data?.clubs?.[0]);
-  const search = await rpc("admin", "search_admin_clubs", { term: "HALCÓNES" });
-  check(search.data?.clubs?.length === 1 && search.data.clubs[0].localityId === "dummy-loc-guaymas", "search_admin_clubs: sin acentos, con localityId", search.data);
-  const searchShort = await rpc("admin", "search_admin_clubs", { term: "ha" });
-  check(searchShort.data?.clubs?.length === 0, "search_admin_clubs: término corto no busca");
   const people = await rpc("presidente", "admin_club_people", { clubId: HALCONES });
   check(people.data?.clubMembers?.length === 4 && people.data.clubMembers.every((m) => m.user?.id && m.role), "admin_club_people: presidente ve a su club", people.error ?? people.data);
   const peopleAdmin = await rpc("admin", "admin_club_people", { clubId: BAHIA });

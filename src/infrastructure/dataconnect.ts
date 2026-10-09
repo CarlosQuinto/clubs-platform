@@ -314,8 +314,6 @@ export const scheduleCourts = queryNoVars<T.ScheduleCourtsData>("schedule_courts
 /** mutation ScheduleOfficialMatch (USER) */
 export const scheduleOfficialMatch = mutation<T.ScheduleOfficialMatchVariables, T.ScheduleOfficialMatchData>("schedule_official_match");
 // ---- admin.gql ----
-/** query SearchAdminClubs (USER) */
-export const searchAdminClubs = query<T.SearchAdminClubsVariables, T.SearchAdminClubsData>("search_admin_clubs");
 // ---- queries.gql ----
 /** query SearchClubs (PUBLIC) */
 export const searchClubs = query<T.SearchClubsVariables, T.SearchClubsData>("search_clubs");

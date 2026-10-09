@@ -37,26 +37,8 @@ END
 $$;
 CALL api_expose('admin_clubs', 'USER');
 
--- Busca por nombre sin acentos; devuelve filas planas (localityId en vez de relación)
-CREATE OR REPLACE FUNCTION public.search_admin_clubs(p jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE
-  v_term text := btrim(coalesce(p ->> 'term', ''));
-BEGIN
-  PERFORM require_platform_admin();
-  RETURN jsonb_build_object('clubs', (
-    SELECT coalesce(jsonb_agg(jsonb_build_object(
-      'id', c.id, 'slug', c.slug, 'name', c.name, 'active', c.active,
-      'disabledReason', c.disabled_reason, 'localityId', c.locality_id) ORDER BY c.name, c.id), '[]'::jsonb)
-    FROM clubs c
-    WHERE c.deleted_at IS NULL
-      AND char_length(v_term) BETWEEN 3 AND 30
-      AND v_term ~ '^([A-Za-z0-9À-ÖØ-öø-ÿ]+)( [A-Za-z0-9À-ÖØ-öø-ÿ]+)*$'
-      AND translate(lower(c.name), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny')
-        LIKE '%' || translate(lower(v_term), 'áàäâéèëêíìïîóòöôúùüûñÿ', 'aaaaeeeeiiiioooouuuuny') || '%'));
-END
-$$;
-CALL api_expose('search_admin_clubs', 'USER');
+-- search_admin_clubs (buscador de /admin → Equipos) se retiró con esa pestaña; /equipos usa search_clubs
+DROP FUNCTION IF EXISTS public.search_admin_clubs(jsonb);
 
 -- Miembros e invitaciones de un club: superadmin o presidente de ese club (lo usa MembersModal)
 CREATE OR REPLACE FUNCTION public.admin_club_people(p jsonb DEFAULT '{}'::jsonb)

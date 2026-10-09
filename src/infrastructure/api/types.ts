@@ -3057,14 +3057,6 @@ export interface ScheduleOfficialMatchVariables {
   courtId?: string | null;
 }
 
-export interface SearchAdminClubsData {
-  clubs?: unknown[] | null;
-}
-
-export interface SearchAdminClubsVariables {
-  term: string;
-}
-
 export interface SearchClubsData {
   clubs?: unknown[] | null;
 }

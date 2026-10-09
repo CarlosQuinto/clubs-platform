@@ -5575,44 +5575,6 @@
                 },
                 "description": "Busca jugadores de toda la liga por nombre (superadmin). «q»: letras, 3 a 50, sin importar acentos ni mayúsculas; vacío trae los 30 creados más recientemente. «free»: solo los que no están vivos en ningún club vivo (jugadores libres). clubs_on_player: clubes donde está hoy (no eliminados), con active por si está de baja.\n\n- Operación: `AdminSearchPlayers` (lectura)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `q`, `free`"
               }
-            },
-            {
-              "name": "search_admin_clubs",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "apikey",
-                    "value": "{{anon_key}}"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/rest/v1/rpc/search_admin_clubs",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "rest",
-                    "v1",
-                    "rpc",
-                    "search_admin_clubs"
-                  ]
-                },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"p\": {\n    \"term\": \"hal\"\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "description": "Busca por nombre sin acentos; devuelve filas planas (localityId en vez de relación)\n\n- Operación: `SearchAdminClubs` (lectura)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)"
-              }
             }
           ]
         },
