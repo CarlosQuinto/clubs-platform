@@ -32,17 +32,25 @@ type AdminTab = "inbox" | "players" | "content" | "admins" | "courts" | "finance
 
 export { markScrollTopAfterNav };
 
-/** Cabecera + contenedor común para las páginas de plataforma (landing, login, admin). */
+/**
+ * Cabecera + contenedor común para las páginas de plataforma (landing, login, admin).
+ * La página del club pasa `topbarCenter` (escudo y nombre en lugar de los enlaces)
+ * y `topbarActions` (lo que va a la derecha en lugar del selector de la liga).
+ */
 export default function PlatformLayout({
   children,
   maxWidth,
   landing,
   flush,
+  topbarCenter,
+  topbarActions,
 }: {
   children: ReactNode;
   maxWidth?: string;
   landing?: boolean;
   flush?: boolean;
+  topbarCenter?: ReactNode;
+  topbarActions?: ReactNode;
 }) {
   const { user, isSuperAdmin } = useAuth();
   const chrome = usePlatformChrome(true);
@@ -302,7 +310,7 @@ export default function PlatformLayout({
       )}
       {sidebar}
       <div className="platform-body">
-        <header className="platform-topbar">
+        <header className={topbarCenter ? "platform-topbar platform-topbar--club" : "platform-topbar"}>
           <button
             type="button"
             className="platform-topbar__menu"
@@ -311,30 +319,39 @@ export default function PlatformLayout({
           >
             {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          <Link to="/" className="platform-topbar__brand" onClick={closeMenu}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" />
-            ) : (
-              <span className="platform-topbar__mark">
-                <Shield color={C.amber} />
-              </span>
-            )}
-            <span>{brandName}</span>
-          </Link>
-          <nav className="platform-topbar__nav" aria-label="Secciones">
-            {topLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                aria-current={link.active ? "page" : undefined}
-                className={link.active ? "is-on" : undefined}
-                onClick={() => onDestinationClick(link.to)}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-          {user ? (
+          {/* En la página del club la cabecera es del club: sin logo ni nombre de la plataforma */}
+          {topbarCenter ? null : (
+            <Link to="/" className="platform-topbar__brand" onClick={closeMenu}>
+              {logoUrl ? (
+                <img src={logoUrl} alt="" />
+              ) : (
+                <span className="platform-topbar__mark">
+                  <Shield color={C.amber} />
+                </span>
+              )}
+              <span>{brandName}</span>
+            </Link>
+          )}
+          {topbarCenter ? (
+            <div className="platform-topbar__center">{topbarCenter}</div>
+          ) : (
+            <nav className="platform-topbar__nav" aria-label="Secciones">
+              {topLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  aria-current={link.active ? "page" : undefined}
+                  className={link.active ? "is-on" : undefined}
+                  onClick={() => onDestinationClick(link.to)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+          {topbarActions ? (
+            <div className="platform-topbar__space">{topbarActions}</div>
+          ) : user ? (
             <div className="platform-topbar__space">
               <SpaceSwitcher variant="topbar" />
             </div>

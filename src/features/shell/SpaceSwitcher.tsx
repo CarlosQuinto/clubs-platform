@@ -7,7 +7,6 @@ import { ADMIN_SPACE, useMyClubSpaces } from "../../domains/auth/mySpaces";
 import type { Role } from "../../domains/auth/roles";
 import ConfirmModal from "../../shared/ConfirmModal";
 import { normalizeSlug } from "../../shared/paths";
-import { C } from "../../shared/ui";
 import { markScrollTopAfterNav } from "./scrollAfterNav";
 import SpaceRow, { roleIcon, SpaceAvatar } from "./SpaceRow";
 import { usePlatformChrome } from "./usePlatformChrome";
@@ -110,7 +109,7 @@ export default function SpaceSwitcher({
       window.scrollTo(0, 0);
       return;
     }
-    // La cabecera del club no usa PlatformLayout: el destino arranca arriba en ambos casos.
+    // El destino arranca arriba aunque el clic llegue desde otra página con PlatformLayout.
     markScrollTopAfterNav();
     navigate(path);
     window.setTimeout(() => window.scrollTo(0, 0), 0);
@@ -150,10 +149,11 @@ export default function SpaceSwitcher({
         aria-label={triggerLabel}
         title={user.email || undefined}
         onClick={toggle}
-        style={{
-          backgroundColor: club?.hasAccess ? "rgba(245, 158, 11, 0.15)" : "rgba(255,255,255,0.1)",
-          color: club?.hasAccess ? C.amber : C.gray300,
-        }}
+        style={
+          club?.hasAccess
+            ? { backgroundColor: "rgba(205, 154, 64, 0.16)", color: "#8a5f17" }
+            : { backgroundColor: "var(--sand-light)", color: "var(--ink-soft)", borderColor: "var(--sand-border)" }
+        }
       >
         {roleIcon(club?.role, isSuperAdmin, 11)}
         <span className="space-switcher__role">{club?.roleLabel}</span>

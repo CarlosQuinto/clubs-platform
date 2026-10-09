@@ -903,6 +903,138 @@
   flex-shrink: 0;
 }
 
+/* ── Cabecera de la plataforma en la página del club ── */
+/* Sin logo ni nombre de la plataforma, el escudo y el nombre del club ocupan su lugar, a la izquierda */
+.platform-topbar__center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.platform-topbar--club .platform-topbar__space {
+  margin-left: 0;
+}
+
+.club-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.club-topbar__logo {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.club-topbar__crest {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: #121212;
+  border: 1.5px solid var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.club-topbar__crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.5);
+}
+
+.club-topbar__edit {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--amber);
+  background-color: #121212;
+  color: var(--amber);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.club-topbar__edit:hover {
+  transform: scale(1.1);
+}
+
+.club-topbar__name {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.club-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Las pestañas del club quedan fijas justo debajo de la cabecera.
+   `clip` en vez de `hidden`: un overflow oculto rompería el sticky. */
+.club-tabs {
+  position: sticky;
+  top: 64px;
+  z-index: 30;
+}
+
+.platform-main--flush:has(.club-tabs) {
+  overflow-x: clip;
+}
+
+@media (max-width: 639px) {
+  .club-topbar__crest {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* En teléfonos «Entrar» queda solo con su ícono para que quepa el nombre del club. */
+@media (max-width: 479px) {
+  .club-topbar__login-label {
+    display: none;
+  }
+
+  .platform-auth-btn.platform-topbar__login.club-topbar__login {
+    padding: 0.45rem 0.65rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .club-topbar__name {
+    font-size: 1.15rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .club-tabs {
+    top: 80px;
+  }
+
+  .club-topbar__name {
+    font-size: 1.25rem;
+  }
+}
+
 .space-switcher__trigger {
   display: inline-flex;
   align-items: center;

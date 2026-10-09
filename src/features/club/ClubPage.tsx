@@ -17,8 +17,7 @@ import { MembersPanel } from "./MembersModal";
 import EditClubModal from "./EditClubModal";
 import AdSlot from "../shell/AdSlot";
 import SpaceSwitcher from "../shell/SpaceSwitcher";
-import PlatformFooter from "../shell/PlatformFooter";
-import { markScrollTopAfterNav } from "../shell/scrollAfterNav";
+import PlatformLayout from "../shell/PlatformLayout";
 import { useClubShell } from "./useClubShell";
 
 
@@ -132,7 +131,6 @@ function ClubShell() {
     trophies,
     scopeLabel,
     isMobile,
-    isUltraSmall,
     navContainerRef,
     sliderRef,
     editingClub,
@@ -151,178 +149,60 @@ function ClubShell() {
     return <ClubNotFound slug={normalizeSlug(routeSlug)} />;
   }
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: C.gray50,
-        color: C.gray800,
-      }}
-    >
-      <header
-        style={{
-          background: `linear-gradient(135deg, ${C.navy900} 0%, #0a1120 100%)`,
-          color: C.white,
-          // 👇 En móviles reducimos el padding para darle más cancha al texto
-          padding: isMobile ? "1rem" : "1.25rem 1.5rem",
-          boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
-          position: "relative",
-          zIndex: 50,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "800px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: isMobile ? "0.5rem" : "1rem", // 👇 Menos hueco al centro en móviles
-          }}
-        >
-          {/* ── IZQUIERDA: ESCUDO E INFO ── */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: isMobile ? "0.5rem" : "0.875rem", // 👇 Escudo y texto más juntos en móviles
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
-            {/* CONTENEDOR DEL LOGO CON LÁPIZ TIPO "BADGE" */}
-            <div
-              style={{ position: "relative", display: "flex", flexShrink: 0 }}
-            >
-              <div
-                style={{
-                  width: "42px",
-                  height: "42px",
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  backgroundColor: "#121212",
-                  border: `1.5px solid ${C.amber}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <img
-                  src={clubInfo?.logoUrl || DEFAULT_CLUB_LOGO}
-                  alt="Escudo del Club"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    transform: "scale(1.5)",
-                  }}
-                />
-              </div>
-
-              {perms.isAdmin && (
-                <button
-                  onClick={() => setEditingClub(true)}
-                  style={{
-                    position: "absolute",
-                    bottom: "-2px",
-                    right: "-4px",
-                    backgroundColor: C.navy900,
-                    border: `1px solid ${C.amber}`,
-                    color: C.amber,
-                    borderRadius: "50%",
-                    width: "18px",
-                    height: "18px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    padding: 0,
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
-                    transition: "transform 0.2s ease",
-                  }}
-                  title="Editar información del club"
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.transform = "scale(1.1)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.transform = "scale(1)")
-                  }
-                >
-                  <Edit2 size={10} strokeWidth={3} />
-                </button>
-              )}
-            </div>
-
-            {/* 👇 CONTENEDOR DEL TÍTULO (Restaurado a 1 sola línea) 👇 */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              <h1
-                style={{
-                  // 👇 Reducción de tamaño estricta basada en el ancho de la pantalla
-                  fontSize: isUltraSmall
-                    ? "0.8rem"
-                    : isMobile
-                      ? "0.95rem"
-                      : "1.25rem",
-                  fontWeight: "800",
-                  margin: 0,
-                  letterSpacing: "-0.02em",
-                  color: C.white,
-                  whiteSpace: "nowrap", // 👈 PROHIBIDO saltar a segunda línea
-                  overflow: "hidden",
-                  textOverflow: "clip", // 👈 Corta al ras si es necesario, sin puntos suspensivos
-                }}
-              >
-                {clubInfo?.name || DEFAULT_CLUB_NAME}
-              </h1>
-            </div>
-          </div>
-
-          {/* ── DERECHA: SELECTOR DE ESPACIOS O LOGIN ── */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              {user ? (
-                <SpaceSwitcher
-                  variant="club"
-                  club={{
-                    name: clubInfo?.name || DEFAULT_CLUB_NAME,
-                    logoUrl: clubInfo?.logoUrl || undefined,
-                    role,
-                    roleLabel,
-                    hasAccess,
-                  }}
-                />
-              ) : (
-                // Mismas clases que «Entrar» de la cabecera de la plataforma.
-                <div className="platform-topbar__auth">
-                  <button
-                    type="button"
-                    className="platform-auth-btn is-in"
-                    onClick={goToLogin}
-                  >
-                    <LogIn size={14} /> Entrar
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+  // Lo que el club pone en la cabecera de la plataforma: escudo y nombre al centro.
+  const topbarCenter = (
+    <div className="club-topbar">
+      <div className="club-topbar__logo">
+        <div className="club-topbar__crest">
+          <img src={clubInfo?.logoUrl || DEFAULT_CLUB_LOGO} alt="Escudo del Club" />
         </div>
-      </header>
+        {perms.isAdmin && (
+          <button
+            type="button"
+            className="club-topbar__edit"
+            onClick={() => setEditingClub(true)}
+            title="Editar información del club"
+            aria-label="Editar información del club"
+          >
+            <Edit2 size={10} strokeWidth={3} />
+          </button>
+        )}
+      </div>
+      <h1 className="club-topbar__name">{clubInfo?.name || DEFAULT_CLUB_NAME}</h1>
+    </div>
+  );
+
+  // A la derecha: menú del superadmin y selector de espacios, o «Entrar» sin sesión.
+  const topbarActions = (
+    <div className="club-topbar__actions">
+      {user ? (
+        <SpaceSwitcher
+          variant="club"
+          club={{
+            name: clubInfo?.name || DEFAULT_CLUB_NAME,
+            logoUrl: clubInfo?.logoUrl || undefined,
+            role,
+            roleLabel,
+            hasAccess,
+          }}
+        />
+      ) : (
+        // Mismas clases que «Entrar» de la cabecera de la plataforma.
+        <button
+          type="button"
+          className="platform-auth-btn is-in platform-topbar__login club-topbar__login"
+          onClick={goToLogin}
+          aria-label="Entrar"
+          title="Entrar"
+        >
+          <LogIn size={14} /> <span className="club-topbar__login-label">Entrar</span>
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <PlatformLayout flush topbarCenter={topbarCenter} topbarActions={topbarActions}>
 
       {clubInfo?.active === false && (
         <div
@@ -375,12 +255,10 @@ function ClubShell() {
 
       {/* ── NAVIGATION (SWIPEABLE & AUTO-CENTERED TABS) ── */}
       <nav
+        className="club-tabs"
         style={{
           backgroundColor: C.white,
           borderBottom: `1px solid ${C.gray200}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
           boxShadow: SHADOWS.sm,
         }}
       >
@@ -431,7 +309,7 @@ function ClubShell() {
       </nav>
 
       {/* ── MAIN CONTENT (DYNAMIC SLIDER CONTAINER) ── */}
-      <main
+      <div
         style={{
           maxWidth: "800px",
           margin: "0 auto",
@@ -601,14 +479,7 @@ function ClubShell() {
             })}
           </div>
         )}
-      </main>
-
-      {/* Los destinos del pie son páginas de plataforma: llegan arriba, salvo los formularios. */}
-      <PlatformFooter
-        onLinkClick={(to) => {
-          if (!to.includes("#")) markScrollTopAfterNav();
-        }}
-      />
-    </div>
+      </div>
+    </PlatformLayout>
   );
 }
