@@ -18,7 +18,8 @@
     "docker:web": "docker compose --project-directory docker --profile web up -d --build web",
     "db:migrate": "docker compose --project-directory docker run --rm migrate",
     "db:reset": "docker compose --project-directory docker down -v && npm run demo:sql && docker compose --project-directory docker up -d",
-    "db:check": "node scripts/db/check.mjs"
+    "db:check": "node scripts/db/check.mjs",
+    "postman:collection": "node scripts/postman/generarColeccion.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

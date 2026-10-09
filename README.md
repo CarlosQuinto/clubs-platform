@@ -320,6 +320,7 @@ clubs-platform/
 │   ├── volumes/api/kong.yml       # rutas del gateway
 │   ├── volumes/db/                # init de roles y jwt de la imagen de Postgres
 │   └── web/                       # Dockerfile del frontend y plantilla de nginx
+├── postman/                       # colección y entornos de Postman (npm run postman:collection)
 ├── public/icon.svg
 ├── scripts/
 │   ├── api/                       # generadores usados en la migración (tipos y shim)
@@ -327,7 +328,8 @@ clubs-platform/
 │   ├── db/check.mjs               # verificación con Postgres embebido
 │   ├── db/pruebas/*.mjs           # pruebas de las funciones SQL por bloque
 │   ├── demo/generarDemo.mjs       # datos dummy
-│   └── docker/generarEnv.mjs      # secretos y claves del stack
+│   ├── docker/generarEnv.mjs      # secretos y claves del stack
+│   └── postman/generarColeccion.mjs # colección de Postman a partir de las funciones y tipos
 ├── src/
 │   ├── main.tsx
 │   ├── app/                       # rutas (App.tsx), PWA y marca del documento
@@ -425,6 +427,18 @@ Servidor Fastify en [`api/`](api/), expuesto por Kong en `${VITE_SUPABASE_URL}/f
 Los errores son `{ code, message }` con los códigos `unauthenticated` (401), `permission-denied` (403), `invalid-argument` (400), `not-found` (404), `failed-precondition` (412) o `resource-exhausted` (429) y mensajes en español; el cliente los relanza como `functions/<code>`. Si Gmail no está configurado, responden `mailed: false` y la operación de datos queda guardada.
 
 Restablecer contraseña no pasa por la API: `requestPasswordReset` llama a `supabase.auth.resetPasswordForEmail` y GoTrue manda el correo con la plantilla `api/templates/recovery.html` (configuración `SMTP_*`). El enlace lleva a `/restablecer?token_hash=…&type=recovery` (`{{ .RedirectTo }}` + `{{ .TokenHash }}`), y la página lo verifica con `verifyOtp` solo al guardar la contraseña nueva, en un cliente que no persiste sesión: así el enlace no se gasta al abrirlo (prefetch del navegador, escáner del correo, recarga) y la app no queda con sesión iniciada. Caduca en una hora (`GOTRUE_MAILER_OTP_EXP`).
+
+### Probar con Postman
+
+[`postman/`](postman/) trae una colección con todas las funciones RPC (una carpeta por archivo `db/migrations/1*.sql`, separadas en lecturas y mutaciones), la sesión de GoTrue, las imágenes de Storage y los endpoints de correo, más dos entornos: local (`http://localhost:8000`) y servidor de pruebas.
+
+1. Importa `clubs-platform.postman_collection.json` y el entorno que vayas a usar, y selecciónalo.
+2. Pega la `anon_key` en el entorno (`ANON_KEY` de `docker/.env`; no se guarda en el repo). En el servidor, pon también `email` y `password` de una cuenta real (allí no hay usuarios demo).
+3. Ejecuta **0. Sesión → Login**: guarda el token en el entorno y todas las peticiones lo usan (sin token van como `anon`).
+
+Los bodies de ejemplo usan los ids de la base demo (variables de la colección: `club_id`, `match_id`, `tournament_id`…); `{{hoy}}` y `{{ahora}}` se calculan en cada envío. Solo incluyen los campos obligatorios: los opcionales se listan en la descripción de cada petición, porque omitirlos suele significar «conservar el valor». Las mutaciones traen una prueba que falla si todas las claves de la respuesta vuelven en `null` (la función rechazó el cambio).
+
+La colección se genera con `npm run postman:collection`: no la edites a mano; regenérala después de añadir o cambiar una función.
 
 ---
 
@@ -597,6 +611,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) comprueba tipos, bui
 | `npm run api:build` | Compila `api/src` |
 | `npm run check:firebase` | Falla si reaparece Firebase |
 | `npm run demo:sql` | Genera `scripts/demo/demo-seed.sql` y `demo-cleanup.sql` con datos dummy |
+| `npm run postman:collection` | Regenera la colección de Postman en `postman/` a partir de las funciones SQL, `api/types.ts` y `api/src/fns` |
 
 **Datos dummy.** `npm run demo:sql` escribe dos archivos SQL (ignorados por git): `demo-seed.sql` inserta 8 clubes con plantilla, cuatro torneos (uno activo, uno de veteranos con un partido hoy, uno terminado con podio y uno próximo), canchas, rentas, agenda, finanzas, inventario, galería, anuncios, consultas y solicitudes; `demo-cleanup.sql` los borra. Todos los ids empiezan con `dummy-`. Las fechas se calculan respecto al día de generación (hora de Sonora); `npm run demo:sql -- 2026-10-05` fija otra fecha base. El servicio `migrate` lo carga si existe y `DB_SEED=true`; `db/seed/` añade los usuarios de prueba y sus roles.
 
