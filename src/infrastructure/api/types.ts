@@ -1511,9 +1511,9 @@ export interface HomePageData {
     url: string;
   })[];
   platformStats: ({
+    tournaments?: number | null;
     clubs?: number | null;
     players?: number | null;
-    courts?: number | null;
   })[];
   tournaments: ({
     id: string;

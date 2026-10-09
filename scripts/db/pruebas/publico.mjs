@@ -27,6 +27,13 @@ export async function run({ db, rpc, check }) {
   const h = home.data ?? {};
   check(Array.isArray(h.tournaments) && h.tournaments.length >= 2, "home_page: torneos vigentes", h.tournaments?.length);
   check(h.platformStats?.[0]?.clubs === 8, "home_page: platformStats.clubs = 8", h.platformStats);
+  const allTournaments = (await db.query("SELECT count(*)::int AS n FROM tournaments")).rows[0].n;
+  check(
+    h.platformStats?.[0]?.tournaments === allTournaments && allTournaments >= h.tournaments.length,
+    "home_page: platformStats.tournaments cuenta todos los torneos, también los terminados",
+    { stats: h.platformStats, todos: allTournaments, vigentes: h.tournaments?.length },
+  );
+  check(!("courts" in (h.platformStats?.[0] ?? {})), "home_page: platformStats ya no entrega canchas", h.platformStats);
   check(h.tournaments?.[0]?.tournamentClubs_on_tournament?.[0]?._count > 0, "home_page: _count de clubes", h.tournaments?.[0]);
   check(typeof h.matches?.[0]?.matchDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.matches[0].matchDate), "home_page: matchDate como YYYY-MM-DD", h.matches?.[0]);
   check(h.matches?.[0]?.homeClub?.name && h.matches?.[0]?.tournament?.category?.name, "home_page: relaciones anidadas", h.matches?.[0]);

@@ -112,7 +112,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       SELECT coalesce(jsonb_agg(jsonb_build_object('url', h.url) ORDER BY h.position), '[]'::jsonb)
       FROM platform_hero_images h),
     'platformStats', (
-      SELECT coalesce(jsonb_agg(jsonb_build_object('clubs', st.clubs, 'players', st.players, 'courts', st.courts)), '[]'::jsonb)
+      SELECT coalesce(jsonb_agg(jsonb_build_object('tournaments', st.tournaments, 'clubs', st.clubs, 'players', st.players)), '[]'::jsonb)
       FROM platform_stats st),
     'tournaments', (
       SELECT coalesce(jsonb_agg(jsonb_build_object(

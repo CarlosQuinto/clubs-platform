@@ -63,7 +63,7 @@ Hay tres tipos de usuario:
 
 | Ruta | Qué ofrece |
 |---|---|
-| `/` | Portada con diseño «Carbón y Oro»: héroe con carrusel, temporada vigente, botones (inscribirse, registrar equipo, rentar cancha) y cifras reales de la vista `platform_stats` (clubes activos, jugadores y canchas si la renta está activa); sección «En vivo» con el marcador y el minuto de los partidos de hoy; próximos partidos de 6 en 6 (en escritorio rotan cada 6 s; el superadmin los programa desde la tarjeta); torneos con pestañas «En curso / Próximos», fecha de inicio, equipos inscritos y premio al campeón; y al final una franja negra con los anuncios de `home` a todo el ancho (rotan cada 5 s). Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
+| `/` | Portada con diseño «Carbón y Oro»: héroe con carrusel, temporada vigente, botones (inscribirse, registrar equipo, rentar cancha) y cifras reales de la vista `platform_stats` (torneos, equipos y jugadores); sección «En vivo» con el marcador y el minuto de los partidos de hoy; próximos partidos de 6 en 6 (en escritorio rotan cada 6 s; el superadmin los programa desde la tarjeta); torneos con pestañas «En curso / Próximos», fecha de inicio, equipos inscritos y premio al campeón; y al final una franja negra con los anuncios de `home` a todo el ancho (rotan cada 5 s). Si nadie ha reclamado la plataforma, ofrece reclamar la administración. |
 | `/torneos` | Archivo de torneos: en curso, próximos y finalizados, con el premio al campeón si tiene. El superadmin puede borrar un torneo que no tenga partidos jugados. |
 | `/torneos/:id` | Ficha del torneo: anuncio `tournament`, cabecera (temporada · categoría · modalidad, estado y premio), podio con escudos cuando está finalizado, tabla de posiciones, top 5 de goleadores y calendario por jornada. Cada partido usa la tarjeta de la portada; toda la tarjeta lleva a `/partido/:id` y el superadmin tiene «Programar» y «Marcador». |
 | `/temporadas/:id/resumen` | Resumen de una temporada **cerrada** (`season_summary`): podio de cada torneo, cifras (partidos, goles, promedio, tarjetas, penales, walkovers), premios individuales (goleador, asistidor, más MVP y arquero menos goleado con mínimo 3 partidos) y récords (mayor goleada, partido con más goles, mejor ataque, valla menos vencida con mínimo 3 partidos, juego limpio y más tarjetas; amarilla = 1, roja = 3). Solo se enlaza desde «Resumen» en `/admin` → Competencia, pero es pública: la ve quien tenga el enlace, y trae «Compartir». Si la temporada sigue activa o no existe, avisa que no está disponible. Los walkovers no suman goles ni cuentan para los récords de partido ni de arqueros. |
@@ -488,7 +488,7 @@ Vistas ([`db/migrations/0002_views.sql`](db/migrations/0002_views.sql)):
 | Vista | Contenido |
 |---|---|
 | `platform_claim_states` | `open = true` si `platform_admins` está vacía |
-| `platform_stats` | Cifras de la portada: clubes activos, jugadores activos (sin cuerpo técnico; cada persona una vez aunque esté en varios clubes) y canchas activas |
+| `platform_stats` | Cifras de la portada: torneos (todos, también los terminados), clubes activos y jugadores activos (sin cuerpo técnico; cada persona una vez aunque esté en varios clubes). Conserva `courts` (canchas activas), que ya no se muestra |
 | `match_listings` | Partidos `SCHEDULED` con fecha y hora, con `starts_at` para ordenar |
 | `tournament_standings` | PJ, G, E, P, GF, GC, DG, puntos y posición por torneo |
 | `tournament_scorers` | Goles y asistencias por jugador (sin autogoles) |

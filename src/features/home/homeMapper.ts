@@ -108,18 +108,15 @@ function plural(value: number, one: string, many: string) {
   return value === 1 ? one : many;
 }
 
-function toStats(
-  row: HomePageData["platformStats"][number] | undefined,
-  courtsEnabled: boolean,
-): HomeStatView[] {
+function toStats(row: HomePageData["platformStats"][number] | undefined): HomeStatView[] {
   if (!row) return [];
+  const tournaments = row.tournaments ?? 0;
   const clubs = row.clubs ?? 0;
   const players = row.players ?? 0;
-  const courts = courtsEnabled ? (row.courts ?? 0) : 0;
   return [
-    { value: clubs, label: plural(clubs, "Club activo", "Clubes activos") },
+    { value: tournaments, label: plural(tournaments, "Torneo", "Torneos") },
+    { value: clubs, label: plural(clubs, "Equipo", "Equipos") },
     { value: players, label: plural(players, "Jugador registrado", "Jugadores registrados") },
-    { value: courts, label: plural(courts, "Cancha", "Canchas") },
   ].filter((stat) => stat.value > 0);
 }
 
@@ -235,7 +232,7 @@ export function toHomePage(data: HomePageData, now: Date): HomePageModel {
       tagline: settings?.tagline.trim() || PLATFORM_DESCRIPTION,
       courtsEnabled,
       seasonLabel: seasonLabel(activeRows, upcomingRows),
-      stats: toStats(data.platformStats?.[0], courtsEnabled),
+      stats: toStats(data.platformStats?.[0]),
     },
     ads: toAds(data.adPlacements, today),
     matches,
