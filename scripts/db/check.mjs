@@ -106,6 +106,17 @@ export async function bootDatabase() {
   if (existsSync(demo)) await runFile(db, demo);
   else log("  (sin scripts/demo/demo-seed.sql; ejecuta npm run demo:sql para probar con datos dummy)");
   for (const f of sqlFiles("db/seed", (f) => /^[1-9]/.test(f))) await runFile(db, f);
+  // La sesión «usuario» es una cuenta recién creada sin roles: existe en auth.users (require_uid lo exige) pero
+  // todavía sin perfil en public.users. Se inserta sin triggers, como la semilla, para que no pida invitación.
+  await db.exec(`
+    ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_before_insert;
+    ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_after_insert;
+    INSERT INTO auth.users (id, aud, role, email)
+    VALUES ('${SESSIONS.usuario.claims.sub}', 'authenticated', 'authenticated', '${SESSIONS.usuario.claims.email}')
+    ON CONFLICT (id) DO NOTHING;
+    ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_before_insert;
+    ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_after_insert;
+  `);
   return db;
 }
 

@@ -24,6 +24,7 @@ import {
   platformAdminById,
   platformClaimOpen,
   QueryFetchPolicy,
+  RpcError,
 } from "../../infrastructure/dataconnect";
 import { emailKey } from "../../shared/paths";
 
@@ -49,6 +50,26 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** La cuenta de la sesión ya no existe (base vaciada o usuario borrado): require_uid() responde 42501. */
+const isGoneAccount = (err: unknown) => err instanceof RpcError && err.code === "unauthenticated";
+
+/**
+ * GoTrue responde «Database error saving new user» tanto si falta la invitación como ante cualquier otro fallo al
+ * guardar la cuenta. Si la plataforma aún no tiene administrador no hace falta invitación: fue otra cosa.
+ */
+async function explainSignupError(err: unknown) {
+  if ((err as { code?: string })?.code !== "auth/operation-not-allowed") return err;
+  try {
+    const result = await platformClaimOpen(dataConnect, { fetchPolicy: QueryFetchPolicy.SERVER_ONLY });
+    if (result.data.platformClaimStates[0]?.open) {
+      return Object.assign(new Error("No se pudo crear la cuenta."), { code: "auth/signup-failed" });
+    }
+  } catch {
+    // Sin respuesta se queda el mensaje de invitación
+  }
+  return err;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -134,6 +155,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user || isSuperAdmin) return;
     void claimPlatformInvite(user).catch((err) => {
+      // Sesión de una cuenta que ya no existe: se cierra para que pueda entrar o registrarse de nuevo
+      if (isGoneAccount(err)) {
+        void signOutSession().catch(() => undefined);
+        return;
+      }
       console.error("No se pudo reclamar la invitación de superadmin:", err);
     });
   }, [user, isSuperAdmin, claimPlatformInvite]);
@@ -155,7 +181,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
       const name = displayName.trim();
-      const created = await signUp(email, password, name);
+      const created = await signUp(email, password, name).catch(async (err: unknown) => {
+        throw await explainSignupError(err);
+      });
       const profileEmail = email.trim().toLowerCase();
       await ensureMyProfile(dataConnect, {
         email: profileEmail,
@@ -264,6 +292,8 @@ export function authErrorMessage(err: unknown): string {
       return "Esta cuenta está desactivada.";
     case "auth/operation-not-allowed":
       return "Necesitas una invitación para registrarte.";
+    case "auth/signup-failed":
+      return "No se pudo crear la cuenta. Inténtalo de nuevo en un momento.";
     case "auth/expired-action-code":
     case "auth/invalid-action-code":
       return "Este enlace venció o ya se usó. Pide uno nuevo desde iniciar sesión.";

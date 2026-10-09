@@ -500,7 +500,7 @@ Las imágenes están en el bucket `media` bajo `platform/**` y `clubs/{clubId}/{
 
 ## Authentication & Authorization
 
-- **Autenticación:** GoTrue con correo y contraseña, sin confirmación de correo. El registro está limitado a correos invitados, salvo el primer usuario.
+- **Autenticación:** GoTrue con correo y contraseña, sin confirmación de correo. El registro está limitado a correos invitados, salvo el primer usuario. `require_uid()` exige que la cuenta exista en `auth.users`: un token todavía vigente de una cuenta borrada (base vaciada, usuario eliminado o respaldo restaurado) se trata como sin sesión y la app la cierra sola. Al registrarse, un perfil sin cuenta con el mismo correo se borra para que el alta no falle.
 - **Superadmin:** fila en `platform_admins`. No hay otra fuente.
 - **Roles de club** ([`src/domains/auth/roles.ts`](src/domains/auth/roles.ts), `buildPerms`), leídos de `club_members` con `clubScreen`:
 
@@ -571,7 +571,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up
 
 Para actualizar: `git pull` y el mismo comando. Las migraciones `0*` nuevas se aplican una vez y las funciones `1*` siempre. Si prefieres otro proxy (nginx, Traefik) o dos dominios (`app.` y `api.`), usa solo `docker-compose.yml` y apunta tu proxy a `web:80` y `kong:8000`.
 
-Con `DB_SEED=false` la base arranca vacía: el primer usuario que se registre queda como superadministrador, así que regístrate en cuanto el sitio responda. No uses la semilla en un servidor público (sus usuarios de prueba tienen contraseñas conocidas).
+Con `DB_SEED=false` la base arranca vacía: el primer usuario que se registre queda como superadministrador, así que regístrate en cuanto el sitio responda. Para **vaciar** un servidor y empezar de cero: respalda (`pg_dump` y un `tar` del volumen `storage-data`), `docker compose ... down`, borra los volúmenes `db-data`, `db-config` y `storage-data` (los de Caddy conservan el certificado) y vuelve a levantarlo. No uses la semilla en un servidor público (sus usuarios de prueba tienen contraseñas conocidas).
 
 ### Ejemplo: Hetzner + DuckDNS
 

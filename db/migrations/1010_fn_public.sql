@@ -10,6 +10,54 @@
 -- - Al final de cada función: CALL api_expose('nombre', 'PUBLIC' | 'USER').
 SET ROLE postgres;
 
+-- ---------- Sesión (redefine helpers de 0003_auth.sql y 0005, que se aplican una sola vez) ----------
+
+-- Exige la sesión de una cuenta que exista. Un token todavía vigente de una cuenta borrada (base vaciada, usuario
+-- eliminado o respaldo restaurado) cuenta como sin sesión (42501) y el cliente la cierra: así no crea perfiles sin
+-- cuenta ni puede reclamar la plataforma vacía. SECURITY DEFINER porque GoTrue activa RLS en auth.users.
+CREATE OR REPLACE FUNCTION public.require_uid()
+RETURNS text
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT EXISTS (SELECT 1 FROM auth.users a WHERE a.id = auth.uid()) THEN
+    RAISE EXCEPTION 'unauthenticated' USING ERRCODE = '42501', HINT = 'Debes iniciar sesión.';
+  END IF;
+  RETURN auth.uid()::text;
+END
+$$;
+
+-- Perfil en public.users al crear la cuenta y, si la plataforma no tiene administrador, el primer usuario lo es.
+-- Un perfil con el mismo correo sin cuenta detrás (de una cuenta borrada) haría fallar el alta por correo
+-- repetido: se quita antes.
+CREATE OR REPLACE FUNCTION public.handle_auth_user_after_insert()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_email text := lower(btrim(coalesce(NEW.email, '')));
+  v_name text := left(regexp_replace(btrim(coalesce(NEW.raw_user_meta_data ->> 'display_name', '')), '\s+', ' ', 'g'), 40);
+BEGIN
+  DELETE FROM users u
+  WHERE u.email = v_email AND u.id <> NEW.id::text
+    AND NOT EXISTS (SELECT 1 FROM auth.users a WHERE a.id::text = u.id);
+
+  INSERT INTO users (id, email, display_name, updated_at)
+  VALUES (NEW.id::text, v_email, v_name, now())
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    display_name = CASE WHEN EXCLUDED.display_name <> '' THEN EXCLUDED.display_name ELSE users.display_name END,
+    updated_at = now();
+
+  IF NOT EXISTS (SELECT 1 FROM platform_admins) THEN
+    INSERT INTO platform_admins (user_id, email) VALUES (NEW.id::text, v_email);
+  END IF;
+  RETURN NEW;
+END
+$$;
+
 -- ---------- Plataforma ----------
 
 CREATE OR REPLACE FUNCTION public.platform_chrome(p jsonb DEFAULT '{}'::jsonb)
