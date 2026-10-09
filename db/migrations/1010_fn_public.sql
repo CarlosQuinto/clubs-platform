@@ -320,7 +320,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 CALL api_expose('matches_page', 'PUBLIC');
 
--- Jugadores que ya aparecen en un partido (goles, asistencias, tarjetas, convocados, MVP y alineación), de ambos
+-- Jugadores que ya aparecen en un partido (goles, asistencias, tarjetas, convocados y alineación), de ambos
 -- clubes. La ficha y la hoja de marcador los devuelven aunque estén de baja o eliminados, para que su historial
 -- conserve el nombre; los selectores solo ofrecen a los activos (campo active).
 CREATE OR REPLACE FUNCTION public.match_player_refs(p_match text)
@@ -329,7 +329,6 @@ RETURNS SETOF text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
   UNION SELECT g.assist_id FROM match_goals g WHERE g.match_id = p_match AND g.assist_id IS NOT NULL
   UNION SELECT k.player_id FROM match_cards k WHERE k.match_id = p_match AND k.player_id IS NOT NULL
   UNION SELECT a.player_id FROM match_attendees a WHERE a.match_id = p_match
-  UNION SELECT r.mvp_id FROM match_club_reports r WHERE r.match_id = p_match AND r.mvp_id IS NOT NULL
   UNION SELECT pos.value FROM match_club_reports r
     CROSS JOIN LATERAL jsonb_each_text(CASE WHEN jsonb_typeof(r.lineup -> 'positions') = 'object'
       THEN r.lineup -> 'positions' ELSE '{}'::jsonb END) AS pos
@@ -360,7 +359,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
 $$;
 REVOKE ALL ON FUNCTION public.match_club_roster(text, text, boolean) FROM PUBLIC, anon, authenticated;
 
--- Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo.
+-- Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo. mvp: el jugador del partido
+-- (vista match_mvps, de los goles); la página lo muestra solo cuando el partido ya terminó.
 CREATE OR REPLACE FUNCTION public.match_detail(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT jsonb_build_object('matches', (
@@ -379,9 +379,10 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug, 'logoUrl', c.logo_url,
         'players_on_club', match_club_roster(c.id, m.id, true))
         FROM clubs c WHERE c.id = m.away_club_id),
+      'mvp', (SELECT jsonb_build_object('id', pl.id, 'name', pl.name, 'club', jsonb_build_object('id', mv.club_id))
+        FROM match_mvps mv JOIN players pl ON pl.id = mv.player_id WHERE mv.match_id = m.id),
       'matchClubReports_on_match', (
-        SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', r.club_id), 'lineup', r.lineup,
-          'mvp', (SELECT jsonb_build_object('id', pl.id, 'name', pl.name) FROM players pl WHERE pl.id = r.mvp_id))), '[]'::jsonb)
+        SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', r.club_id), 'lineup', r.lineup)), '[]'::jsonb)
         FROM match_club_reports r WHERE r.match_id = m.id),
       'matchAttendees_on_match', (
         SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', a.club_id),
@@ -564,10 +565,9 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     GROUP BY sc.player_id, sc.club_id
   ),
   mvps AS (
-    SELECT r.mvp_id AS player_id, r.club_id, count(*)::int AS n
-    FROM match_club_reports r JOIN played m ON m.id = r.match_id
-    WHERE r.mvp_id IS NOT NULL
-    GROUP BY r.mvp_id, r.club_id
+    SELECT mv.player_id, mv.club_id, count(*)::int AS n
+    FROM match_mvps mv JOIN played m ON m.id = mv.match_id
+    GROUP BY mv.player_id, mv.club_id
   ),
   keepers AS (
     SELECT g.player_id, g.club_id, count(*)::int AS matches, sum(g.conceded)::int AS conceded, sum(g.saves)::int AS saves
@@ -690,11 +690,12 @@ CALL api_expose('season_summary', 'PUBLIC');
 -- Ficha pública de un jugador (se comparte por enlace): clubes donde está o estuvo y sus números por temporada,
 -- torneo y club. Trae la edad, nunca la fecha de nacimiento.
 -- Solo cuentan partidos oficiales jugados (PLAYED con marcador) que no sean walkover; los amistosos del club no entran.
--- Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia, tarjeta o MVP (lo mismo
+-- Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia o tarjeta (lo mismo
 -- que match_player_refs, pero por club). Goles y asistencias siguen a tournament_scorers (sin goles en contra); el gol
--- en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: solo
--- el que eligió el club, como season_summary. Los clubes borrados no salen en clubs_on_player pero sus números se
--- conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER (eliminado del club).
+-- en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: el
+-- jugador del partido de la vista match_mvps (uno por partido), como season_summary. Los clubes borrados no salen en
+-- clubs_on_player pero sus números se conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER
+-- (eliminado del club).
 CREATE OR REPLACE FUNCTION public.player_profile(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   WITH pl AS (
@@ -715,8 +716,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
     SELECT k.match_id, k.club_id, 0, 0, 0, 0, (k.color = 'YELLOW'::card_color)::int, (k.color = 'RED'::card_color)::int, 0
     FROM match_cards k JOIN pl ON pl.id = k.player_id
     UNION ALL
-    SELECT r.match_id, r.club_id, 0, 0, 0, 0, 0, 0, 1
-    FROM match_club_reports r JOIN pl ON pl.id = r.mvp_id
+    SELECT mv.match_id, mv.club_id, 0, 0, 0, 0, 0, 0, 1
+    FROM match_mvps mv JOIN pl ON pl.id = mv.player_id
     UNION ALL
     SELECT a.match_id, a.club_id, 0, 0, 0, 0, 0, 0, 0
     FROM match_attendees a JOIN pl ON pl.id = a.player_id
@@ -848,7 +849,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
           'eventDate', to_jsonb(e.event_date), 'eventTime', e.event_time, 'location', e.location, 'routine', e.routine,
           'lineup', e.lineup, 'scoreOurs', e.score_ours, 'scoreTheirs', e.score_theirs,
           'penaltiesOurs', e.penalties_ours, 'penaltiesTheirs', e.penalties_theirs,
-          'mvp', CASE WHEN e.mvp_id IS NULL THEN NULL ELSE jsonb_build_object('id', e.mvp_id) END,
+          'mvp', (SELECT jsonb_build_object('id', mv.player_id) FROM club_event_mvps mv WHERE mv.event_id = e.id),
           'clubEventAttendees_on_event', (SELECT coalesce(jsonb_agg(jsonb_build_object('rawLabel', a.raw_label,
             'player', CASE WHEN a.player_id IS NULL THEN NULL ELSE jsonb_build_object('id', a.player_id) END)), '[]'::jsonb)
             FROM (SELECT * FROM club_event_attendees a WHERE a.event_id = e.id LIMIT 200) a),
@@ -913,9 +914,10 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
       'awayClub', (SELECT jsonb_build_object('id', c.id, 'name', c.name) FROM clubs c WHERE c.id = m.away_club_id),
       'tournament', (SELECT jsonb_build_object('id', t.id, 'name', t.name, 'season', jsonb_build_object('id', t.season_id),
         'category', jsonb_build_object('id', t.category_id)) FROM tournaments t WHERE t.id = m.tournament_id),
+      'mvp', (SELECT jsonb_build_object('id', mv.player_id, 'club', jsonb_build_object('id', mv.club_id))
+        FROM match_mvps mv WHERE mv.match_id = m.id),
       'matchClubReports_on_match', (SELECT coalesce(jsonb_agg(jsonb_build_object('lineup', r.lineup,
-        'club', jsonb_build_object('id', r.club_id),
-        'mvp', CASE WHEN r.mvp_id IS NULL THEN NULL ELSE jsonb_build_object('id', r.mvp_id) END)), '[]'::jsonb)
+        'club', jsonb_build_object('id', r.club_id))), '[]'::jsonb)
         FROM match_club_reports r WHERE r.match_id = m.id),
       'matchAttendees_on_match', (SELECT coalesce(jsonb_agg(jsonb_build_object('club', jsonb_build_object('id', a.club_id),
         'player', jsonb_build_object('id', a.player_id))), '[]'::jsonb) FROM (SELECT * FROM match_attendees a WHERE a.match_id = m.id LIMIT 80) a),

@@ -118,13 +118,13 @@ export async function run({ db, rpc, check }) {
     id: EVENTO, clubId: HALCONES,
     stats: {
       goals: [{ scorer: P03, assist: P01, isPenalty: false, isOwnGoal: false }, { scorer: "dummy-club-bahia-p01", isPenalty: true }],
-      yellowCards: [P01, "dummy-club-bahia-p01"], redCards: [P03], goalkeepers: [{ id: P01, conceded: 1, saves: 4 }], mvp: P03,
+      yellowCards: [P01, "dummy-club-bahia-p01"], redCards: [P03], goalkeepers: [{ id: P01, conceded: 1, saves: 4 }],
     },
   });
   check(stats.data?.event?.id === EVENTO && stats.data.added === 5, "replace_club_event_stats: DT", stats);
   check((await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = '${EVENTO}' AND sort_order = 1 AND scorer_id IS NULL AND is_penalty`)) === 1, "replace_club_event_stats: goleador de otro club queda sin enlazar");
   check((await count(`SELECT count(*)::int AS n FROM club_event_cards WHERE event_id = '${EVENTO}'`)) === 2
-    && (await count(`SELECT count(*)::int AS n FROM club_events WHERE id = '${EVENTO}' AND mvp_id = '${P03}'`)) === 1, "replace_club_event_stats: tarjetas solo del club y MVP");
+    && (await count(`SELECT count(*)::int AS n FROM club_event_mvps WHERE event_id = '${EVENTO}' AND player_id = '${P03}'`)) === 1, "replace_club_event_stats: tarjetas solo del club y MVP automático (el goleador del club)");
   const statsAjeno = await rpc("usuario", "replace_club_event_stats", { id: EVENTO, clubId: HALCONES, stats: { goals: [] } });
   check(statsAjeno.data?.event === null && (await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = '${EVENTO}'`)) === 2, "replace_club_event_stats: sin rol -> null y no borra");
 
@@ -391,7 +391,7 @@ export async function run({ db, rpc, check }) {
   const statsBaja = {
     id: "prueba-baja-ev", clubId: HALCONES,
     stats: { goals: [{ scorer: BAJA, assist: P01, isPenalty: false, isOwnGoal: false }], yellowCards: [BAJA], redCards: [],
-      goalkeepers: [{ id: BAJA, conceded: 0, saves: 3 }], mvp: BAJA },
+      goalkeepers: [{ id: BAJA, conceded: 0, saves: 3 }] },
   };
   await rpc("dt", "replace_club_event_attendees", { id: "prueba-baja-ev", clubId: HALCONES, labels: [P01, BAJA] });
   await rpc("dt", "replace_club_event_stats", statsBaja);
@@ -404,7 +404,7 @@ export async function run({ db, rpc, check }) {
     gol: await count(`SELECT count(*)::int AS n FROM club_event_goals WHERE event_id = 'prueba-baja-ev' AND scorer_id = '${BAJA}'`),
     tarjeta: await count(`SELECT count(*)::int AS n FROM club_event_cards WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
     portero: await count(`SELECT count(*)::int AS n FROM club_event_goalkeepers WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
-    mvp: await count(`SELECT count(*)::int AS n FROM club_events WHERE id = 'prueba-baja-ev' AND mvp_id = '${BAJA}'`),
+    mvp: await count(`SELECT count(*)::int AS n FROM club_event_mvps WHERE event_id = 'prueba-baja-ev' AND player_id = '${BAJA}'`),
     partido: await count(`SELECT count(*)::int AS n FROM match_attendees WHERE match_id = '${PARTIDO}' AND player_id = '${BAJA}'`),
     aporte: await count(`SELECT count(*)::int AS n FROM goal_contributions WHERE goal_id = 'prueba-baja-meta' AND player_id = '${BAJA}' AND amount = 120`),
   });

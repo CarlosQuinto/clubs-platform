@@ -24,14 +24,13 @@ export interface MatchHeaderView {
   walkover: boolean;
   /** «No se presentó X» o «3-0 por ingreso tardío» en un W.O. */
   walkoverNote: string | null;
-  dateLabel: string | null;
-  timeLabel: string | null;
+  /** «Viernes, 09 de Octubre • 03:00 PM»; sin fecha ni hora, null. */
+  whenLabel: string | null;
   venue: string | null;
   courtImage: string | null;
   tournamentName: string;
   tournamentHref: string;
   category: string;
-  round: string;
 }
 
 export type TimelineKind = "goal" | "penalty" | "ownGoal" | "yellow" | "red";
@@ -43,8 +42,11 @@ export interface TimelineEventView {
   kind: TimelineKind;
   side: MatchSide;
   minuteLabel: string | null;
+  /** «Héctor M.»: nombre e inicial del apellido. */
   playerName: string;
-  /** Asistencia, «Penal» o «Autogol». */
+  /** Nombre completo, para el aviso de borrar y el texto al pasar el cursor. */
+  fullName: string;
+  /** Asistencia («Asist.: Jesús M.»), «Penal» o «Autogol». */
   detail: string | null;
   /** «2–1» tras el gol; null en tarjetas. */
   scoreAfter: string | null;
@@ -147,12 +149,19 @@ export interface StandingSummaryView {
   breakdown: { label: string; value: number }[];
 }
 
+/** Un lado de un enfrentamiento previo; local y visita son los de ese partido, no los de este. */
+export interface HeadToHeadSideView {
+  clubId: string;
+  name: string;
+  /** «2», o «–» si no hubo marcador. */
+  score: string;
+}
+
 export interface HeadToHeadItemView {
   id: string;
   dateLabel: string;
-  /** «Local 2–1 Visitante», con los nombres de ese partido. */
-  line: string;
-  tournament: string;
+  home: HeadToHeadSideView;
+  away: HeadToHeadSideView;
   href: string;
 }
 

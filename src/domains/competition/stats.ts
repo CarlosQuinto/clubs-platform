@@ -247,38 +247,6 @@ export function computeTopScorers(matches: Match[]): ScorerRow[] {
   );
 }
 
-export interface MvpGoal {
-  clubId: string;
-  scorerId: string;
-  assistId?: string;
-  isOwnGoal?: boolean;
-}
-
-/**
- * Jugador del partido por un club cuando nadie lo nombró (match_club_reports.mvp_id vacío):
- * el de más goles, luego más asistencias y, a igualdad, el primero en aparecer. "" si no hay datos.
- */
-export function matchMvp(goals: MvpGoal[], clubId: string): string {
-  const tally = new Map<string, { goals: number; assists: number; order: number }>();
-  const row = (id: string) => {
-    let entry = tally.get(id);
-    if (!entry) {
-      entry = { goals: 0, assists: 0, order: tally.size };
-      tally.set(id, entry);
-    }
-    return entry;
-  };
-  for (const goal of goals) {
-    if (goal.clubId !== clubId || goal.isOwnGoal) continue;
-    if (goal.scorerId) row(goal.scorerId).goals += 1;
-    if (goal.assistId) row(goal.assistId).assists += 1;
-  }
-  const best = [...tally.entries()].sort(
-    (a, b) => b[1].goals - a[1].goals || b[1].assists - a[1].assists || a[1].order - b[1].order,
-  )[0];
-  return best ? best[0] : "";
-}
-
 export const podiumFromStandings = (rows: StandingRow[]) => {
   const podium: Record<string, string> = {};
   rows.slice(0, 3).forEach((r, i) => {

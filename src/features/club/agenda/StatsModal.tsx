@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Hand, Plus, Award, Goal } from "lucide-react";
+import { X, Hand, Plus, Goal } from "lucide-react";
 import {
   C,
   RADIUS,
@@ -29,7 +29,6 @@ export default function StatsModal({
   const [statsFormGoalkeepers, setStatsFormGoalkeepers] = useState<
     { id: string; conceded: number }[]
   >([]);
-  const [statsFormMVP, setStatsFormMVP] = useState("");
   const [statsFormYellowCards, setStatsFormYellowCards] = useState<string[]>(
     [],
   );
@@ -73,15 +72,6 @@ export default function StatsModal({
       initialGks = [{ id, conceded: 0 }];
     }
     setStatsFormGoalkeepers(initialGks);
-
-    setStatsFormMVP(
-      players.find((p: any) => p.name === ev.mvp || p.id === ev.mvp)?.id ||
-        (ev.mvp
-          ? ev.mvp.startsWith("guest-")
-            ? ev.mvp
-            : `guest-${ev.mvp}`
-          : ""),
-    );
 
     setStatsFormYellowCards(
       (ev.yellowCards || []).map(
@@ -169,7 +159,6 @@ export default function StatsModal({
       goalkeepers: statsFormGoalkeepers.filter((gk) => gk.id.trim() !== ""),
       goalkeeper: null, // Mantenemos compatibilidad con DB
       stats: statsFormScorers,
-      mvp: statsFormMVP,
       yellowCards: statsFormYellowCards.filter((id) => id.trim() !== ""),
       redCards: statsFormRedCards.filter((id) => id.trim() !== ""),
     });
@@ -475,47 +464,6 @@ export default function StatsModal({
                 </button>
               </div>
             ))}
-          </div>
-
-          <div
-            style={{
-              backgroundColor: C.amberLight,
-              padding: "1rem",
-              borderRadius: RADIUS.lg,
-              border: `1px solid ${C.amber}40`,
-            }}
-          >
-            <label
-              style={{
-                fontSize: "0.8125rem",
-                fontWeight: "700",
-                color: C.amber,
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <Award size={16} /> MVP del Partido
-            </label>
-            <FormSelect
-              value={statsFormMVP}
-              onChange={(e) => setStatsFormMVP(e.target.value)}
-              style={{ marginTop: "0.5rem", borderColor: `${C.amber}60` }}
-            >
-              <option value="">¿Quién fue la estrella?</option>
-              {attendingPlayers.map((p: any) => (
-                <option key={`mvp-${p.id}`} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-              {(ev.attendees || [])
-                .filter((id: string) => id.startsWith("guest-"))
-                .map((guestId: string) => (
-                  <option key={`mvp-${guestId}`} value={guestId}>
-                    {getPlayerName(guestId, players)} (Invitado)
-                  </option>
-                ))}
-            </FormSelect>
           </div>
 
           <div>

@@ -114,8 +114,8 @@ export function PlayerProfileBody({ view, actions, clubs }: { view: PlayerProfil
           </div>
         )}
         <p className="player-profile__footnote">
-          Cuenta un partido cuando fue convocado, alineado, anotó, asistió, vio tarjeta o fue MVP. No incluye walkovers ni
-          amistosos.
+          Cuenta un partido cuando fue convocado, alineado, anotó, asistió o vio tarjeta. MVP: jugador del partido (más
+          goles, luego asistencias, luego el más joven). No incluye walkovers ni amistosos.
         </p>
       </section>
     </>
@@ -188,7 +188,7 @@ function SeasonBlock({ season }: { season: ProfileSeasonView }) {
               <th scope="col" title="Partidos jugados">PJ</th>
               <th scope="col" title="Goles">G</th>
               <th scope="col" title="Asistencias">A</th>
-              <th scope="col" title="Veces MVP">MVP</th>
+              <th scope="col" title="Veces jugador del partido">MVP</th>
               <th scope="col" title="Amarillas">TA</th>
               <th scope="col" title="Rojas">TR</th>
             </tr>

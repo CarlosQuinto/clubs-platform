@@ -88,7 +88,7 @@ function toAwards(awards: Season["awards"]): AwardGroupView[] {
     {
       key: "mvps",
       title: "Jugador más valioso",
-      subtitle: "Más veces elegido MVP",
+      subtitle: "Más veces jugador del partido",
       entries: awards.mvps.map((a, i) => playerEntry(a, i, "MVP", "MVP")),
     },
     {

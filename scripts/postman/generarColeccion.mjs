@@ -138,7 +138,6 @@ const ID_FIELDS = {
   seasonId: "{{season_id}}",
   playerId: "{{player_id}}",
   scorerId: "{{player_id}}",
-  mvpId: "{{player_id}}",
   courtId: "{{court_id}}",
   categoryId: "{{category_id}}",
   localityId: "{{locality_id}}",

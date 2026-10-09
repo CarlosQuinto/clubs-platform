@@ -1578,8 +1578,8 @@ REVOKE ALL ON FUNCTION public.lineup_swap_player(jsonb, text, text) FROM PUBLIC,
 --   (eliminada → viva, de baja → activa): entonces el destino toma sus datos. Se queda el alta más antigua.
 -- - Convocatorias, porteros y asistencias a eventos repetidas en el mismo partido o evento: queda la del destino.
 -- - Aportes a la misma meta: se suman (es dinero).
--- - Goles, asistencias, tarjetas, MVP, movimientos y alineaciones (partidos, eventos y la alineación por defecto)
---   pasan al destino. El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas
+-- - Goles, asistencias, tarjetas, movimientos y alineaciones (partidos, eventos y la alineación por defecto)
+--   pasan al destino (el MVP sale de los goles, así que los sigue solo). El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas
 --   NO se toca: es la clave de las multas de la liga (league_match_expected) y cambiarlo las cancelaría y rehacería.
 -- - Persona: ganan nombre, nacimiento y foto del destino; los vacíos se completan con los del origen. Si la foto del
 --   origen no se usa vuelve en orphanImageUrl para que el cliente la borre de Storage.
@@ -1597,7 +1597,6 @@ DECLARE
   v_goals integer := 0;
   v_assists integer := 0;
   v_cards integer := 0;
-  v_mvps integer := 0;
   v_lineups integer := 0;
   v_event_facts integer := 0;
   v_contributions integer := 0;
@@ -1669,13 +1668,6 @@ BEGIN
   GET DIAGNOSTICS v_n = ROW_COUNT;
   v_cards := v_n;
 
-  UPDATE match_club_reports SET mvp_id = v_dst WHERE mvp_id = v_src;
-  GET DIAGNOSTICS v_n = ROW_COUNT;
-  v_mvps := v_n;
-  UPDATE club_events SET mvp_id = v_dst WHERE mvp_id = v_src;
-  GET DIAGNOSTICS v_n = ROW_COUNT;
-  v_mvps := v_mvps + v_n;
-
   -- Alineaciones guardadas como JSON (posición → id)
   UPDATE match_club_reports SET lineup = lineup_swap_player(lineup, v_src, v_dst)
   WHERE lineup_has_player(lineup, v_src);
@@ -1742,7 +1734,7 @@ BEGIN
     'id', v_to.id, 'name', v_to.name, 'orphanImageUrl', v_orphan,
     'moved', jsonb_build_object(
       'clubs', v_clubs, 'attendees', v_attendees, 'goals', v_goals, 'assists', v_assists, 'cards', v_cards,
-      'mvps', v_mvps, 'lineups', v_lineups, 'eventFacts', v_event_facts, 'contributions', v_contributions,
+      'lineups', v_lineups, 'eventFacts', v_event_facts, 'contributions', v_contributions,
       'transactions', v_transactions)));
 END
 $$;

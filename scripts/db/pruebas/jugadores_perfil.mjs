@@ -120,13 +120,13 @@ export async function run({ db, rpc, check }) {
   check(!nadie.error && nadie.data?.player === null, "admin_player: id inexistente -> null", nadie);
 
   // ---------- Hechos de P ----------
-  // m1 (T1, por A): gol de penal, asistencia, amarilla, MVP y alineación
+  // m1 (T1, por A): gol de penal, asistencia, amarilla y alineación; es el MVP (el otro gol de A no tiene jugador)
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_id, scorer_name, is_penalty) VALUES ($1, $2, 1, $3, 'Perfil Jugador', true)`, [M1, A, P]);
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_name, assist_id, assist_name) VALUES ($1, $2, 2, 'Otro', $3, 'Perfil Jugador')`, [M1, A, P]);
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_name) VALUES ($1, $2, 1, 'Rival')`, [M1, C]);
   await q(`INSERT INTO match_cards (match_id, club_id, player_id, player_name, color) VALUES ($1, $2, $3, 'Perfil Jugador', 'YELLOW')`, [M1, A, P]);
-  await q(`INSERT INTO match_club_reports (match_id, club_id, mvp_id, lineup) VALUES ($1, $2, $3, $4)`,
-    [M1, A, P, JSON.stringify({ mode: "FUT_7", formation: "2-3-1", positions: { gk: P, d1: "invitado-libre" } })]);
+  await q(`INSERT INTO match_club_reports (match_id, club_id, lineup) VALUES ($1, $2, $3)`,
+    [M1, A, JSON.stringify({ mode: "FUT_7", formation: "2-3-1", positions: { gk: P, d1: "invitado-libre" } })]);
   // m2 (T1, por B): convocado, gol en contra (cuenta para C, el acreditado) y roja
   await q(`INSERT INTO match_attendees (match_id, club_id, player_id) VALUES ($1, $2, $3)`, [M2, B, P]);
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_id, scorer_name, is_own_goal) VALUES ($1, $2, 1, $3, 'Perfil Jugador', true)`, [M2, C, P]);
@@ -134,9 +134,9 @@ export async function run({ db, rpc, check }) {
   // No cuentan: partido programado, walkover y amistoso
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_id, scorer_name) VALUES ($1, $2, 1, $3, 'Perfil Jugador')`, [M3, A, P]);
   await q(`INSERT INTO match_attendees (match_id, club_id, player_id) VALUES ($1, $2, $3)`, [M4, A, P]);
-  await q(`INSERT INTO club_events (id, club_id, event_type, match_type, title, event_date, event_time, mvp_id) VALUES ($1, $2, 'PARTIDO', 'AMISTOSO', 'Amistoso perfil', '2001-03-05', '10:00', $3)`, [AMISTOSO, A, P]);
+  await q(`INSERT INTO club_events (id, club_id, event_type, match_type, title, event_date, event_time) VALUES ($1, $2, 'PARTIDO', 'AMISTOSO', 'Amistoso perfil', '2001-03-05', '10:00')`, [AMISTOSO, A]);
   await q(`INSERT INTO club_event_goals (event_id, sort_order, scorer_id) VALUES ($1, 1, $2)`, [AMISTOSO, P]);
-  // m5 (T2, por A): solo un gol; el partido cuenta por el gol aunque no esté convocado
+  // m5 (T2, por A): solo un gol (y por eso MVP); el partido cuenta por el gol aunque no esté convocado
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_id, scorer_name) VALUES ($1, $2, 1, $3, 'Perfil Jugador')`, [M5, A, P]);
 
   // ---------- player_profile ----------
@@ -155,12 +155,12 @@ export async function run({ db, rpc, check }) {
     "player_profile: Apertura con Beta (convocado, gol en contra en su club y roja)", b1);
   check(!line(pr, T1, C), "player_profile: el gol en contra no crea una fila para el club acreditado", pr?.statLines);
   const a2 = line(pr, T2, A);
-  check(a2 && a2.matches === 1 && a2.goals === 1, "player_profile: Clausura con Alfa (el partido cuenta por el gol)", a2);
+  check(a2 && a2.matches === 1 && a2.goals === 1 && a2.mvps === 1, "player_profile: Clausura con Alfa (el partido cuenta por el gol y es MVP)", a2);
   check(pr?.statLines?.map((l) => `${l.tournament.id}/${l.club.id}`).join() === [`${T2}/${A}`, `${T1}/${A}`, `${T1}/${B}`].join(),
     "player_profile: orden por torneo más reciente y luego club", pr?.statLines);
   const t = pr?.totals;
-  check(t && t.matches === 3 && t.goals === 2 && t.assists === 1 && t.penalties === 1 && t.ownGoals === 1 && t.yellowCards === 1 && t.redCards === 1 && t.mvps === 1,
-    "player_profile: totales (amistoso excluido)", t);
+  check(t && t.matches === 3 && t.goals === 2 && t.assists === 1 && t.penalties === 1 && t.ownGoals === 1 && t.yellowCards === 1 && t.redCards === 1 && t.mvps === 2,
+    "player_profile: totales (amistoso excluido; MVP de m1 y m5, no del programado)", t);
   const sc = await one("SELECT goals, assists FROM tournament_scorers WHERE tournament_id = $1 AND club_id = $2 AND player_id = $3", [T1, A, P]);
   check(sc && sc.goals === a1?.goals && sc.assists === a1?.assists, "player_profile: goles y asistencias coinciden con tournament_scorers", sc);
   check(pr?.clubs_on_player?.length === 2 && pr.clubs_on_player.every((c) => c.status === "ACTIVE"), "player_profile: sus dos clubes actuales", pr?.clubs_on_player);
@@ -193,8 +193,8 @@ export async function run({ db, rpc, check }) {
   await q(`INSERT INTO match_attendees (match_id, club_id, player_id) VALUES ($1, $2, $3), ($4, $5, $3)`, [M2, B, Q, M1, A]);
   await q(`INSERT INTO match_goals (match_id, club_id, sort_order, scorer_id, scorer_name) VALUES ($1, $2, 3, $3, 'Perfil Duplicado')`, [M1, A, Q]);
   await q(`INSERT INTO match_cards (match_id, club_id, player_id, player_name, color) VALUES ($1, $2, $3, 'Perfil Duplicado', 'YELLOW')`, [M1, A, Q]);
-  await q(`INSERT INTO match_club_reports (match_id, club_id, mvp_id, lineup) VALUES ($1, $2, $3, $4)`,
-    [M5, A, Q, JSON.stringify({ mode: "FUT_7", formation: "2-3-1", positions: { d1: Q, d2: "Nombre Viejo" } })]);
+  await q(`INSERT INTO match_club_reports (match_id, club_id, lineup) VALUES ($1, $2, $3)`,
+    [M5, A, JSON.stringify({ mode: "FUT_7", formation: "2-3-1", positions: { d1: Q, d2: "Nombre Viejo" } })]);
   await q(`UPDATE club_events SET lineup = $2 WHERE id = $1`, [AMISTOSO, JSON.stringify({ mode: "FUT_7", formation: "2-3-1", positions: { x: Q } })]);
   await q(`INSERT INTO club_events (id, club_id, event_type, title, event_date, event_time) VALUES ($1, $2, 'ENTRENAMIENTO', 'Entreno perfil', '2001-03-06', '10:00')`, [ENTRENO, A]);
   await q(`INSERT INTO club_event_attendees (event_id, player_id, raw_label) VALUES ($1, $2, $2), ($1, $3, $3), ($4, $3, $3)`, [AMISTOSO, P, Q, ENTRENO]);
@@ -229,8 +229,8 @@ export async function run({ db, rpc, check }) {
   const restos = await n(`SELECT (
       (SELECT count(*) FROM club_players WHERE player_id = $1) + (SELECT count(*) FROM match_attendees WHERE player_id = $1)
     + (SELECT count(*) FROM match_goals WHERE scorer_id = $1 OR assist_id = $1) + (SELECT count(*) FROM match_cards WHERE player_id = $1)
-    + (SELECT count(*) FROM match_club_reports WHERE mvp_id = $1 OR lineup::text LIKE '%"' || $1 || '"%')
-    + (SELECT count(*) FROM club_events WHERE mvp_id = $1 OR lineup::text LIKE '%"' || $1 || '"%')
+    + (SELECT count(*) FROM match_club_reports WHERE lineup::text LIKE '%"' || $1 || '"%')
+    + (SELECT count(*) FROM club_events WHERE lineup::text LIKE '%"' || $1 || '"%')
     + (SELECT count(*) FROM club_default_lineups WHERE positions::text LIKE '%"' || $1 || '"%')
     + (SELECT count(*) FROM club_event_attendees WHERE player_id = $1 OR raw_label = $1)
     + (SELECT count(*) FROM goal_contributions WHERE player_id = $1) + (SELECT count(*) FROM transactions WHERE player_id = $1))::int AS n`, [Q]);

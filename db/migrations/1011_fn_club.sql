@@ -278,7 +278,8 @@ END
 $$;
 CALL api_expose('replace_club_event_album', 'USER');
 
--- Sustituye goles, tarjetas, porteros y MVP de un amistoso (ADMIN o DT).
+-- Sustituye goles, tarjetas y porteros de un amistoso (ADMIN o DT). El MVP no se elige: sale de los goles
+-- (vista club_event_mvps).
 -- Solo se enlazan jugadores del propio club; el resto se ignora (goles) o se descarta (tarjetas/porteros).
 -- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.replace_club_event_stats(p jsonb DEFAULT '{}'::jsonb)
@@ -332,11 +333,8 @@ BEGIN
     JOIN club_players cp ON cp.player_id = gk ->> 'id' AND cp.club_id = v_club;
     GET DIAGNOSTICS v_n = ROW_COUNT; v_added := v_added + v_n;
 
-    -- event: MVP (solo si es jugador del club)
-    UPDATE club_events e
-    SET mvp_id = CASE WHEN is_club_player(v_stats ->> 'mvp', v_club) THEN v_stats ->> 'mvp' END
-    WHERE e.id = v_id
-    RETURNING jsonb_build_object('id', e.id) INTO v_row;
+    -- event
+    SELECT jsonb_build_object('id', e.id) INTO v_row FROM club_events e WHERE e.id = v_id;
   END IF;
   RETURN jsonb_build_object('cleared', api_rows(v_cleared), 'added', api_rows(v_added), 'event', v_row);
 END
@@ -345,29 +343,24 @@ CALL api_expose('replace_club_event_stats', 'USER');
 
 -- ---------- Agenda: partidos oficiales ----------
 
--- Alineación del club en un partido oficial en el que participa (ADMIN o DT). «mvpId» (opcional) nombra al
--- jugador del partido por el club: tiene que ser de su plantilla; si no viene, se conserva el guardado.
+-- Alineación del club en un partido oficial en el que participa (ADMIN o DT). El jugador del partido no se elige:
+-- sale de los goles (vista match_mvps).
 -- Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.
 CREATE OR REPLACE FUNCTION public.set_match_club_lineup(p jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_uid text := require_uid();
   v_club text := p ->> 'clubId';
-  v_mvp text := NULLIF(coalesce(p ->> 'mvpId', ''), '');
   v_row jsonb;
 BEGIN
-  IF v_mvp IS NOT NULL AND NOT is_club_player(v_mvp, v_club) THEN
-    RETURN jsonb_build_object('report', NULL);
-  END IF;
-  INSERT INTO match_club_reports (match_id, club_id, lineup, mvp_id)
-  SELECT m.id, v_club, p -> 'lineup', v_mvp
+  INSERT INTO match_club_reports (match_id, club_id, lineup)
+  SELECT m.id, v_club, p -> 'lineup'
   FROM matches m
   WHERE m.id = p ->> 'matchId'
     AND (m.home_club_id = v_club OR m.away_club_id = v_club)
     AND has_club_role(v_club, ARRAY['ADMIN', 'DT'])
   ON CONFLICT (match_id, club_id) DO UPDATE
-    SET lineup = EXCLUDED.lineup,
-        mvp_id = CASE WHEN p ? 'mvpId' THEN EXCLUDED.mvp_id ELSE match_club_reports.mvp_id END
+    SET lineup = EXCLUDED.lineup
   RETURNING jsonb_build_object('match_id', match_id) INTO v_row;
   RETURN jsonb_build_object('report', v_row);
 END

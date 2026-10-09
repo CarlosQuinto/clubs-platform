@@ -107,7 +107,7 @@ export default function SeasonSummaryView() {
             <TeamsEmpty
               icon={<Award size={20} />}
               title="Sin datos individuales."
-              hint="Los premios salen de los goles, MVP y arqueros capturados en cada partido."
+              hint="Los premios salen de los goles y arqueros capturados en cada partido."
             />
           ) : (
             <div className="season-summary__awards">

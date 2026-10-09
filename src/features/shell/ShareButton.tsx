@@ -1,8 +1,19 @@
 import { useState } from "react";
 import { Share2 } from "lucide-react";
 
-/** Comparte la página actual con el menú nativo del teléfono o, si no hay, copia el enlace (partido y resumen de temporada). */
-export default function ShareButton({ text, className = "match-hero__share" }: { text: string; className?: string }) {
+/**
+ * Comparte la página actual con el menú nativo del teléfono o, si no hay, copia el enlace (partido y resumen de temporada).
+ * `iconOnly` deja solo el ícono; el texto aparece únicamente para avisar «Enlace copiado».
+ */
+export default function ShareButton({
+  text,
+  className = "match-hero__share",
+  iconOnly = false,
+}: {
+  text: string;
+  className?: string;
+  iconOnly?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     const url = window.location.href;
@@ -21,9 +32,15 @@ export default function ShareButton({ text, className = "match-hero__share" }: {
     }
   };
   return (
-    <button type="button" className={className} onClick={() => void share()}>
-      <Share2 size={14} />
-      {copied ? "Enlace copiado" : "Compartir"}
+    <button
+      type="button"
+      className={className}
+      onClick={() => void share()}
+      aria-label={iconOnly ? "Compartir" : undefined}
+      title={iconOnly ? "Compartir" : undefined}
+    >
+      <Share2 size={iconOnly ? 18 : 14} />
+      {copied ? "Enlace copiado" : iconOnly ? null : "Compartir"}
     </button>
   );
 }

@@ -772,9 +772,10 @@ export interface ClubScreenData {
       scoreTheirs?: number | null;
       penaltiesOurs?: number | null;
       penaltiesTheirs?: number | null;
+      /** Jugador del partido: calculado de los goles (club_event_mvps); null si no hay. */
       mvp?: {
         id: string;
-      } & Player_Key;
+      } & Player_Key | null;
       clubEventAttendees_on_event: ({
         rawLabel: string;
         player?: {
@@ -922,14 +923,18 @@ export interface ClubScreenData {
         id: string;
       } & Category_Key;
     } & Tournament_Key;
+    /** Jugador del partido (uno solo, calculado de los goles) y su club; null si no hay. */
+    mvp?: ({
+      id: string;
+      club: {
+        id: string;
+      } & Club_Key;
+    } & Player_Key) | null;
     matchClubReports_on_match: ({
       lineup?: unknown | null;
       club: {
         id: string;
       } & Club_Key;
-      mvp?: ({
-        id: string;
-      } & Player_Key) | null;
     })[];
     matchAttendees_on_match: ({
       club: {
@@ -1827,6 +1832,14 @@ export interface MatchClubReport_Key {
 export interface MatchDetailData {
   matches: ({
     id: string;
+    /** Jugador del partido (uno solo, calculado de los goles: match_mvps) y su club; null si no hay. */
+    mvp?: ({
+      id: string;
+      name: string;
+      club: {
+        id: string;
+      } & Club_Key;
+    } & Player_Key) | null;
     roundLabel: string;
     matchDate?: DateString | null;
     startTime?: string | null;
@@ -1889,10 +1902,6 @@ export interface MatchDetailData {
         id: string;
       } & Club_Key;
       lineup?: unknown | null;
-      mvp?: {
-        id: string;
-        name: string;
-      } & Player_Key;
     })[];
     matchAttendees_on_match: ({
       club: {
@@ -2988,7 +2997,6 @@ export interface AdminMergePlayersData {
       goals: number;
       assists: number;
       cards: number;
-      mvps: number;
       lineups: number;
       eventFacts: number;
       contributions: number;
@@ -3248,8 +3256,6 @@ export interface SetMatchClubLineupVariables {
   matchId: string;
   clubId: string;
   lineup?: unknown | null;
-  /** Jugador del partido por el club (de su plantilla). Si falta, se conserva el guardado. */
-  mvpId?: string | null;
 }
 
 export interface SetSeasonActiveData {

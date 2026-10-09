@@ -5150,6 +5150,10 @@ button {
   letter-spacing: 0.025em;
   text-transform: uppercase;
   text-decoration: none;
+}
+
+.match-hero__tournament span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5159,15 +5163,19 @@ button {
   flex: none;
 }
 
+/* Solo el ícono; al copiar el enlace el botón se estira para decir «Enlace copiado». */
 .match-hero__share {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   flex: none;
-  padding: 0.35rem 0.9rem;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 0.5rem;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: transparent;
   color: #fff;
   font: inherit;
   font-size: 0.6875rem;
@@ -5234,7 +5242,10 @@ button {
   gap: 0.5rem;
 }
 
+/* Píldora de estado centrada sobre los escudos. */
 .match-hero__status {
+  align-self: center;
+  margin-bottom: -0.5rem;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -5304,27 +5315,33 @@ button {
   text-align: center;
 }
 
-.match-hero__chips {
+.match-hero__info {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
 }
 
-.match-hero__chip {
+.match-hero__when {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.match-hero__venue {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  max-width: 100%;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
-.match-hero__chip svg {
+.match-hero__venue svg {
   flex: none;
   color: var(--gold-cta);
 }
@@ -6140,40 +6157,75 @@ button {
   background: var(--live);
 }
 
+/* Historial: tres fichas (victorias de cada club y empates; la etiqueta va arriba, alineada en las tres) y la lista de enfrentamientos. */
 .h2h-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-bottom: 1rem;
   text-align: center;
 }
 
-.h2h-summary div {
+.h2h-summary > div {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
+  justify-content: flex-start;
+  gap: 0.2rem;
   min-width: 0;
-  padding: 1rem 0.5rem;
-  border-radius: 12px;
+  padding: 1.25rem 0.75rem;
+  border-radius: 14px;
+}
+
+.h2h-summary__top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.h2h-summary__crest {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.h2h-summary__crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .h2h-summary strong {
-  font-size: 1.75rem;
+  font-size: 2.25rem;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
-.h2h-summary span {
+.h2h-summary__name {
   max-width: 100%;
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   overflow-wrap: anywhere;
+}
+
+.h2h-summary__label {
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .h2h-summary__home {
@@ -6184,47 +6236,50 @@ button {
   color: var(--gold-cta);
 }
 
-.h2h-summary__home span {
-  color: rgba(255, 255, 255, 0.7);
+.h2h-summary__home .h2h-summary__name {
+  color: #fff;
+}
+
+.h2h-summary__home .h2h-summary__label {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .h2h-summary__draws {
   background: var(--sand-light);
+  color: var(--ink-soft);
 }
 
-.h2h-summary__draws strong,
-.h2h-summary__draws span {
-  color: var(--ink-soft);
+.h2h-summary__draws .h2h-summary__crest {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .h2h-summary__away {
   background: var(--gold-deep);
-}
-
-.h2h-summary__away strong {
   color: #fff;
 }
 
-.h2h-summary__away span {
-  color: rgba(255, 255, 255, 0.75);
+.h2h-summary__away .h2h-summary__label {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .h2h-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.6rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Fecha · local · marcador · visita · flecha; en el teléfono la fecha sube a su propia fila. */
 .h2h-list a {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.1rem 0.75rem;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr) auto minmax(0, 1fr) auto;
   align-items: center;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--sand-border);
+  border-radius: 12px;
   background: var(--surface-low);
   color: var(--ink);
   text-decoration: none;
@@ -6236,43 +6291,111 @@ button {
 }
 
 .h2h-list__date {
-  grid-row: span 2;
-  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
-.h2h-list__line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
+.h2h-list__date svg {
+  flex: none;
 }
 
 .h2h-list__team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
   min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.h2h-list__team img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
 }
 
 .h2h-list__score {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.35rem 0.9rem;
+  border-radius: 8px;
   background: var(--ink);
   color: #fff;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 900;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.h2h-list__tournament {
+.h2h-list__go {
   color: var(--ink-soft);
-  font-size: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .h2h-summary {
+    gap: 0.5rem;
+  }
+
+  .h2h-summary > div {
+    padding: 1rem 0.4rem;
+  }
+
+  .h2h-summary__top {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .h2h-summary__crest {
+    width: 36px;
+    height: 36px;
+  }
+
+  .h2h-summary__name {
+    font-size: 0.6875rem;
+  }
+
+  .h2h-summary__label {
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+  }
+
+  .h2h-list a {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.6rem 0.5rem;
+    padding: 0.85rem 0.75rem;
+  }
+
+  .h2h-list__date {
+    grid-column: 1 / -1;
+    justify-self: center;
+    font-size: 0.75rem;
+  }
+
+  .h2h-list__team {
+    font-size: 0.8125rem;
+  }
+
+  .h2h-list__team img {
+    width: 32px;
+    height: 32px;
+  }
+
+  .h2h-list__score {
+    padding: 0.25rem 0.6rem;
+    font-size: 1.05rem;
+  }
+
+  .h2h-list__go {
+    display: none;
+  }
 }
 
 /* Iconos de balón y tarjeta */
@@ -6805,7 +6928,7 @@ button {
   }
 
   .h2h-summary strong {
-    font-size: 1.35rem;
+    font-size: 1.6rem;
   }
 
   .live-sheet__players {

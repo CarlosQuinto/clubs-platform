@@ -1,7 +1,7 @@
 import { type ClubScreenData, type MemberRole } from "../../infrastructure/dataconnect";
 import type { Category, Match, MatchSide, Season, TimeWindow, Tournament } from "../../shared/types";
 import type { Role } from "../../domains/auth/roles";
-import { matchMvp, startedSeasons } from "../../domains/competition/stats";
+import { startedSeasons } from "../../domains/competition/stats";
 
 export interface ClubInfo {
   id: string;
@@ -126,7 +126,6 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
     for (const report of match.matchClubReports_on_match) {
       const side = sideBucket(sides, report.club.id);
       side.lineup = report.lineup;
-      side.mvp = report.mvp?.id || "";
     }
     for (const row of match.matchAttendees_on_match) {
       const side = sideBucket(sides, row.club.id);
@@ -151,17 +150,8 @@ export function toClubScreen(data: ClubScreenData, userId: string | null): ClubS
       if (card.color === "RED") side.redCards = [...(side.redCards || []), playerId];
       else side.yellowCards = [...(side.yellowCards || []), playerId];
     }
-    // Sin MVP nombrado por el club, el de más goles y asistencias (misma regla que la ficha del partido)
-    const mvpGoals = match.matchGoals_on_match.map((goal) => ({
-      clubId: goal.club.id,
-      scorerId: goal.scorer?.id || "",
-      assistId: goal.assist?.id || "",
-      isOwnGoal: goal.isOwnGoal,
-    }));
-    for (const clubId of [match.homeClub.id, match.awayClub.id]) {
-      const side = sideBucket(sides, clubId);
-      if (!side.mvp) side.mvp = matchMvp(mvpGoals, clubId);
-    }
+    // Jugador del partido: uno solo, lo calcula el servidor de los goles; cuenta en el lado de su club
+    if (match.mvp) sideBucket(sides, match.mvp.club.id).mvp = match.mvp.id;
     return {
       id: match.id,
       tournamentId: match.tournament.id,

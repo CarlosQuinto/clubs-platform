@@ -306,8 +306,37 @@ function SeeAll({ to }: { to: string }) {
   );
 }
 
+/** Partidos de hoy con pestañas En vivo / Terminados (como En curso / Próximos en Torneos); por defecto, en vivo. */
 function LiveSection({ matches }: { matches: LiveMatchView[] }) {
-  const playing = matches.some((match) => match.phase === "live");
+  const [tab, setTab] = useState<"live" | "finished" | null>(null);
+  const live = matches.filter((match) => match.phase === "live");
+  const finished = matches.filter((match) => match.phase !== "live");
+  const playing = live.length > 0;
+  const current = tab === "finished" && finished.length > 0 ? "finished" : playing ? "live" : "finished";
+  const cards = current === "live" ? live : finished;
+  const tabs =
+    playing && finished.length > 0 ? (
+      <div className="home-tabs" role="tablist" aria-label="Partidos de hoy">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={current === "live"}
+          className={current === "live" ? "is-on" : undefined}
+          onClick={() => setTab("live")}
+        >
+          En vivo <span>{live.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={current === "finished"}
+          className={current === "finished" ? "is-on" : undefined}
+          onClick={() => setTab("finished")}
+        >
+          Terminados <span>{finished.length}</span>
+        </button>
+      </div>
+    ) : null;
   return (
     <Section
       id="en-vivo"
@@ -315,9 +344,10 @@ function LiveSection({ matches }: { matches: LiveMatchView[] }) {
       icon={<Radio size={22} />}
       title={playing ? "En vivo" : "Resultados de hoy"}
       live={playing}
+      action={tabs}
     >
       <div className="home-grid">
-        {matches.map((match) => (
+        {cards.map((match) => (
           <ResultCard key={match.id} match={match} />
         ))}
       </div>

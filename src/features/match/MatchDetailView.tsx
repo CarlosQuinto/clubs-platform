@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   CalendarDays,
-  Clock,
+  ChevronRight,
+  Handshake,
   History,
   IdCard,
   ListOrdered,
@@ -25,6 +26,7 @@ import { BallIcon, CardIcon } from "./MatchIcons";
 import { useMatchDetail } from "./useMatchDetail";
 import type {
   FormPillView,
+  HeadToHeadSideView,
   LineupTokenView,
   MatchDetailView,
   MatchHeaderView,
@@ -191,18 +193,18 @@ function MatchHero({ header, shareText }: { header: MatchHeaderView; shareText: 
         <div className="match-hero__rail">
           <Link to={header.tournamentHref} className="match-hero__tournament">
             <Trophy size={16} />
-            {[header.tournamentName, header.category].filter(Boolean).join(" · ")}
+            <span>{[header.tournamentName, header.category].filter(Boolean).join(" • ")}</span>
           </Link>
-          <ShareButton text={shareText} />
+          <ShareButton text={shareText} iconOnly />
         </div>
+        <span className={statusClass}>
+          {live ? <span className="match-hero__dot" aria-hidden /> : null}
+          {header.statusLabel}
+          {header.minuteLabel ? <span className="match-hero__minute">{header.minuteLabel}</span> : null}
+        </span>
         <div className="match-hero__board">
           <HeroTeam team={header.home} />
           <div className="match-hero__center">
-            <span className={statusClass}>
-              {live ? <span className="match-hero__dot" aria-hidden /> : null}
-              {header.statusLabel}
-              {header.minuteLabel ? <span className="match-hero__minute">{header.minuteLabel}</span> : null}
-            </span>
             {showScore ? (
               <div className="match-hero__score" aria-label={`${header.home.score} a ${header.away.score}`}>
                 <span>{header.home.score}</span>
@@ -210,7 +212,7 @@ function MatchHero({ header, shareText }: { header: MatchHeaderView; shareText: 
                 <span>{header.away.score}</span>
               </div>
             ) : (
-              <div className="match-hero__kickoff">{header.timeLabel || "vs"}</div>
+              <div className="match-hero__kickoff">VS</div>
             )}
             {header.penaltiesLabel ? <span className="match-hero__note">{header.penaltiesLabel}</span> : null}
             {header.walkoverNote ? <span className="match-hero__note">{header.walkoverNote}</span> : null}
@@ -220,24 +222,17 @@ function MatchHero({ header, shareText }: { header: MatchHeaderView; shareText: 
           </div>
           <HeroTeam team={header.away} />
         </div>
-        <div className="match-hero__chips">
-          {header.round ? <span className="match-hero__chip">{header.round}</span> : null}
-          {header.dateLabel ? (
-            <span className="match-hero__chip">
-              <CalendarDays size={13} /> {header.dateLabel}
-            </span>
-          ) : null}
-          {header.timeLabel && showScore ? (
-            <span className="match-hero__chip">
-              <Clock size={13} /> {header.timeLabel}
-            </span>
-          ) : null}
-          {header.venue ? (
-            <span className="match-hero__chip">
-              <MapPin size={13} /> {header.venue}
-            </span>
-          ) : null}
-        </div>
+        {header.whenLabel || header.venue ? (
+          <div className="match-hero__info">
+            {header.whenLabel ? <p className="match-hero__when">{header.whenLabel}</p> : null}
+            {header.venue ? (
+              <p className="match-hero__venue">
+                <MapPin size={15} aria-hidden />
+                <span>{header.venue}</span>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -339,7 +334,7 @@ function SummaryTab({ view, admin, onChanged }: { view: MatchDetailView; admin: 
         title={removing?.source === "goal" ? "Borrar gol" : "Borrar tarjeta"}
         message={
           removing
-            ? `${removing.minuteLabel ? `${removing.minuteLabel} · ` : ""}${removing.playerName}. ${
+            ? `${removing.minuteLabel ? `${removing.minuteLabel} · ` : ""}${removing.fullName}. ${
                 removing.source === "goal" ? "El marcador se recalcula al borrarlo." : ""
               }`
             : ""
@@ -369,7 +364,9 @@ function TimelineRow({ event, onRemove }: { event: TimelineEventView; onRemove?:
         <div className="match-timeline__text">
           <span className="match-timeline__head">
             <span className={`match-timeline__badge is-${event.kind}`}>{KIND_LABEL[event.kind]}</span>
-            <span className="match-timeline__player">{event.playerName}</span>
+            <span className="match-timeline__player" title={event.fullName}>
+              {event.playerName}
+            </span>
           </span>
           {event.detail ? <span className="match-timeline__detail">{event.detail}</span> : null}
         </div>
@@ -593,25 +590,49 @@ function PreviewTab({ view, preview }: { view: MatchDetailView; preview: MatchPr
           <>
             <div className="h2h-summary">
               <div className="h2h-summary__home">
-                <strong>{h2h.homeWins}</strong>
-                <span>{home.name}</span>
+                <span className="h2h-summary__label">Victorias</span>
+                <span className="h2h-summary__top">
+                  <span className="h2h-summary__crest">
+                    <img src={home.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
+                  </span>
+                  <strong>{h2h.homeWins}</strong>
+                </span>
+                <span className="h2h-summary__name">{home.name}</span>
               </div>
               <div className="h2h-summary__draws">
-                <strong>{h2h.draws}</strong>
-                <span>Empates</span>
+                <span className="h2h-summary__label">Empates</span>
+                <span className="h2h-summary__top">
+                  <span className="h2h-summary__crest" aria-hidden>
+                    <Handshake size={20} />
+                  </span>
+                  <strong>{h2h.draws}</strong>
+                </span>
               </div>
               <div className="h2h-summary__away">
-                <strong>{h2h.awayWins}</strong>
-                <span>{away.name}</span>
+                <span className="h2h-summary__label">Victorias</span>
+                <span className="h2h-summary__top">
+                  <span className="h2h-summary__crest">
+                    <img src={away.logoUrl || DEFAULT_CLUB_LOGO} alt="" />
+                  </span>
+                  <strong>{h2h.awayWins}</strong>
+                </span>
+                <span className="h2h-summary__name">{away.name}</span>
               </div>
             </div>
             <ul className="h2h-list">
               {h2h.items.map((item) => (
                 <li key={item.id}>
                   <Link to={item.href}>
-                    <span className="h2h-list__date">{item.dateLabel}</span>
-                    <HeadToHeadLine line={item.line} />
-                    <span className="h2h-list__tournament">{item.tournament}</span>
+                    <span className="h2h-list__date">
+                      <CalendarDays size={16} aria-hidden />
+                      {item.dateLabel}
+                    </span>
+                    <HeadToHeadTeam side={item.home} home={home} away={away} />
+                    <span className="h2h-list__score">
+                      {item.home.score} - {item.away.score}
+                    </span>
+                    <HeadToHeadTeam side={item.away} home={home} away={away} />
+                    <ChevronRight size={20} className="h2h-list__go" aria-hidden />
                   </Link>
                 </li>
               ))}
@@ -684,19 +705,13 @@ function StandingTile({
   );
 }
 
-/** El mapper arma «Local 2–1 Visita»; aquí solo se separa el marcador para pintarlo como chip. */
-const H2H_LINE = /^(.+?) (\d+)–(\d+) (.+)$/;
-
-function HeadToHeadLine({ line }: { line: string }) {
-  const parts = H2H_LINE.exec(line);
-  if (!parts) return <span className="h2h-list__line">{line}</span>;
+/** Escudo y nombre de un lado del enfrentamiento; el escudo sale de la cabecera, porque solo juegan estos dos clubes. */
+function HeadToHeadTeam({ side, home, away }: { side: HeadToHeadSideView; home: MatchTeamView; away: MatchTeamView }) {
+  const logo = side.clubId === home.id ? home.logoUrl : side.clubId === away.id ? away.logoUrl : null;
   return (
-    <span className="h2h-list__line">
-      <span className="h2h-list__team">{parts[1]}</span>
-      <span className="h2h-list__score">
-        {parts[2]}–{parts[3]}
-      </span>
-      <span className="h2h-list__team">{parts[4]}</span>
+    <span className="h2h-list__team">
+      <img src={logo || DEFAULT_CLUB_LOGO} alt="" />
+      <span>{side.name}</span>
     </span>
   );
 }

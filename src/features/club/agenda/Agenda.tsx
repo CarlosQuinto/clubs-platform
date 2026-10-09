@@ -429,8 +429,8 @@ export default function Agenda(props: any) {
             const saved = await replaceClubEventStats(dataConnect, {
               id: statsModalEvent.id,
               clubId,
+              // El MVP no se elige: el servidor lo calcula de los goles (club_event_mvps)
               stats: {
-                mvp: statsData.mvp || "",
                 goals: statsData.stats || [],
                 yellowCards: statsData.yellowCards || [],
                 redCards: statsData.redCards || [],

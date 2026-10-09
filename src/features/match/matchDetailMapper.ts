@@ -1,6 +1,5 @@
 import { walkoverNote } from "../../domains/matches/noShow";
 import type { MatchDetailData, MatchPreviewData } from "../../infrastructure/dataconnect";
-import { matchMvp } from "../../domains/competition/stats";
 import { courtPlaceLabel } from "../../domains/courts/courts";
 import { formationNodes } from "../../domains/matches/formations";
 import {
@@ -10,7 +9,7 @@ import {
   matchPagePhase,
   type MatchPagePhase,
 } from "../../domains/matches/liveMatchPhase";
-import { formatFriendlyDate, formatFriendlyTime, formatShortDate } from "../../shared/helpers";
+import { formatFriendlyTime, formatShortDate } from "../../shared/helpers";
 import { matchPath } from "../../shared/paths";
 import { asMatchDuration } from "../../shared/types";
 import type {
@@ -39,8 +38,19 @@ const POLL_AFTER_END_MS = 60 * MINUTE;
 const POLL_BEFORE_START_MS = 2 * MINUTE;
 const UNASSIGNED = "Sin asignar";
 
-/** «Jornada 3» cuando la etiqueta es solo el número, como en el calendario del torneo. */
-const roundChip = (label: string) => (/^\d+$/.test(label.trim()) ? `Jornada ${label.trim()}` : label);
+/** «Viernes, 09 de Octubre»; el año solo se agrega si no es el actual («… de Octubre del 2025»). */
+function heroDate(iso: string, now: Date) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const text = new Date(year, month - 1, day).toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: year !== now.getFullYear() ? "numeric" : undefined,
+  });
+  return text
+    .replace(/ de (\d{4})/, " del $1")
+    .replace(/\p{L}+/gu, (word) => (word === "de" || word === "del" ? word : word[0].toUpperCase() + word.slice(1)));
+}
 
 const STATUS_LABEL: Record<MatchPagePhase, string> = {
   unscheduled: "Por programar",
@@ -60,6 +70,13 @@ function shortName(name: string) {
   const parts = name.trim().split(/\s+/);
   if (parts.length < 2) return name.trim();
   return `${parts[0].charAt(0)}. ${parts.slice(1).join(" ")}`;
+}
+
+/** «Héctor Medina Serrano» → «Héctor M.»; un solo nombre se deja igual. Para la cronología. */
+function nameInitial(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name.trim();
+  return `${parts[0]} ${parts[1].charAt(0).toUpperCase()}.`;
 }
 
 function count(value: number | null | undefined) {
@@ -144,6 +161,7 @@ function timelineOf(match: MatchRow, sideOf: (clubId: string) => MatchSide): Tim
   match.matchGoals_on_match.forEach((goal, index) => {
     const kind: TimelineKind = goal.isOwnGoal ? "ownGoal" : goal.isPenalty ? "penalty" : "goal";
     const assist = goal.assistName.trim() || goal.assist?.name?.trim() || "";
+    const scorer = goal.scorerName.trim() || goal.scorer?.name?.trim() || "";
     rows.push({
       minute: goal.minute ?? null,
       order: index,
@@ -153,12 +171,14 @@ function timelineOf(match: MatchRow, sideOf: (clubId: string) => MatchSide): Tim
         kind,
         side: sideOf(goal.club.id),
         minuteLabel: goal.minute != null ? `${goal.minute}'` : null,
-        playerName: goal.scorerName.trim() || goal.scorer?.name?.trim() || UNASSIGNED,
-        detail: goal.isOwnGoal ? "Autogol" : goal.isPenalty ? "Penal" : assist ? `Asist.: ${assist}` : null,
+        playerName: scorer ? nameInitial(scorer) : UNASSIGNED,
+        fullName: scorer || UNASSIGNED,
+        detail: goal.isOwnGoal ? "Autogol" : goal.isPenalty ? "Penal" : assist ? `Asist.: ${nameInitial(assist)}` : null,
       },
     });
   });
   match.matchCards_on_match.forEach((card, index) => {
+    const player = card.playerName.trim() || card.player?.name?.trim() || "";
     rows.push({
       minute: card.minute ?? null,
       order: 1000 + index,
@@ -168,7 +188,8 @@ function timelineOf(match: MatchRow, sideOf: (clubId: string) => MatchSide): Tim
         kind: card.color === "RED" ? "red" : "yellow",
         side: sideOf(card.club.id),
         minuteLabel: card.minute != null ? `${card.minute}'` : null,
-        playerName: card.playerName.trim() || card.player?.name?.trim() || UNASSIGNED,
+        playerName: player ? nameInitial(player) : UNASSIGNED,
+        fullName: player || UNASSIGNED,
         detail: null,
       },
     });
@@ -316,22 +337,8 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
   const penaltiesHome = count(match.penaltiesHome);
   const penaltiesAway = count(match.penaltiesAway);
   const venue = courtPlaceLabel(match.court?.location, match.court?.name) || match.venue.trim();
-  // Jugador del partido por club: el que nombró el club o, si no, el de más goles y asistencias
-  const mvpGoals = match.matchGoals_on_match.map((goal) => ({
-    clubId: goal.club.id,
-    scorerId: goal.scorer?.id || "",
-    assistId: goal.assist?.id || "",
-    isOwnGoal: goal.isOwnGoal,
-  }));
-  const squad = [...match.homeClub.players_on_club, ...match.awayClub.players_on_club];
-  const mvps = [homeId, awayId]
-    .map((clubId) => {
-      const named = reports.get(clubId)?.mvp?.name?.trim();
-      if (named) return named;
-      const derived = matchMvp(mvpGoals, clubId);
-      return squad.find((player) => player.id === derived)?.name.trim() || "";
-    })
-    .filter((name) => Boolean(name));
+  // Jugador del partido: uno solo, lo calcula el servidor de los goles; se muestra cuando el partido ya terminó
+  const mvp = phase === "pending" || phase === "final" ? match.mvp?.name.trim() || null : null;
 
   const convocados = {
     home: squadOf(
@@ -377,14 +384,15 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
         penaltiesHome != null && penaltiesAway != null ? `${penaltiesHome}–${penaltiesAway} pen.` : null,
       walkover: match.walkover,
       walkoverNote: walkoverNote(match.walkover, match.noShow, match.homeClub.name, match.awayClub.name),
-      dateLabel: match.matchDate ? formatFriendlyDate(match.matchDate) : null,
-      timeLabel: match.startTime ? formatFriendlyTime(match.startTime) : null,
+      whenLabel:
+        [match.matchDate ? heroDate(match.matchDate, now) : "", match.startTime ? formatFriendlyTime(match.startTime) : ""]
+          .filter(Boolean)
+          .join(" • ") || null,
       venue: venue || null,
       courtImage: match.court?.imageUrl?.trim() || null,
       tournamentName: match.tournament.name,
       tournamentHref: `/torneos/${match.tournament.id}`,
       category: match.tournament.category.name,
-      round: roundChip(match.roundLabel),
     },
     timeline: timelineOf(match, sideOf),
     lineups: {
@@ -392,7 +400,7 @@ export function toMatchDetail(data: MatchDetailData, now: Date): MatchDetailView
       away: lineupOf("away", match.awayClub, reports.get(awayId)?.lineup, attendees.away, tally),
     },
     stats,
-    mvp: mvps.length > 0 ? mvps.join(" · ") : null,
+    mvp,
     convocados,
     roster: {
       home: rosterOf(match.homeClub, attendees.home),
@@ -485,8 +493,8 @@ export function toMatchPreview(
   const items: HeadToHeadItemView[] = meetings.slice(0, 5).map((match) => ({
     id: match.id,
     dateLabel: match.matchDate ? formatShortDate(match.matchDate) : "",
-    line: `${match.homeClub.name} ${count(match.homeScore) ?? "–"}–${count(match.awayScore) ?? "–"} ${match.awayClub.name}`,
-    tournament: match.tournament.name,
+    home: { clubId: match.homeClub.id, name: match.homeClub.name, score: String(count(match.homeScore) ?? "–") },
+    away: { clubId: match.awayClub.id, name: match.awayClub.name, score: String(count(match.awayScore) ?? "–") },
     href: matchPath(match.id),
   }));
   return {

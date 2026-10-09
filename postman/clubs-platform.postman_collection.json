@@ -772,7 +772,7 @@
                     }
                   }
                 },
-                "description": "Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo.\n\n- Operación: `MatchDetail` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
+                "description": "Ficha pública del partido. Se vuelve a consultar cada 15 s mientras está en vivo. mvp: el jugador del partido (vista match_mvps, de los goles); la página lo muestra solo cuando el partido ya terminó.\n\n- Operación: `MatchDetail` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
               }
             },
             {
@@ -1190,7 +1190,7 @@
                     }
                   }
                 },
-                "description": "Ficha pública de un jugador (se comparte por enlace): clubes donde está o estuvo y sus números por temporada, torneo y club. Trae la edad, nunca la fecha de nacimiento. Solo cuentan partidos oficiales jugados (PLAYED con marcador) que no sean walkover; los amistosos del club no entran. Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia, tarjeta o MVP (lo mismo que match_player_refs, pero por club). Goles y asistencias siguen a tournament_scorers (sin goles en contra); el gol en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: solo el que eligió el club, como season_summary. Los clubes borrados no salen en clubs_on_player pero sus números se conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER (eliminado del club).\n\n- Operación: `PlayerProfile` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
+                "description": "Ficha pública de un jugador (se comparte por enlace): clubes donde está o estuvo y sus números por temporada, torneo y club. Trae la edad, nunca la fecha de nacimiento. Solo cuentan partidos oficiales jugados (PLAYED con marcador) que no sean walkover; los amistosos del club no entran. Partido jugado: aparece por ese club como convocado, en la alineación, con gol, asistencia o tarjeta (lo mismo que match_player_refs, pero por club). Goles y asistencias siguen a tournament_scorers (sin goles en contra); el gol en contra se cuenta en el club contrario al acreditado (match_goals.club_id es el club que suma el gol). MVP: el jugador del partido de la vista match_mvps (uno por partido), como season_summary. Los clubes borrados no salen en clubs_on_player pero sus números se conservan (club.slug null). status: ACTIVE, INACTIVE (de baja) o FORMER (eliminado del club).\n\n- Operación: `PlayerProfile` (lectura)\n- SQL: `db/migrations/1010_fn_public.sql`\n- Acceso: público (funciona sin sesión)"
               }
             },
             {
@@ -2780,7 +2780,7 @@
                     }
                   }
                 },
-                "description": "Sustituye goles, tarjetas, porteros y MVP de un amistoso (ADMIN o DT). Solo se enlazan jugadores del propio club; el resto se ignora (goles) o se descarta (tarjetas/porteros). Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.\n\n- Operación: `ReplaceClubEventStats` (mutación)\n- SQL: `db/migrations/1011_fn_club.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `stats`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+                "description": "Sustituye goles, tarjetas y porteros de un amistoso (ADMIN o DT). El MVP no se elige: sale de los goles (vista club_event_mvps). Solo se enlazan jugadores del propio club; el resto se ignora (goles) o se descarta (tarjetas/porteros). Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.\n\n- Operación: `ReplaceClubEventStats` (mutación)\n- SQL: `db/migrations/1011_fn_club.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `stats`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
               },
               "event": [
                 {
@@ -3550,7 +3550,7 @@
                     }
                   }
                 },
-                "description": "Alineación del club en un partido oficial en el que participa (ADMIN o DT). «mvpId» (opcional) nombra al jugador del partido por el club: tiene que ser de su plantilla; si no viene, se conserva el guardado. Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.\n\n- Operación: `SetMatchClubLineup` (mutación)\n- SQL: `db/migrations/1011_fn_club.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `lineup`, `mvpId`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+                "description": "Alineación del club en un partido oficial en el que participa (ADMIN o DT). El jugador del partido no se elige: sale de los goles (vista match_mvps). Acepta jugadores eliminados (borrado lógico) a propósito: volver a guardar un evento viejo no borra su historial.\n\n- Operación: `SetMatchClubLineup` (mutación)\n- SQL: `db/migrations/1011_fn_club.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `lineup`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
               },
               "event": [
                 {
@@ -3747,7 +3747,7 @@
                     }
                   }
                 },
-                "description": "Editor del torneo: ficha, clubes activos para elegir y todos sus partidos\n\n- Operación: `TournamentEditor` (lectura)\n- SQL: `db/migrations/1012_fn_league.sql`\n- Acceso: requiere sesión (haz «Login» antes)"
+                "description": "Editor del torneo: ficha, clubes activos para elegir y todos sus partidos. Solo el superadmin, que es el único que puede escribir con lo que devuelve.\n\n- Operación: `TournamentEditor` (lectura)\n- SQL: `db/migrations/1012_fn_league.sql`\n- Acceso: requiere sesión (haz «Login» antes)"
               }
             }
           ]
@@ -5055,7 +5055,7 @@
                     }
                   }
                 },
-                "description": "Programa fecha, hora, sede y cancha de un partido no jugado. La fecha no puede ser anterior al inicio del torneo (o de su temporada, si el torneo no tiene fecha propia); el formulario pone el mismo «min».\n\n- Operación: `ScheduleOfficialMatch` (mutación)\n- SQL: `db/migrations/1012_fn_league.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `courtId`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+                "description": "Programa fecha, hora, sede y cancha de un partido no jugado. La fecha no puede ser anterior al inicio del torneo (o de su temporada, si el torneo no tiene fecha propia); el formulario pone el mismo «min». Con cancha (courtId: debe existir, estar activa y ser de fútbol) la sede es el nombre de la cancha, puesto aquí y no por el cliente; el trigger courts_sync_match_venue (1013) la mantiene al día si renombran la cancha. Sin cancha, la sede es el lugar escrito a mano: opcional, 3 a 60 caracteres, las reglas de la ubicación de una cancha (courtLocation).\n\n- Operación: `ScheduleOfficialMatch` (mutación)\n- SQL: `db/migrations/1012_fn_league.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n- Campos opcionales (no incluidos): `courtId`\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
               },
               "event": [
                 {
@@ -5578,7 +5578,7 @@
                     }
                   }
                 },
-                "description": "Fusiona dos fichas de la misma persona (superadmin): todo lo de sourceId pasa a targetId y sourceId se borra. No se puede deshacer. Reglas: - Plantillas: si los dos están en el mismo club queda la ficha del destino, salvo que la del origen esté más viva   (eliminada → viva, de baja → activa): entonces el destino toma sus datos. Se queda el alta más antigua. - Convocatorias, porteros y asistencias a eventos repetidas en el mismo partido o evento: queda la del destino. - Aportes a la misma meta: se suman (es dinero). - Goles, asistencias, tarjetas, MVP, movimientos y alineaciones (partidos, eventos y la alineación por defecto)   pasan al destino. El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas   NO se toca: es la clave de las multas de la liga (league_match_expected) y cambiarlo las cancelaría y rehacería. - Persona: ganan nombre, nacimiento y foto del destino; los vacíos se completan con los del origen. Si la foto del   origen no se usa vuelve en orphanImageUrl para que el cliente la borre de Storage.\n\n- Operación: `AdminMergePlayers` (mutación)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
+                "description": "Fusiona dos fichas de la misma persona (superadmin): todo lo de sourceId pasa a targetId y sourceId se borra. No se puede deshacer. Reglas: - Plantillas: si los dos están en el mismo club queda la ficha del destino, salvo que la del origen esté más viva   (eliminada → viva, de baja → activa): entonces el destino toma sus datos. Se queda el alta más antigua. - Convocatorias, porteros y asistencias a eventos repetidas en el mismo partido o evento: queda la del destino. - Aportes a la misma meta: se suman (es dinero). - Goles, asistencias, tarjetas, movimientos y alineaciones (partidos, eventos y la alineación por defecto)   pasan al destino (el MVP sale de los goles, así que los sigue solo). El nombre guardado en los goles se actualiza solo donde era el del origen; el de las tarjetas   NO se toca: es la clave de las multas de la liga (league_match_expected) y cambiarlo las cancelaría y rehacería. - Persona: ganan nombre, nacimiento y foto del destino; los vacíos se completan con los del origen. Si la foto del   origen no se usa vuelve en orphanImageUrl para que el cliente la borre de Storage.\n\n- Operación: `AdminMergePlayers` (mutación)\n- SQL: `db/migrations/1013_fn_admin.sql`\n- Acceso: requiere sesión (haz «Login» antes)\n\nSi todas las claves de la respuesta vienen en `null`, la función rechazó el cambio (sin permiso o datos inválidos)."
               },
               "event": [
                 {

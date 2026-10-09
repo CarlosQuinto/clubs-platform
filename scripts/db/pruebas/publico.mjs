@@ -90,8 +90,10 @@ export async function run({ db, rpc, check }) {
   const ac = anonClub.data?.clubs?.[0];
   check(ac && ac.players_on_club.length > 0 && ac.clubEvents_on_club.length > 0, "club_screen: público ve jugadores y agenda", anonClub.error);
   check(ac?.transactions_on_club.length === 0 && ac?.clubMembers_on_club.length === 0, "club_screen: público no ve finanzas ni miembros");
-  const reports = (anonClub.data?.matches ?? []).flatMap((m) => m.matchClubReports_on_match);
-  check(reports.length > 0 && reports.every((r) => "mvp" in r) && reports.some((r) => r.mvp?.id), "club_screen: los informes traen el MVP del partido", reports.slice(0, 2));
+  const clubMatches = anonClub.data?.matches ?? [];
+  check(clubMatches.length > 0 && clubMatches.every((m) => "mvp" in m) && clubMatches.some((m) => m.mvp?.id && m.mvp.club?.id)
+    && clubMatches.flatMap((m) => m.matchClubReports_on_match).every((r) => !("mvp" in r)),
+    "club_screen: cada partido trae un solo MVP (con su club) y los informes ya no", clubMatches.slice(0, 2).map((m) => m.mvp));
   const presClub = await rpc("presidente", "club_screen", { slug: "halcones-fc-demo" });
   const pc = presClub.data?.clubs?.[0];
   check(pc?.transactions_on_club.length > 0 && pc?.clubMembers_on_club.some((m) => m.user.id === "11111111-1111-4111-8111-111111111102"), "club_screen: presidente ve finanzas y su rol", presClub.error);
@@ -132,7 +134,7 @@ export async function run({ db, rpc, check }) {
   check(ss.name === "2025" && ss.startDate === "2025-01-01" && ss.endDate === "2025-12-31", "season_summary: datos de la temporada", ss);
   const clausura = ss.tournaments?.find((t) => t.id === "dummy-tour-clausura-anterior");
   check(ss.tournaments?.length === 1 && clausura?.category?.name === "Primera Fuerza" && clausura.prize === "$20,000 MXN", "season_summary: torneos de la temporada", ss.tournaments);
-  check(clausura?.podium?.map((x) => x.club?.id).join() === "dummy-club-tiburones,dummy-club-sanvicente,dummy-club-leones", "season_summary: podio en orden", clausura?.podium);
+  check(clausura?.podium?.map((x) => x.club?.id).join() === "dummy-club-miramar,dummy-club-leones,dummy-club-sanvicente", "season_summary: podio en orden", clausura?.podium);
   const expected = (await db.query(`
     SELECT count(*)::int AS matches,
       coalesce(sum(home_score + away_score) FILTER (WHERE NOT walkover), 0)::int AS goals,

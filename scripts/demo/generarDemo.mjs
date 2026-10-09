@@ -473,9 +473,9 @@ function playMatch(t, match, home, away) {
     });
     rows.match_attendees.push([match.id, side.club.id, side.attendees.map((p) => p.id)]);
   }
+  // El jugador del partido no se guarda: sale de los goles (vista match_mvps)
   for (const side of sides) {
-    const mvp = side.scorers[0] ?? pick(side.attendees);
-    rows.match_club_reports.push({ match_id: match.id, club_id: side.club.id, mvp_id: mvp.id, lineup: side.lineup });
+    rows.match_club_reports.push({ match_id: match.id, club_id: side.club.id, lineup: side.lineup });
   }
   return { home_score: sides[0].goals, away_score: sides[1].goals };
 }
@@ -542,7 +542,7 @@ CLUBS.forEach((club, ci) => {
     club_rows.club_events.push({
       id, club_id: club.id, event_type: "ENTRENAMIENTO", match_type: null, title: n % 2 ? "Entrenamiento físico" : "Entrenamiento táctico",
       event_date: day(offset), event_time: "19:00", location: FOOTBALL_COURTS[ci % FOOTBALL_COURTS.length].name, routine: ROUTINE,
-      lineup: null, score_ours: null, score_theirs: null, penalties_ours: null, penalties_theirs: null, mvp_id: null, created_at: stamp(offset - 7),
+      lineup: null, score_ours: null, score_theirs: null, penalties_ours: null, penalties_theirs: null, created_at: stamp(offset - 7),
     });
     if (offset < 0) {
       club_rows.club_event_attendees.push([id, shuffle(club.players).slice(0, int(10, 15)).map((p) => p.id)]);
@@ -570,7 +570,7 @@ CLUBS.forEach((club, ci) => {
       id, club_id: club.id, event_type: "PARTIDO", match_type: "AMISTOSO", title: `Amistoso vs ${RIVALS[(ci + n) % RIVALS.length]}`,
       event_date: day(offset), event_time: "10:00", location: FOOTBALL_COURTS[(ci + 1) % FOOTBALL_COURTS.length].name, routine: [],
       lineup, score_ours: ours, score_theirs: theirs, penalties_ours: tied ? 4 : null, penalties_theirs: tied ? 3 : null,
-      mvp_id: (scorers[0] ?? pick(attendees)).id, created_at: stamp(offset - 5),
+      created_at: stamp(offset - 5),
     });
     club_rows.club_event_attendees.push([id, attendees.map((p) => p.id)]);
     for (let c = 0; c < int(0, 2); c++) {
