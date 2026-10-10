@@ -11,6 +11,9 @@ import { isoDate } from "../../shared/helpers";
 
 const ROTATE_MS = 5000;
 
+// Las clases son «vitrina», no «ad-slot»: los bloqueadores (Brave, uBlock, EasyList) ocultan .ad-slot y el anuncio
+// se veía un instante y desaparecía. No uses ad/ads/banner/sponsor en las clases de este componente.
+
 interface Props {
   placement: AdPlacement;
   /** `band` alinea la franja con las secciones del inicio. `top` la pega bajo el header. `club` la centra en la ficha del club. */
@@ -78,29 +81,29 @@ export default function AdSlot({ placement, layout = "inset" }: Props) {
 
   const href = safeAdHref(ad.href);
   const image = (
-    <img src={ad.imageUrl} alt={ad.brand} className="ad-slot__image" />
+    <img src={ad.imageUrl} alt={ad.brand} className="vitrina__image" />
   );
 
   const card = (
-    <div className="ad-slot__card">
+    <div className="vitrina__card">
       {href ? (
         <a
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="ad-slot__frame"
+          className="vitrina__frame"
         >
           {image}
         </a>
       ) : (
-        <div className="ad-slot__frame">{image}</div>
+        <div className="vitrina__frame">{image}</div>
       )}
     </div>
   );
 
   if (layout === "band") {
     return (
-      <section className="ad-slot-band">
+      <section className="vitrina-band">
         <div className="landing-band__inner">{card}</div>
       </section>
     );
@@ -108,10 +111,10 @@ export default function AdSlot({ placement, layout = "inset" }: Props) {
 
   const frame =
     layout === "club"
-      ? "ad-slot ad-slot--club"
+      ? "vitrina vitrina--club"
       : layout === "top"
-        ? "ad-slot ad-slot--top"
-        : "ad-slot";
+        ? "vitrina vitrina--top"
+        : "vitrina";
 
   return <div className={frame}>{card}</div>;
 }

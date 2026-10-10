@@ -660,9 +660,9 @@ export default function AdsAdmin() {
             />
           </Field>
           <Field label="Dónde se muestra" tip={tipFor("placements")}>
-            <div className="ad-placements">
+            <div className="vitrina-placements">
               {AD_PLACEMENTS.map((item) => (
-                <label key={item.id} className="ad-placements__item">
+                <label key={item.id} className="vitrina-placements__item">
                   <input
                     type="checkbox"
                     checked={draft.placements.includes(item.id)}

@@ -704,8 +704,11 @@ export const LineupModal = ({
   const currentFormationData = FORMATIONS[mode][formation];
   const currentNodes = currentFormationData.nodes;
 
+  // El alto sale de .tactic-board (index.css): en el iPhone 95vh incluye las barras de Safari y dejaba los botones
+  // fuera de la pantalla; la cancha se encoge con la ventana y, si aun así no cabe, la parte central se desplaza
   const modalContent = (
     <div
+      className="tactic-board"
       style={{
         position: "fixed",
         inset: 0,
@@ -714,18 +717,17 @@ export const LineupModal = ({
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        padding: "1rem",
         animation: "fadeIn 0.2s ease",
       }}
       onClick={onClose}
     >
       <div
+        className="tactic-board__panel"
         style={{
           backgroundColor: C.navy900,
           borderRadius: RADIUS.xl,
           width: "100%",
           maxWidth: "480px",
-          maxHeight: "95vh",
           display: "flex",
           flexDirection: "column",
           boxShadow: SHADOWS.xl,
@@ -818,6 +820,7 @@ export const LineupModal = ({
           )}
         </div>
 
+        <div className="tactic-board__body">
         {/* CONTENEDOR CENTRAL: LA CANCHA */}
         <div
           style={{
@@ -828,10 +831,10 @@ export const LineupModal = ({
           }}
         >
           <div
+            className="tactic-board__pitch"
             style={{
               position: "relative",
               width: "100%",
-              height: "450px",
               borderRadius: RADIUS.md,
               border: "2px solid rgba(255,255,255,0.4)",
               overflow: "hidden",
@@ -1097,6 +1100,7 @@ export const LineupModal = ({
             </div>
           </div>
         )}
+        </div>
 
         {/* PIE DEL MODAL: BOTONES DE GUARDAR */}
         <div
