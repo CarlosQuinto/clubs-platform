@@ -1,6 +1,7 @@
-# HTTPS automático (Let's Encrypt) para el dominio de DOMAIN. Todo va al frontend (nginx),
+# HTTPS automático (Let's Encrypt) para DOMAIN y, si los hay, los subdominios de EXTRA_DOMAINS
+# (separados por espacios; cada uno saca su propio certificado). Todo va al frontend (nginx),
 # que sirve la SPA y reenvía /api/* al gateway (Kong): auth, rest, storage, fn y Studio.
-{$DOMAIN} {
+{$DOMAIN} {$EXTRA_DOMAINS} {
 	encode gzip
 	reverse_proxy web:80
 }

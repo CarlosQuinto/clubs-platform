@@ -22,14 +22,22 @@ function trustProxy(): boolean | string {
   return raw;
 }
 
-/** CORS_ORIGINS: `*` en desarrollo; en producción una lista separada por comas. */
-function corsOrigin(): boolean | string[] {
+/**
+ * CORS_ORIGINS: `*` en desarrollo; en producción una lista separada por comas.
+ * Un `*` dentro de un origen vale por una etiqueta de subdominio (`https://*.liga.com`).
+ */
+function corsOrigin(): boolean | (string | RegExp)[] {
   const raw = (process.env.CORS_ORIGINS || "*").trim();
   if (!raw || raw === "*") return true;
   return raw
     .split(",")
     .map((origin) => origin.trim().replace(/\/+$/, ""))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((origin) =>
+      origin.includes("*")
+        ? new RegExp(`^${origin.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[a-z0-9-]+")}$`)
+        : origin,
+    );
 }
 
 const app = Fastify({ logger: true, trustProxy: trustProxy() });

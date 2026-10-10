@@ -242,7 +242,7 @@ Plantilla en [`docker/.env.example`](docker/.env.example); `npm run docker:env` 
 | `DB_SEED` | `true` carga `db/seed` y `scripts/demo/demo-seed.sql` al migrar. Ponlo en `false` en producción. |
 | `KONG_HTTP_PORT`, `POSTGRES_HOST_PORT`, `API_HOST_PORT`, `WEB_HOST_PORT` | Puertos expuestos en desarrollo (8000, 5432, 8787, 8080). |
 | `CORS_ORIGINS`, `TRUST_PROXY` | Orígenes permitidos en la API y si lee la IP real de `X-Forwarded-For`. |
-| `DOMAIN` | Solo producción: dominio para Caddy. |
+| `DOMAIN`, `EXTRA_DOMAINS` | Solo producción: dominio para Caddy y subdominios extra (separados por espacios). |
 
 ### Constantes de marca
 
@@ -575,6 +575,8 @@ Arranca con el override de producción (Caddy obtiene el certificado solo):
 cd docker
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up -d --build
 ```
+
+**Subdominios:** apunta su DNS al servidor (un registro `A` por subdominio o uno comodín `*`; en DuckDNS cualquier `x.miliga.duckdns.org` ya resuelve a tu IP), agrégalos a `EXTRA_DOMAINS` en `docker/.env` separados por espacios (`EXTRA_DOMAINS=demo.liga.ejemplo.com`) y vuelve a levantar. Caddy saca un certificado por cada uno y todos sirven la misma app; la API (CORS) y GoTrue (enlaces de los correos) ya aceptan cualquier `*.DOMAIN`.
 
 Para actualizar: `git pull` y el mismo comando. Las migraciones `0*` nuevas se aplican una vez y las funciones `1*` siempre. Si prefieres otro proxy (nginx, Traefik) o dos dominios (`app.` y `api.`), usa solo `docker-compose.yml` y apunta tu proxy a `web:80` y `kong:8000`.
 

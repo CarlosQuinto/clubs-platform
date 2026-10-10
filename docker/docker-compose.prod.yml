@@ -24,6 +24,7 @@ services:
       - caddy-config:/config
     environment:
       DOMAIN: ${DOMAIN}
+      EXTRA_DOMAINS: ${EXTRA_DOMAINS:-}
     depends_on:
       - web
 
@@ -37,7 +38,12 @@ services:
   api:
     ports: !reset []
     environment:
-      CORS_ORIGINS: https://${DOMAIN}
+      CORS_ORIGINS: https://${DOMAIN},https://*.${DOMAIN}
+
+  # Los enlaces de los correos (restablecer contraseña) vuelven al subdominio desde el que se pidieron
+  auth:
+    environment:
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS},https://*.${DOMAIN}/**
 
   kong:
     ports: !reset []
