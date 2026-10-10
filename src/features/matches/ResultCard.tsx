@@ -16,8 +16,9 @@ export default function ResultCard({ match, actions }: { match: LiveMatchView; a
     : match.pending
       ? "Por confirmar"
       : "Terminado";
-  // En vivo la píldora solo lleva el punto y el minuto («En vivo» queda para el lector de pantalla)
-  const shown = live ? match.minuteLabel || "En vivo" : label;
+  // En vivo la píldora solo lleva el punto y el minuto; un partido terminado no la lleva (el estado queda en el
+  // aria-label), solo «Por confirmar» se ve
+  const shown = live ? match.minuteLabel || "En vivo" : match.pending ? label : null;
   const place = [match.timeLabel, match.venue].filter(Boolean).join(" · ");
   return (
     <article className="home-card home-live">
@@ -26,17 +27,19 @@ export default function ResultCard({ match, actions }: { match: LiveMatchView; a
         className="home-fixture__link"
         aria-label={`${match.homeName} ${home}, ${match.awayName} ${away}. ${label}.`}
       >
-        {/* Categoría y torneo a la izquierda; estado (o punto y minuto) a la derecha */}
+        {/* Categoría y torneo a la izquierda (todo lo que quepa); estado (o punto y minuto) a la derecha */}
         <div className="home-live__top">
           {match.subtitle ? (
             <span className="home-chip" title={match.subtitle}>
               {match.subtitle}
             </span>
           ) : null}
-          <span className={`home-status ${live ? "is-live" : match.pending ? "is-pending" : "is-done"}`}>
-            {live ? <span className="home-status__dot" aria-hidden /> : null}
-            {shown}
-          </span>
+          {shown ? (
+            <span className={`home-status ${live ? "is-live" : "is-pending"}`}>
+              {live ? <span className="home-status__dot" aria-hidden /> : null}
+              {shown}
+            </span>
+          ) : null}
         </div>
         <div className="home-live__face">
           <TeamFace name={match.homeName} logo={match.homeLogo} role="Local" />
